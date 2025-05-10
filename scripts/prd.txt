@@ -1,0 +1,66 @@
+Project: Cypher Validation Library
+
+Goal:
+Build a Rust-based Cypher validation library with Python bindings using PyO3. The purpose of the library is to validate LLM-generated Cypher queries by performing syntax and schema validation, and exposing structured diagnostics.
+
+Functionality:
+- Parse and validate Cypher queries using an ANTLR-generated parser
+- Load graph schema from JSON (or Neo4j via Cypher query in future)
+- Validate:
+  - Node labels
+  - Relationship types
+  - Property existence
+  - Property values (enums, ranges)
+- Identify write queries
+- Optionally suggest or correct issues (e.g., wrong relationship direction)
+
+Deliverables:
+- Rust crate: cypher_guard
+- Python package (via maturin): cypher_guard
+- CLI binary for validating queries from stdin (optional)
+- Unit tests for all public functions
+
+Modules and Key Functions:
+- syntax.rs
+  - fn validate_syntax(query: &str) -> Result<(), ValidationError>
+  - fn is_write_query(query: &str) -> bool
+- schema.rs
+  - struct DbSchema { ... }
+  - fn validate_node_label(label: &str, schema: &DbSchema) -> Result<(), ValidationError>
+  - fn validate_relationship_type(...)
+  - fn validate_property_exists(...)
+  - fn validate_property_value(...)
+- loader.rs
+  - fn load_schema_from_json(path: &str) -> Result<DbSchema, Error>
+- lib.rs (Python bindings)
+  - #[pyfunction] fn validate_query(...)
+
+Build and Tooling:
+- Rust 2021 Edition
+- Python bindings built via pyo3 and maturin
+- Crate type is cdylib for FFI compatibility
+- Uses pyo3/extension-module feature
+- Tests runnable via cargo test
+- Python wheel installable with: maturin develop
+- CLI binary buildable via: cargo build --bin cypher_guard_cli
+- Cypher parser generated using antlr4rust
+
+Future Enhancements:
+- Add strict_mode flag to toggle between warnings and hard errors
+- Support multiple-statement Cypher parsing
+- Include position info in diagnostics (line, column)
+- Track query variables and alias usage across clauses
+- Relationship direction inference + auto-correction
+- Property format validation (regex)
+- Support schema load from live Neo4j via Cypher query
+
+Out of Scope (for now):
+- Autocompletion
+- Signature help
+- Formatting
+- LSP integration
+
+External References:
+- https://github.com/neo4j/cypher-language-support
+- https://github.com/neo4j-field/ps-genai-agents
+- https://github.com/neo4j/neo4j-graphrag-python
