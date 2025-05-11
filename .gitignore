@@ -42,4 +42,4 @@ build/
 
 # Task files
 tasks.json
-tasks/ 
+tasks/ .cursor/mcp.json
