@@ -15,15 +15,37 @@ pub enum PatternElement {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Property {
+    pub key: String,
+    pub value: PropertyValue,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum PropertyValue {
+    String(String),
+    Number(i64),
+}
+
+#[derive(Debug, PartialEq)]
 pub struct NodePattern {
     pub variable: Option<String>,
     pub label: Option<String>,
+    pub properties: Option<Vec<Property>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LengthRange {
+    pub min: Option<u32>,
+    pub max: Option<u32>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct RelationshipPattern {
     pub variable: Option<String>,
     pub direction: Direction,
+    pub properties: Option<Vec<Property>>,
+    pub rel_type: Option<String>,
+    pub length: Option<LengthRange>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,8 +56,21 @@ pub enum Direction {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum MatchElement {
+    Pattern(Vec<PatternElement>),
+    QuantifiedPathPattern(QuantifiedPathPattern),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct QuantifiedPathPattern {
+    pub pattern: Vec<PatternElement>,
+    pub min: Option<u32>,
+    pub max: Option<u32>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct MatchClause {
-    pub elements: Vec<PatternElement>,
+    pub elements: Vec<MatchElement>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,6 +88,43 @@ fn identifier(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)
 }
 
+fn string_literal(input: &str) -> IResult<&str, String> {
+    let (input, _) = char('"')(input)?;
+    let (input, s) = take_while1(|c| c != '"')(input)?;
+    let (input, _) = char('"')(input)?;
+    Ok((input, s.to_string()))
+}
+
+fn number_literal(input: &str) -> IResult<&str, i64> {
+    let (input, n) = take_while1(|c: char| c.is_ascii_digit())(input)?;
+    Ok((input, n.parse().unwrap()))
+}
+
+fn property_value(input: &str) -> IResult<&str, PropertyValue> {
+    alt((
+        map(string_literal, PropertyValue::String),
+        map(number_literal, PropertyValue::Number),
+    ))(input)
+}
+
+fn property(input: &str) -> IResult<&str, Property> {
+    let (input, _) = multispace0(input)?;
+    let (input, key) = identifier(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, _) = char(':')(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, value) = property_value(input)?;
+    Ok((input, Property { key: key.to_string(), value }))
+}
+
+fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
+    delimited(
+        tuple((multispace0, char('{'))),
+        separated_list1(tuple((multispace0, char(','), multispace0)), property),
+        tuple((multispace0, char('}'))),
+    )(input)
+}
+
 fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
     let (input, _) = multispace0(input)?;
     let (input, _) = char('(')(input)?;
@@ -61,8 +133,9 @@ fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
         tuple((multispace0, char(':'))),
         identifier,
     ))(input)?;
+    let (input, properties) = opt(preceded(multispace0, property_map))(input)?;
     let (input, _) = char(')')(input)?;
-    Ok((input, NodePattern { variable: var, label: label.map(|s| s.to_string()) }))
+    Ok((input, NodePattern { variable: var, label: label.map(|s| s.to_string()), properties }))
 }
 
 fn opt_identifier(input: &str) -> IResult<&str, Option<String>> {
@@ -73,23 +146,49 @@ fn opt_identifier(input: &str) -> IResult<&str, Option<String>> {
     }
 }
 
+fn length_range(input: &str) -> IResult<&str, LengthRange> {
+    let (input, _) = char('*')(input)?;
+    let (input, min) = opt(map(number_literal, |n| n as u32))(input)?;
+    let (input, max) = if let Ok((input, _)) = char('.')(input) {
+        let (input, _) = char('.')(input)?;
+        let (input, max) = opt(map(number_literal, |n| n as u32))(input)?;
+        (input, max)
+    } else {
+        (input, None)
+    };
+    Ok((input, LengthRange { min, max }))
+}
+
 fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, left) = opt(preceded(multispace0, alt((tag("<-"), tag("-")))))(input)?;
     let (input, _) = multispace0(input)?;
     let (input, rel) = opt(delimited(
         char('['),
-        opt_identifier,
+        tuple((opt_identifier, opt(preceded(tuple((multispace0, char(':'))), identifier)), opt(preceded(multispace0, property_map)), opt(length_range))),
         char(']'),
     ))(input)?;
+    let (input, length) = if rel.is_none() {
+        // support for -[:TYPE*1..3]-> (no variable)
+        opt(length_range)(input)?
+    } else {
+        (input, None)
+    };
     let (input, _) = multispace0(input)?;
     let (input, right) = opt(alt((tag("->"), tag("-"))))(input)?;
 
+    let (variable, rel_type, properties, rel_length) = rel.map(|(v, t, p, l)| (v, t, p, l)).unwrap_or((None, None, None, None));
     let direction = match (left, right) {
         (Some("<-"), _) => Direction::Left,
         (_, Some("->")) => Direction::Right,
         _ => Direction::Undirected,
     };
-    Ok((input, RelationshipPattern { variable: rel.flatten(), direction }))
+    Ok((input, RelationshipPattern {
+        variable,
+        direction,
+        properties,
+        rel_type,
+        length: rel_length.or(length),
+    }))
 }
 
 fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement>> {
@@ -110,19 +209,46 @@ fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement>> {
     Ok((input, elements))
 }
 
-fn pattern_element_list(input: &str) -> IResult<&str, Vec<PatternElement>> {
+fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
+    let (input, pattern) = delimited(
+        tuple((multispace0, char('('))),
+        pattern_element_sequence,
+        tuple((char(')'), multispace0)),
+    )(input)?;
+    let (input, quant) = delimited(
+        char('{'),
+        tuple((
+            opt(map(number_literal, |n| n as u32)),
+            opt(preceded(tuple((char(','), multispace0)), map(number_literal, |n| n as u32))),
+        )),
+        char('}'),
+    )(input)?;
+    let (min, max) = quant;
+    Ok((input, MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max })))
+}
+
+fn match_element(input: &str) -> IResult<&str, MatchElement> {
+    // Try quantified path pattern first
+    if let Ok((input2, qpp)) = quantified_path_pattern(input) {
+        return Ok((input2, qpp));
+    }
+    // Otherwise, parse a normal pattern sequence
+    let (input, pattern) = pattern_element_sequence(input)?;
+    Ok((input, MatchElement::Pattern(pattern)))
+}
+
+fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
     separated_list1(
         tuple((multispace0, char(','), multispace0)),
-        pattern_element_sequence,
+        match_element,
     )(input)
-    .map(|(i, v)| (i, v.into_iter().flatten().collect()))
 }
 
 pub fn match_clause(input: &str) -> IResult<&str, MatchClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("MATCH")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, elements) = pattern_element_list(input)?;
+    let (input, elements) = match_element_list(input)?;
     Ok((input, MatchClause { elements }))
 }
 
@@ -156,9 +282,9 @@ mod tests {
             Ok((
                 "",
                 MatchClause {
-                    elements: vec![PatternElement::Node(NodePattern {
+                    elements: vec![MatchElement::Pattern(vec![PatternElement::Node(NodePattern {
                         variable: Some("n".to_string())
-                    })]
+                    })])]
                 }
             ))
         );
@@ -174,12 +300,14 @@ mod tests {
                 "",
                 MatchClause {
                     elements: vec![
-                        PatternElement::Node(NodePattern {
-                            variable: Some("n".to_string())
-                        }),
-                        PatternElement::Node(NodePattern {
-                            variable: Some("m".to_string())
-                        })
+                        MatchElement::Pattern(vec![
+                            PatternElement::Node(NodePattern {
+                                variable: Some("n".to_string())
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: Some("m".to_string())
+                            })
+                        ])
                     ]
                 }
             ))
@@ -196,16 +324,18 @@ mod tests {
                 "",
                 MatchClause {
                     elements: vec![
-                        PatternElement::Node(NodePattern {
-                            variable: Some("n".to_string())
-                        }),
-                        PatternElement::Relationship(RelationshipPattern {
-                            variable: Some("r".to_string()),
-                            direction: Direction::Right
-                        }),
-                        PatternElement::Node(NodePattern {
-                            variable: Some("m".to_string())
-                        })
+                        MatchElement::Pattern(vec![
+                            PatternElement::Node(NodePattern {
+                                variable: Some("n".to_string())
+                            }),
+                            PatternElement::Relationship(RelationshipPattern {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Right
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: Some("m".to_string())
+                            })
+                        ])
                     ]
                 }
             ))
@@ -222,16 +352,18 @@ mod tests {
                 "",
                 MatchClause {
                     elements: vec![
-                        PatternElement::Node(NodePattern {
-                            variable: Some("a".to_string())
-                        }),
-                        PatternElement::Relationship(RelationshipPattern {
-                            variable: None,
-                            direction: Direction::Undirected
-                        }),
-                        PatternElement::Node(NodePattern {
-                            variable: Some("b".to_string())
-                        })
+                        MatchElement::Pattern(vec![
+                            PatternElement::Node(NodePattern {
+                                variable: Some("a".to_string())
+                            }),
+                            PatternElement::Relationship(RelationshipPattern {
+                                variable: None,
+                                direction: Direction::Undirected
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: Some("b".to_string())
+                            })
+                        ])
                     ]
                 }
             ))
@@ -248,16 +380,18 @@ mod tests {
                 "",
                 MatchClause {
                     elements: vec![
-                        PatternElement::Node(NodePattern {
-                            variable: Some("x".to_string())
-                        }),
-                        PatternElement::Relationship(RelationshipPattern {
-                            variable: Some("rel".to_string()),
-                            direction: Direction::Left
-                        }),
-                        PatternElement::Node(NodePattern {
-                            variable: Some("y".to_string())
-                        })
+                        MatchElement::Pattern(vec![
+                            PatternElement::Node(NodePattern {
+                                variable: Some("x".to_string())
+                            }),
+                            PatternElement::Relationship(RelationshipPattern {
+                                variable: Some("rel".to_string()),
+                                direction: Direction::Left
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: Some("y".to_string())
+                            })
+                        ])
                     ]
                 }
             ))
@@ -273,10 +407,10 @@ mod tests {
             Ok((
                 "",
                 MatchClause {
-                    elements: vec![PatternElement::Node(NodePattern {
+                    elements: vec![MatchElement::Pattern(vec![PatternElement::Node(NodePattern {
                         variable: Some("n".to_string()),
                         label: Some("Person".to_string()),
-                    })]
+                    })])]
                 }
             ))
         );
@@ -292,14 +426,16 @@ mod tests {
                 "",
                 MatchClause {
                     elements: vec![
-                        PatternElement::Node(NodePattern {
-                            variable: Some("n".to_string()),
-                            label: Some("Person".to_string()),
-                        }),
-                        PatternElement::Node(NodePattern {
-                            variable: Some("m".to_string()),
-                            label: Some("Animal".to_string()),
-                        })
+                        MatchElement::Pattern(vec![
+                            PatternElement::Node(NodePattern {
+                                variable: Some("n".to_string()),
+                                label: Some("Person".to_string()),
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: Some("m".to_string()),
+                                label: Some("Animal".to_string()),
+                            })
+                        ])
                     ]
                 }
             ))
@@ -316,10 +452,10 @@ mod tests {
                 "",
                 Query {
                     match_clause: MatchClause {
-                        elements: vec![PatternElement::Node(NodePattern {
+                        elements: vec![MatchElement::Pattern(vec![PatternElement::Node(NodePattern {
                             variable: Some("n".to_string()),
                             label: Some("Person".to_string()),
-                        })]
+                        })])]
                     },
                     return_clause: Some(ReturnClause { items: vec!["n".to_string()] }),
                 }
@@ -338,17 +474,233 @@ mod tests {
                 Query {
                     match_clause: MatchClause {
                         elements: vec![
-                            PatternElement::Node(NodePattern {
-                                variable: Some("n".to_string()),
-                                label: Some("Person".to_string()),
-                            }),
-                            PatternElement::Node(NodePattern {
-                                variable: Some("m".to_string()),
-                                label: Some("Animal".to_string()),
-                            })
+                            MatchElement::Pattern(vec![
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("n".to_string()),
+                                    label: Some("Person".to_string()),
+                                }),
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("m".to_string()),
+                                    label: Some("Animal".to_string()),
+                                })
+                            ])
                         ]
                     },
                     return_clause: Some(ReturnClause { items: vec!["n".to_string(), "m".to_string()] }),
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_node_properties() {
+        let input = "MATCH (n {name: \"Alice\", age: 30})";
+        let res = query(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                Query {
+                    match_clause: MatchClause {
+                        elements: vec![MatchElement::Pattern(vec![PatternElement::Node(NodePattern {
+                            variable: Some("n".to_string()),
+                            label: None,
+                            properties: Some(vec![
+                                Property { key: "name".to_string(), value: PropertyValue::String("Alice".to_string()) },
+                                Property { key: "age".to_string(), value: PropertyValue::Number(30) },
+                            ]),
+                        })])]
+                    },
+                    return_clause: None,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_relationship_properties() {
+        let input = "MATCH (n)-[r {since: 2020}]->(m)";
+        let res = query(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                Query {
+                    match_clause: MatchClause {
+                        elements: vec![
+                            MatchElement::Pattern(vec![
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("n".to_string()),
+                                    label: None,
+                                    properties: None,
+                                }),
+                                PatternElement::Relationship(RelationshipPattern {
+                                    variable: Some("r".to_string()),
+                                    direction: Direction::Right,
+                                    properties: Some(vec![
+                                        Property { key: "since".to_string(), value: PropertyValue::Number(2020) },
+                                    ]),
+                                }),
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("m".to_string()),
+                                    label: None,
+                                    properties: None,
+                                })
+                            ])
+                        ]
+                    },
+                    return_clause: None,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_variable_length_relationship() {
+        let input = "MATCH (a)-[:NEXT*1..3]->(b)";
+        let res = query(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                Query {
+                    match_clause: MatchClause {
+                        elements: vec![
+                            MatchElement::Pattern(vec![
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("a".to_string()),
+                                    label: None,
+                                    properties: None,
+                                }),
+                                PatternElement::Relationship(RelationshipPattern {
+                                    variable: None,
+                                    direction: Direction::Right,
+                                    properties: None,
+                                    rel_type: Some("NEXT".to_string()),
+                                    length: Some(LengthRange { min: Some(1), max: Some(3) }),
+                                }),
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("b".to_string()),
+                                    label: None,
+                                    properties: None,
+                                })
+                            ])
+                        ]
+                    },
+                    return_clause: None,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_unbounded_variable_length_relationship() {
+        let input = "MATCH (a)-[:NEXT*]->(b)";
+        let res = query(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                Query {
+                    match_clause: MatchClause {
+                        elements: vec![
+                            MatchElement::Pattern(vec![
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("a".to_string()),
+                                    label: None,
+                                    properties: None,
+                                }),
+                                PatternElement::Relationship(RelationshipPattern {
+                                    variable: None,
+                                    direction: Direction::Right,
+                                    properties: None,
+                                    rel_type: Some("NEXT".to_string()),
+                                    length: Some(LengthRange { min: None, max: None }),
+                                }),
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("b".to_string()),
+                                    label: None,
+                                    properties: None,
+                                })
+                            ])
+                        ]
+                    },
+                    return_clause: None,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_exact_variable_length_relationship() {
+        let input = "MATCH (a)-[:NEXT*3]->(b)";
+        let res = query(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                Query {
+                    match_clause: MatchClause {
+                        elements: vec![
+                            MatchElement::Pattern(vec![
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("a".to_string()),
+                                    label: None,
+                                    properties: None,
+                                }),
+                                PatternElement::Relationship(RelationshipPattern {
+                                    variable: None,
+                                    direction: Direction::Right,
+                                    properties: None,
+                                    rel_type: Some("NEXT".to_string()),
+                                    length: Some(LengthRange { min: Some(3), max: None }),
+                                }),
+                                PatternElement::Node(NodePattern {
+                                    variable: Some("b".to_string()),
+                                    label: None,
+                                    properties: None,
+                                })
+                            ])
+                        ]
+                    },
+                    return_clause: None,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn test_match_clause_with_quantified_path_pattern() {
+        let input = "MATCH ((:Stop)-[:NEXT]->(:Stop)){1,3}";
+        let res = match_clause(input);
+        assert_eq!(
+            res,
+            Ok((
+                "",
+                MatchClause {
+                    elements: vec![MatchElement::QuantifiedPathPattern(QuantifiedPathPattern {
+                        pattern: vec![
+                            PatternElement::Node(NodePattern {
+                                variable: None,
+                                label: Some("Stop".to_string()),
+                                properties: None,
+                            }),
+                            PatternElement::Relationship(RelationshipPattern {
+                                variable: None,
+                                direction: Direction::Right,
+                                properties: None,
+                                rel_type: Some("NEXT".to_string()),
+                                length: None,
+                            }),
+                            PatternElement::Node(NodePattern {
+                                variable: None,
+                                label: Some("Stop".to_string()),
+                                properties: None,
+                            })
+                        ],
+                        min: Some(1),
+                        max: Some(3),
+                    })]
                 }
             ))
         );
