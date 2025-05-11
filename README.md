@@ -7,6 +7,8 @@ Cypher Guard is a Rust library and CLI tool for validating Cypher queries agains
 - Validate node labels, relationship types, and properties against a schema
 - JSON-based schema loading
 - Python bindings via PyO3
+- **Schema-aware validation**: Ensures all labels, relationship types, and properties in a query exist in the provided schema
+- **Makefile** for easy Python extension build
 
 ## Installation
 
@@ -17,11 +19,15 @@ cargo build --release
 ```
 
 ### Python
-Build and install the Python module using maturin:
+Build and install the Python module using maturin or the provided Makefile:
 ```sh
+# Option 1: Use maturin directly
 pip install maturin
 cd cypher-guard
 maturin develop
+
+# Option 2: Use the Makefile (installs maturin if needed)
+make
 ```
 
 ## Usage
@@ -40,10 +46,27 @@ cypher-guard = { path = "./cypher-guard" }
 ```
 
 ### Python
-After installing with maturin, import and use in Python:
+After installing with maturin or `make`, import and use in Python:
 ```python
 import cypher_guard
-# Use validation functions
+
+schema = '''
+{
+    "labels": ["Person"],
+    "rel_types": ["KNOWS"],
+    "properties": {"name": {"type": "String"}, "age": {"type": "Integer"}},
+    "enums": {}
+}
+'''
+query = 'MATCH (n:Person {name: "Alice", age: 30}) RETURN n'
+
+# Validate query
+is_valid = cypher_guard.validate_cypher_py(query, schema)
+print("Is valid:", is_valid)
+
+# Get validation errors
+errors = cypher_guard.get_validation_errors_py(query, schema)
+print("Errors:", errors)
 ```
 
 ## Contributing
