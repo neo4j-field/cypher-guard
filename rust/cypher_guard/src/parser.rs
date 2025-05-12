@@ -192,7 +192,6 @@ fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, right) = opt(alt((tag("->"), tag("-"))))(input)?;
 
     let (variable, rel_type, properties, rel_length) = rel
-        .map(|(v, t, p, l)| (v, t, p, l))
         .unwrap_or((None, None, None, None));
     let direction = match (left, right) {
         (Some("<-"), _) => Direction::Left,

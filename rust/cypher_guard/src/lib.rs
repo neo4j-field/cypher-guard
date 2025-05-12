@@ -1,6 +1,5 @@
 mod parser;
 
-use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -42,6 +41,12 @@ pub struct DbSchema {
     pub properties: HashMap<String, PropertyType>,
     /// Custom enums (name -> EnumType)
     pub enums: HashMap<String, EnumType>,
+}
+
+impl Default for DbSchema {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DbSchema {
@@ -197,7 +202,7 @@ impl DbSchema {
 
     /// Load a DbSchema from a JSON string
     pub fn from_json_str(s: &str) -> Result<Self> {
-        serde_json::from_str(s).map_err(|e| CypherGuardError::SchemaError)
+        serde_json::from_str(s).map_err(|_e| CypherGuardError::SchemaError)
     }
 
     /// Serialize a DbSchema to a JSON string
@@ -233,13 +238,13 @@ pub enum CypherGuardError {
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Placeholder validation function
-pub fn validate_cypher(query: &str) -> Result<bool> {
+pub fn validate_cypher(_query: &str) -> Result<bool> {
     // TODO: Implement validation logic
     Ok(true)
 }
 pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
     match parser::query(query) {
-        Ok((_, ast)) => {
+        Ok((_, _ast)) => {
             let errors = get_cypher_validation_errors(query, schema);
             Ok(errors.is_empty())
         }
@@ -353,7 +358,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json;
+    
 
     #[test]
     fn test_property_type_serialization() {
