@@ -160,14 +160,23 @@ impl DbSchema {
         all_names.sort();
         for w in all_names.windows(2) {
             if w[0] == w[1] {
-                errors.push(format!("Duplicate name found across schema elements: {}", w[0]));
+                errors.push(format!(
+                    "Duplicate name found across schema elements: {}",
+                    w[0]
+                ));
             }
         }
 
         // Check property names for snake_case (simple check)
         for name in self.properties.keys() {
-            if !name.chars().all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()) {
-                errors.push(format!("Property name '{}' should be snake_case (lowercase, digits, underscores)", name));
+            if !name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit())
+            {
+                errors.push(format!(
+                    "Property name '{}' should be snake_case (lowercase, digits, underscores)",
+                    name
+                ));
             }
         }
 
@@ -175,7 +184,10 @@ impl DbSchema {
         for (name, prop_type) in &self.properties {
             if let PropertyType::Enum(enum_name) = prop_type {
                 if !self.enums.contains_key(enum_name) {
-                    errors.push(format!("Property '{}' references undefined enum type '{}'.", name, enum_name));
+                    errors.push(format!(
+                        "Property '{}' references undefined enum type '{}'.",
+                        name, enum_name
+                    ));
                 }
             }
         }
@@ -212,9 +224,9 @@ impl fmt::Display for DbSchema {
 
 #[derive(Debug, thiserror::Error)]
 pub enum CypherGuardError {
-    #[error("Invalid query")] 
+    #[error("Invalid query")]
     InvalidQuery,
-    #[error("Schema error")] 
+    #[error("Schema error")]
     SchemaError,
 }
 
@@ -230,7 +242,7 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
         Ok((_, ast)) => {
             let errors = get_cypher_validation_errors(query, schema);
             Ok(errors.is_empty())
-        },
+        }
         Err(_) => Err(CypherGuardError::InvalidQuery),
     }
 }
@@ -254,7 +266,10 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     if let Some(props) = &node.properties {
                                         for prop in props {
                                             if !schema.has_property(&prop.key) {
-                                                errors.push(format!("Property '{}' not in schema", prop.key));
+                                                errors.push(format!(
+                                                    "Property '{}' not in schema",
+                                                    prop.key
+                                                ));
                                             }
                                         }
                                     }
@@ -262,13 +277,19 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                 parser::PatternElement::Relationship(rel) => {
                                     if let Some(rel_type) = &rel.rel_type {
                                         if !schema.has_relationship_type(rel_type) {
-                                            errors.push(format!("Relationship type '{}' not in schema", rel_type));
+                                            errors.push(format!(
+                                                "Relationship type '{}' not in schema",
+                                                rel_type
+                                            ));
                                         }
                                     }
                                     if let Some(props) = &rel.properties {
                                         for prop in props {
                                             if !schema.has_property(&prop.key) {
-                                                errors.push(format!("Property '{}' not in schema", prop.key));
+                                                errors.push(format!(
+                                                    "Property '{}' not in schema",
+                                                    prop.key
+                                                ));
                                             }
                                         }
                                     }
@@ -288,7 +309,10 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     if let Some(props) = &node.properties {
                                         for prop in props {
                                             if !schema.has_property(&prop.key) {
-                                                errors.push(format!("Property '{}' not in schema", prop.key));
+                                                errors.push(format!(
+                                                    "Property '{}' not in schema",
+                                                    prop.key
+                                                ));
                                             }
                                         }
                                     }
@@ -296,13 +320,19 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                 parser::PatternElement::Relationship(rel) => {
                                     if let Some(rel_type) = &rel.rel_type {
                                         if !schema.has_relationship_type(rel_type) {
-                                            errors.push(format!("Relationship type '{}' not in schema", rel_type));
+                                            errors.push(format!(
+                                                "Relationship type '{}' not in schema",
+                                                rel_type
+                                            ));
                                         }
                                     }
                                     if let Some(props) = &rel.properties {
                                         for prop in props {
                                             if !schema.has_property(&prop.key) {
-                                                errors.push(format!("Property '{}' not in schema", prop.key));
+                                                errors.push(format!(
+                                                    "Property '{}' not in schema",
+                                                    prop.key
+                                                ));
                                             }
                                         }
                                     }
@@ -319,8 +349,6 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
     }
     errors
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -360,12 +388,16 @@ mod tests {
         let mut schema = DbSchema::new();
         schema.labels.push("Person".to_string());
         schema.rel_types.push("KNOWS".to_string());
-        schema.properties.insert("age".to_string(), PropertyType::Integer);
+        schema
+            .properties
+            .insert("age".to_string(), PropertyType::Integer);
         let color_enum = EnumType {
             name: "ColorEnum".to_string(),
             values: vec!["Red".to_string(), "Green".to_string(), "Blue".to_string()],
         };
-        schema.enums.insert("ColorEnum".to_string(), color_enum.clone());
+        schema
+            .enums
+            .insert("ColorEnum".to_string(), color_enum.clone());
         let serialized = serde_json::to_string(&schema).unwrap();
         let deserialized: DbSchema = serde_json::from_str(&serialized).unwrap();
         assert_eq!(schema, deserialized);
@@ -406,10 +438,14 @@ mod tests {
     #[test]
     fn test_add_and_remove_property() {
         let mut schema = DbSchema::new();
-        assert!(schema.add_property("age".to_string(), PropertyType::Integer).is_ok());
+        assert!(schema
+            .add_property("age".to_string(), PropertyType::Integer)
+            .is_ok());
         assert!(schema.has_property("age"));
         // Duplicate
-        assert!(schema.add_property("age".to_string(), PropertyType::Integer).is_err());
+        assert!(schema
+            .add_property("age".to_string(), PropertyType::Integer)
+            .is_err());
         // Remove
         assert!(schema.remove_property("age").is_ok());
         assert!(!schema.has_property("age"));
@@ -424,10 +460,14 @@ mod tests {
             name: "ColorEnum".to_string(),
             values: vec!["Red".to_string(), "Green".to_string(), "Blue".to_string()],
         };
-        assert!(schema.add_enum("ColorEnum".to_string(), enum_type.clone()).is_ok());
+        assert!(schema
+            .add_enum("ColorEnum".to_string(), enum_type.clone())
+            .is_ok());
         assert!(schema.has_enum("ColorEnum"));
         // Duplicate
-        assert!(schema.add_enum("ColorEnum".to_string(), enum_type.clone()).is_err());
+        assert!(schema
+            .add_enum("ColorEnum".to_string(), enum_type.clone())
+            .is_err());
         // Remove
         assert!(schema.remove_enum("ColorEnum").is_ok());
         assert!(!schema.has_enum("ColorEnum"));
@@ -440,15 +480,28 @@ mod tests {
         let mut schema = DbSchema::new();
         schema.add_label("person".to_string()).unwrap();
         schema.add_relationship_type("knows".to_string()).unwrap();
-        schema.add_property("age".to_string(), PropertyType::Integer).unwrap();
+        schema
+            .add_property("age".to_string(), PropertyType::Integer)
+            .unwrap();
         let color_enum = EnumType {
             name: "color_enum".to_string(),
             values: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
         };
-        schema.add_enum("color_enum".to_string(), color_enum).unwrap();
-        schema.add_property("favorite_color".to_string(), PropertyType::Enum("color_enum".to_string())).unwrap();
+        schema
+            .add_enum("color_enum".to_string(), color_enum)
+            .unwrap();
+        schema
+            .add_property(
+                "favorite_color".to_string(),
+                PropertyType::Enum("color_enum".to_string()),
+            )
+            .unwrap();
         let errors = schema.validate();
-        assert!(errors.is_empty(), "Expected no validation errors, got: {:?}", errors);
+        assert!(
+            errors.is_empty(),
+            "Expected no validation errors, got: {:?}",
+            errors
+        );
     }
 
     #[test]
@@ -457,23 +510,39 @@ mod tests {
         schema.add_label("person".to_string()).unwrap();
         schema.add_relationship_type("person".to_string()).unwrap(); // duplicate name
         let errors = schema.validate();
-        assert!(errors.iter().any(|e| e.contains("Duplicate name")), "Expected duplicate name error");
+        assert!(
+            errors.iter().any(|e| e.contains("Duplicate name")),
+            "Expected duplicate name error"
+        );
     }
 
     #[test]
     fn test_schema_validation_bad_property_name() {
         let mut schema = DbSchema::new();
-        schema.add_property("BadName".to_string(), PropertyType::String).unwrap();
+        schema
+            .add_property("BadName".to_string(), PropertyType::String)
+            .unwrap();
         let errors = schema.validate();
-        assert!(errors.iter().any(|e| e.contains("snake_case")), "Expected snake_case property name error");
+        assert!(
+            errors.iter().any(|e| e.contains("snake_case")),
+            "Expected snake_case property name error"
+        );
     }
 
     #[test]
     fn test_schema_validation_missing_enum_reference() {
         let mut schema = DbSchema::new();
-        schema.add_property("favorite_color".to_string(), PropertyType::Enum("missing_enum".to_string())).unwrap();
+        schema
+            .add_property(
+                "favorite_color".to_string(),
+                PropertyType::Enum("missing_enum".to_string()),
+            )
+            .unwrap();
         let errors = schema.validate();
-        assert!(errors.iter().any(|e| e.contains("undefined enum type")), "Expected undefined enum type error");
+        assert!(
+            errors.iter().any(|e| e.contains("undefined enum type")),
+            "Expected undefined enum type error"
+        );
     }
 
     #[test]

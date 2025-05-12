@@ -1,5 +1,5 @@
+use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema};
 use pyo3::prelude::*;
-use ::cypher_guard::{DbSchema, validate_cypher_with_schema, get_cypher_validation_errors};
 
 #[pyfunction]
 fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {

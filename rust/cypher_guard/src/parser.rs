@@ -114,7 +114,13 @@ fn property(input: &str) -> IResult<&str, Property> {
     let (input, _) = char(':')(input)?;
     let (input, _) = multispace0(input)?;
     let (input, value) = property_value(input)?;
-    Ok((input, Property { key: key.to_string(), value }))
+    Ok((
+        input,
+        Property {
+            key: key.to_string(),
+            value,
+        },
+    ))
 }
 
 fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
@@ -129,13 +135,17 @@ fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
     let (input, _) = multispace0(input)?;
     let (input, _) = char('(')(input)?;
     let (input, var) = opt_identifier(input)?;
-    let (input, label) = opt(preceded(
-        tuple((multispace0, char(':'))),
-        identifier,
-    ))(input)?;
+    let (input, label) = opt(preceded(tuple((multispace0, char(':'))), identifier))(input)?;
     let (input, properties) = opt(preceded(multispace0, property_map))(input)?;
     let (input, _) = char(')')(input)?;
-    Ok((input, NodePattern { variable: var, label: label.map(|s| s.to_string()), properties }))
+    Ok((
+        input,
+        NodePattern {
+            variable: var,
+            label: label.map(|s| s.to_string()),
+            properties,
+        },
+    ))
 }
 
 fn opt_identifier(input: &str) -> IResult<&str, Option<String>> {
@@ -164,7 +174,12 @@ fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, _) = multispace0(input)?;
     let (input, rel) = opt(delimited(
         char('['),
-        tuple((opt_identifier, opt(preceded(tuple((multispace0, char(':'))), identifier)), opt(preceded(multispace0, property_map)), opt(length_range))),
+        tuple((
+            opt_identifier,
+            opt(preceded(tuple((multispace0, char(':'))), identifier)),
+            opt(preceded(multispace0, property_map)),
+            opt(length_range),
+        )),
         char(']'),
     ))(input)?;
     let (input, length) = if rel.is_none() {
@@ -176,19 +191,24 @@ fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, _) = multispace0(input)?;
     let (input, right) = opt(alt((tag("->"), tag("-"))))(input)?;
 
-    let (variable, rel_type, properties, rel_length) = rel.map(|(v, t, p, l)| (v, t, p, l)).unwrap_or((None, None, None, None));
+    let (variable, rel_type, properties, rel_length) = rel
+        .map(|(v, t, p, l)| (v, t, p, l))
+        .unwrap_or((None, None, None, None));
     let direction = match (left, right) {
         (Some("<-"), _) => Direction::Left,
         (_, Some("->")) => Direction::Right,
         _ => Direction::Undirected,
     };
-    Ok((input, RelationshipPattern {
-        variable,
-        direction,
-        properties,
-        rel_type: rel_type.map(|s| s.to_string()),
-        length: rel_length.or(length),
-    }))
+    Ok((
+        input,
+        RelationshipPattern {
+            variable,
+            direction,
+            properties,
+            rel_type: rel_type.map(|s| s.to_string()),
+            length: rel_length.or(length),
+        },
+    ))
 }
 
 fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement>> {
@@ -219,12 +239,18 @@ fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
         char('{'),
         tuple((
             opt(map(number_literal, |n| n as u32)),
-            opt(preceded(tuple((char(','), multispace0)), map(number_literal, |n| n as u32))),
+            opt(preceded(
+                tuple((char(','), multispace0)),
+                map(number_literal, |n| n as u32),
+            )),
         )),
         char('}'),
     )(input)?;
     let (min, max) = quant;
-    Ok((input, MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max })))
+    Ok((
+        input,
+        MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max }),
+    ))
 }
 
 fn match_element(input: &str) -> IResult<&str, MatchElement> {
@@ -238,10 +264,7 @@ fn match_element(input: &str) -> IResult<&str, MatchElement> {
 }
 
 fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
-    separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        match_element,
-    )(input)
+    separated_list1(tuple((multispace0, char(','), multispace0)), match_element)(input)
 }
 
 pub fn match_clause(input: &str) -> IResult<&str, MatchClause> {
@@ -256,15 +279,24 @@ fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("RETURN")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, items) = separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        identifier,
-    )(input)?;
-    Ok((input, ReturnClause { items: items.into_iter().map(|s| s.to_string()).collect() }))
+    let (input, items) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), identifier)(input)?;
+    Ok((
+        input,
+        ReturnClause {
+            items: items.into_iter().map(|s| s.to_string()).collect(),
+        },
+    ))
 }
 
 pub fn query(input: &str) -> IResult<&str, Query> {
     let (input, match_clause) = match_clause(input)?;
     let (input, return_clause) = opt(return_clause)(input)?;
-    Ok((input, Query { match_clause, return_clause }))
-} 
+    Ok((
+        input,
+        Query {
+            match_clause,
+            return_clause,
+        },
+    ))
+}
