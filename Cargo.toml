@@ -1,7 +1,9 @@
+
+
 [workspace.package]
-name = "cypher-guard"
 version = "0.1.0"
 edition = "2021"
+description = "A tool for validating Cypher queries against a Neo4j schema"
 
 [workspace]
 resolver = "2"

@@ -225,7 +225,7 @@ pub fn validate_cypher(query: &str) -> Result<bool> {
     // TODO: Implement validation logic
     Ok(true)
 }
-fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
+pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
     match parser::query(query) {
         Ok((_, ast)) => {
             let errors = get_cypher_validation_errors(query, schema);
@@ -235,7 +235,7 @@ fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
     }
 }
 
-fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
+pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
     let mut errors = Vec::new();
     match parser::query(query) {
         Ok((_, ast)) => {
@@ -320,33 +320,7 @@ fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
     errors
 }
 
-#[pyfunction]
-fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
-    let schema = match DbSchema::from_json_str(schema_json) {
-        Ok(s) => s,
-        Err(_) => return Ok(false),
-    };
-    match validate_cypher_with_schema(query, &schema) {
-        Ok(valid) => Ok(valid),
-        Err(_) => Ok(false),
-    }
-}
 
-#[pyfunction]
-fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<String>> {
-    let schema = match DbSchema::from_json_str(schema_json) {
-        Ok(s) => s,
-        Err(_) => return Ok(vec!["Invalid schema JSON".to_string()]),
-    };
-    Ok(get_cypher_validation_errors(query, &schema))
-}
-
-#[pymodule]
-fn cypher_guard(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(validate_cypher_py, m)?)?;
-    m.add_function(wrap_pyfunction!(get_validation_errors_py, m)?)?;
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
