@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-pyo3 = { version = "<=0.18", features = ["extension-module"] }
+pyo3.workspace = true
 cypher-guard = {path = "../cypher_guard" }
