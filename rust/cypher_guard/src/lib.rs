@@ -1,8 +1,9 @@
+mod parser;
+
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-
 /// Enum representing possible property types in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
@@ -224,11 +225,10 @@ pub fn validate_cypher(query: &str) -> Result<bool> {
     // TODO: Implement validation logic
     Ok(true)
 }
-
 fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
-    match crate::parser::query(query) {
+    match parser::query(query) {
         Ok((_, ast)) => {
-            let mut errors = get_cypher_validation_errors(query, schema);
+            let errors = get_cypher_validation_errors(query, schema);
             Ok(errors.is_empty())
         },
         Err(_) => Err(CypherGuardError::InvalidQuery),
@@ -237,15 +237,15 @@ fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
 
 fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
     let mut errors = Vec::new();
-    match crate::parser::query(query) {
+    match parser::query(query) {
         Ok((_, ast)) => {
             // Walk the AST and check labels, rel_types, properties
             for element in &ast.match_clause.elements {
                 match element {
-                    crate::parser::MatchElement::Pattern(pattern) => {
+                    parser::MatchElement::Pattern(pattern) => {
                         for pe in pattern {
                             match pe {
-                                crate::parser::PatternElement::Node(node) => {
+                                parser::PatternElement::Node(node) => {
                                     if let Some(label) = &node.label {
                                         if !schema.has_label(label) {
                                             errors.push(format!("Label '{}' not in schema", label));
@@ -259,7 +259,7 @@ fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
                                         }
                                     }
                                 }
-                                crate::parser::PatternElement::Relationship(rel) => {
+                                parser::PatternElement::Relationship(rel) => {
                                     if let Some(rel_type) = &rel.rel_type {
                                         if !schema.has_relationship_type(rel_type) {
                                             errors.push(format!("Relationship type '{}' not in schema", rel_type));
@@ -276,10 +276,10 @@ fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
                             }
                         }
                     }
-                    crate::parser::MatchElement::QuantifiedPathPattern(qpp) => {
+                    parser::MatchElement::QuantifiedPathPattern(qpp) => {
                         for pe in &qpp.pattern {
                             match pe {
-                                crate::parser::PatternElement::Node(node) => {
+                                parser::PatternElement::Node(node) => {
                                     if let Some(label) = &node.label {
                                         if !schema.has_label(label) {
                                             errors.push(format!("Label '{}' not in schema", label));
@@ -293,7 +293,7 @@ fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
                                         }
                                     }
                                 }
-                                crate::parser::PatternElement::Relationship(rel) => {
+                                parser::PatternElement::Relationship(rel) => {
                                     if let Some(rel_type) = &rel.rel_type {
                                         if !schema.has_relationship_type(rel_type) {
                                             errors.push(format!("Relationship type '{}' not in schema", rel_type));
