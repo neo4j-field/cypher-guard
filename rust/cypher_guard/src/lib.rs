@@ -358,7 +358,6 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn test_property_type_serialization() {

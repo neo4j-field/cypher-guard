@@ -191,8 +191,7 @@ fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, _) = multispace0(input)?;
     let (input, right) = opt(alt((tag("->"), tag("-"))))(input)?;
 
-    let (variable, rel_type, properties, rel_length) = rel
-        .unwrap_or((None, None, None, None));
+    let (variable, rel_type, properties, rel_length) = rel.unwrap_or((None, None, None, None));
     let direction = match (left, right) {
         (Some("<-"), _) => Direction::Left,
         (_, Some("->")) => Direction::Right,
