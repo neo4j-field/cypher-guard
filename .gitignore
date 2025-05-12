@@ -12,7 +12,7 @@ node_modules/
 target/
 
 # Rust/Cargo
-Cargo.lock
+# Cargo.lock
 
 # Python
 __pycache__/
