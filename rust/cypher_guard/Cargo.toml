@@ -10,7 +10,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [features]
-default = ["python-bindings"]
+default = []
 python-bindings = ["pyo3"]
 
 [dependencies.pyo3]
@@ -18,4 +18,5 @@ workspace = true
 optional = true
 
 [lib]
+name = "cypher_guard"
 crate-type = ["cdylib", "rlib"]

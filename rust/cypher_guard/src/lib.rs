@@ -1,3 +1,6 @@
+#[cfg(feature = "python-bindings")]
+use pyo3::prelude::*;
+
 mod parser;
 
 use serde::{Deserialize, Serialize};
@@ -581,4 +584,24 @@ mod tests {
         let json = json.unwrap();
         assert!(json.contains("person"));
     }
+}
+
+#[cfg(feature = "python-bindings")]
+#[pyfunction]
+fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
+    // ... existing code ...
+}
+
+#[cfg(feature = "python-bindings")]
+#[pyfunction]
+fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<String>> {
+    // ... existing code ...
+}
+
+#[cfg(feature = "python-bindings")]
+#[pymodule]
+fn cypher_guard(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(validate_cypher_py, m)?)?;
+    m.add_function(wrap_pyfunction!(get_validation_errors_py, m)?)?;
+    Ok(())
 }
