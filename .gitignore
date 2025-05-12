@@ -43,3 +43,10 @@ build/
 # Task files
 tasks.json
 tasks/ .cursor/mcp.json
+
+# AI
+.cursor/
+.roo
+.roomodes
+.taskmasterconfig
+.windsurfrules
