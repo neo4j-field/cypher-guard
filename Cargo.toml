@@ -1,0 +1,28 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+description = "A tool for validating Cypher queries against a Neo4j schema"
+
+[workspace]
+resolver = "2"
+members = [
+    "rust/cypher_guard",
+    "rust/python_bindings"
+]
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+pyo3 = { version = "0.21.2", features = ["extension-module"] }
+thiserror = "1.0"
+nom = "7"
+
+
+[profile.release]
+debug = 2
+lto = "thin"
+
+[profile.test.package.proptest]
+opt-level = 3
+
+[profile.test.package.rand_chacha]
+opt-level = 3

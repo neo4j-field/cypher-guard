@@ -1,0 +1,22 @@
+[package]
+name = "cypher-guard"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nom.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+default = []
+python-bindings = ["pyo3"]
+
+[dependencies.pyo3]
+workspace = true
+optional = true
+
+[lib]
+name = "cypher_guard"
+crate-type = ["cdylib", "rlib"]
