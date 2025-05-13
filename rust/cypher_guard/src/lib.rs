@@ -10,7 +10,6 @@ pub use schema::DbSchema;
 
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
-
 /// Placeholder validation function
 pub fn validate_cypher(_query: &str) -> Result<bool> {
     // TODO: Implement validation logic
@@ -44,7 +43,9 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     }
                                     if let Some(props) = &node.properties {
                                         for prop in props {
-                                            if !schema.has_property(&prop.key) {
+                                            if !schema.has_property_in_nodes(&prop.key)
+                                                && !schema.has_property_in_relationships(&prop.key)
+                                            {
                                                 errors.push(format!(
                                                     "Property '{}' not in schema",
                                                     prop.key
@@ -64,7 +65,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     }
                                     if let Some(props) = &rel.properties {
                                         for prop in props {
-                                            if !schema.has_property(&prop.key) {
+                                            if !schema.has_property_in_relationships(&prop.key) {
                                                 errors.push(format!(
                                                     "Property '{}' not in schema",
                                                     prop.key
@@ -87,7 +88,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     }
                                     if let Some(props) = &node.properties {
                                         for prop in props {
-                                            if !schema.has_property(&prop.key) {
+                                            if !schema.has_property_in_nodes(&prop.key) {
                                                 errors.push(format!(
                                                     "Property '{}' not in schema",
                                                     prop.key
@@ -107,7 +108,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     }
                                     if let Some(props) = &rel.properties {
                                         for prop in props {
-                                            if !schema.has_property(&prop.key) {
+                                            if !schema.has_property_in_relationships(&prop.key) {
                                                 errors.push(format!(
                                                     "Property '{}' not in schema",
                                                     prop.key
