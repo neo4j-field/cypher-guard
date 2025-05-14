@@ -188,9 +188,11 @@ impl DbSchemaMetadata {
         }
     }
 }
+
 /// Main schema struct for the graph database.
 /// This is a collection of node labels, relationship types, properties, enums, and metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
@@ -759,12 +761,26 @@ mod tests {
     // }
 
     #[test]
-    fn test_from_json_str_valid() {
+    fn test_from_json_str_valid_all_keys_present() {
         let json = r#"{
             "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
             "rel_props": {},
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}],
             "metadata": {"indexes":[], "constraints":[]}
+        }"#;
+        let schema = DbSchema::from_json_str(json);
+        assert!(schema.is_ok());
+        let schema = schema.unwrap();
+        assert!(schema.has_label("Person"));
+        assert!(schema.has_relationship_type("KNOWS"));
+        assert!(schema.has_node_property("Person", "age"));
+    }
+
+    #[test]
+    fn test_from_json_str_valid_missing_keys() {
+        let json = r#"{
+            "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
+            "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}]
         }"#;
         let schema = DbSchema::from_json_str(json);
         assert!(schema.is_ok());
