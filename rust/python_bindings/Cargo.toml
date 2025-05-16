@@ -3,6 +3,10 @@ name = "cypher_guard_python_bindings"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "cypher_guard"
+crate-type = ["cdylib"]
+
 [dependencies]
 pyo3.workspace = true
 cypher-guard = {path = "../cypher_guard" }

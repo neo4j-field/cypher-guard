@@ -12,7 +12,7 @@ node_modules/
 target/
 
 # Rust/Cargo
-# Cargo.lock
+Cargo.lock
 
 # Python
 __pycache__/
@@ -42,11 +42,30 @@ build/
 
 # Task files
 tasks.json
-tasks/ .cursor/mcp.json
+tasks/ 
 
-# AI
-.cursor/
-.roo
-.roomodes
-.taskmasterconfig
-.windsurfrules
+
+mcp.json
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+venv/
+ENV/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+.python-version
+poetry.lock
