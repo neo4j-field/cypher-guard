@@ -23,7 +23,7 @@ Build and install the Python module using maturin or the provided Makefile:
 ```sh
 # Option 1: Use maturin directly
 pip install maturin
-cd cypher-guard
+cd rust/python_bindings
 maturin develop
 
 # Option 2: Use the Makefile (installs maturin if needed)
@@ -48,24 +48,49 @@ cypher-guard = { path = "./cypher-guard" }
 ### Python
 After installing with maturin or `make`, import and use in Python:
 ```python
-import cypher_guard
+from cypher_guard import validate_cypher_py, get_validation_errors_py
 
-schema = '''
+# Example schema JSON
+schema_json = '''
 {
-    "labels": ["Person"],
-    "rel_types": ["KNOWS"],
-    "properties": {"name": {"type": "String"}, "age": {"type": "Integer"}},
-    "enums": {}
+    "node_props": {
+        "Person": [
+            {"name": "name", "neo4j_type": {"type": "STRING"}},
+            {"name": "age", "neo4j_type": {"type": "INTEGER"}}
+        ],
+        "Movie": [
+            {"name": "title", "neo4j_type": {"type": "STRING"}},
+            {"name": "year", "neo4j_type": {"type": "INTEGER"}}
+        ]
+    },
+    "rel_props": {
+        "KNOWS": [
+            {"name": "since", "neo4j_type": {"type": "STRING"}}
+        ],
+        "ACTED_IN": [
+            {"name": "role", "neo4j_type": {"type": "STRING"}}
+        ]
+    },
+    "relationships": [
+        {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
+        {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"}
+    ],
+    "metadata": {
+        "indexes": [],
+        "constraints": []
+    }
 }
 '''
-query = 'MATCH (n:Person {name: "Alice", age: 30}) RETURN n'
+
+# Example query
+query = 'MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since'
 
 # Validate query
-is_valid = cypher_guard.validate_cypher_py(query, schema)
+is_valid = validate_cypher_py(query, schema_json)
 print("Is valid:", is_valid)
 
 # Get validation errors
-errors = cypher_guard.get_validation_errors_py(query, schema)
+errors = get_validation_errors_py(query, schema_json)
 print("Errors:", errors)
 ```
 
