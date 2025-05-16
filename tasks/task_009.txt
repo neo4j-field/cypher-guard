@@ -1,0 +1,11 @@
+# Task ID: 9
+# Title: Expose Python Binding via PyO3 and Maturin
+# Status: pending
+# Dependencies: 4, 5, 6, 7
+# Priority: medium
+# Description: Expose the core validation functions as a Python module using PyO3 and maturin.
+# Details:
+Add PyO3 and maturin to dependencies. Create a Python module exposing `validate_query(query: str, schema_path: str) -> bool`. Build and publish the module.
+
+# Test Strategy:
+Test Python module with valid and invalid queries. Ensure results match Rust implementation.

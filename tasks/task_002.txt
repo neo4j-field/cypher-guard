@@ -1,0 +1,43 @@
+# Task ID: 2
+# Title: Define DbSchema Struct and Enums
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Define the DbSchema struct to represent labels, relationship types, properties, and enums as specified in the PRD.
+# Details:
+Create a struct in Rust with fields for labels (Vec<String>), relTypes (Vec<String>), properties (HashMap<String, PropertyType>), and enums (as needed). Use serde for serialization.
+
+# Test Strategy:
+Unit test struct creation, field access, and serialization/deserialization.
+
+# Subtasks:
+## 1. Define PropertyType Enum [pending]
+### Dependencies: None
+### Description: Create an enum to represent the different property types that can be stored in the graph database schema.
+### Details:
+Create a PropertyType enum in Rust that includes variants for common data types like String, Integer, Float, Boolean, DateTime, etc. Implement serde serialization/deserialization for this enum using #[derive(Serialize, Deserialize)]. Include documentation comments for each variant.
+
+## 2. Define Custom Enum Type Structure [pending]
+### Dependencies: None
+### Description: Create a structure to represent user-defined enums that can be used as property types in the schema.
+### Details:
+Create an EnumType struct that contains a name field and a vector of allowed values (as strings). This will represent custom enumeration types that users can define. Implement serde serialization/deserialization for this struct. Ensure the struct is properly documented with comments.
+
+## 3. Define DbSchema Struct [pending]
+### Dependencies: None
+### Description: Create the main DbSchema struct that will hold all schema information for the graph database.
+### Details:
+Define a DbSchema struct with fields for labels (Vec<String>), relTypes (Vec<String>), properties (HashMap<String, PropertyType>), and enums (HashMap<String, EnumType>). Add appropriate documentation comments. Implement serde serialization/deserialization with #[derive(Serialize, Deserialize)]. Include a constructor method (new()) that creates an empty schema.
+
+## 4. Implement Schema Modification Methods [pending]
+### Dependencies: None
+### Description: Add methods to the DbSchema struct for adding, removing, and querying schema elements.
+### Details:
+Implement methods for DbSchema: add_label(), remove_label(), add_relationship_type(), remove_relationship_type(), add_property(), remove_property(), add_enum(), remove_enum(). Each method should validate inputs and return a Result type to handle errors. Include methods to check if elements exist: has_label(), has_relationship_type(), has_property(), has_enum().
+
+## 5. Implement Schema Validation Logic [pending]
+### Dependencies: None
+### Description: Add validation methods to ensure schema integrity and consistency.
+### Details:
+Implement a validate() method on DbSchema that checks for schema consistency (e.g., no duplicate names across different schema elements, property names follow naming conventions). Add specific validation for enum properties to ensure they reference valid enum types. Include a method to get validation errors as a Vec<String>. Consider implementing the Display trait for human-readable schema representation.
+
