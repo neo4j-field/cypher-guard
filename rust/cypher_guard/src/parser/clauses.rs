@@ -10,8 +10,7 @@ use nom::{
 
 use crate::parser::ast::*;
 use crate::parser::patterns::*;
-use crate::parser::utils::{identifier};
-
+use crate::parser::utils::identifier;
 
 #[derive(Debug, Clone)]
 pub enum Clause {
@@ -40,34 +39,38 @@ pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("RETURN")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, items) = separated_list1(tuple((multispace0, char(','), multispace0)), identifier)(input)?;
-    Ok((input, ReturnClause { items: items.into_iter().map(|s| s.to_string()).collect() }))
+    let (input, items) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), identifier)(input)?;
+    Ok((
+        input,
+        ReturnClause {
+            items: items.into_iter().map(|s| s.to_string()).collect(),
+        },
+    ))
 }
 
 // Parses an entire Cypher query consisting of a MATCH and optional RETURN clause
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
     let (input, match_clause) = match_clause(input)?;
     let (input, return_clause) = opt(return_clause)(input)?;
-    Ok((input, Query { match_clause, return_clause }))
+    Ok((
+        input,
+        Query {
+            match_clause,
+            return_clause,
+        },
+    ))
 }
 
 // Update the parser to handle OPTIONAL MATCH
 pub fn clause(input: &str) -> IResult<&str, Clause> {
     alt((
         map(
-            tuple((
-                tag("OPTIONAL MATCH"),
-                multispace1,
-                match_element_list,
-            )),
+            tuple((tag("OPTIONAL MATCH"), multispace1, match_element_list)),
             |(_, _, elements)| Clause::OptionalMatch(MatchClause { elements }),
         ),
         map(
-            tuple((
-                tag("MATCH"),
-                multispace1,
-                match_element_list,
-            )),
+            tuple((tag("MATCH"), multispace1, match_element_list)),
             |(_, _, elements)| Clause::Match(MatchClause { elements }),
         ),
         // ... existing clause parsers ...
@@ -87,7 +90,7 @@ mod tests {
         match clause {
             Clause::OptionalMatch(mc) => {
                 assert_eq!(mc.elements.len(), 1);
-            },
+            }
             _ => panic!("Expected OptionalMatch"),
         }
     }
@@ -101,7 +104,7 @@ mod tests {
         match clause {
             Clause::Match(mc) => {
                 assert_eq!(mc.elements.len(), 1);
-            },
+            }
             _ => panic!("Expected Match"),
         }
     }

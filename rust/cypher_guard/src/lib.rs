@@ -8,9 +8,9 @@ mod schema;
 use errors::CypherGuardError;
 pub use schema::DbSchema;
 
-use crate::parser::clauses::Clause;
+use crate::parser::ast::{MatchElement, NodePattern, PatternElement, RelationshipPattern};
 use crate::parser::clauses::parse_query;
-use crate::parser::ast::{RelationshipPattern,MatchElement, PatternElement, NodePattern};
+use crate::parser::clauses::Clause;
 use std::collections::HashSet;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
@@ -86,29 +86,36 @@ fn validate_node(node: &NodePattern, schema: &DbSchema, ctx: &mut ValidationCont
             if !schema.has_property_in_nodes(&prop.key)
                 && !schema.has_property_in_relationships(&prop.key)
             {
-                ctx.errors.push(format!("Property '{}' not in schema", prop.key));
+                ctx.errors
+                    .push(format!("Property '{}' not in schema", prop.key));
             }
         }
     }
 }
 
 /// Validate a relationship (type, properties)
-fn validate_relationship(rel: &RelationshipPattern, schema: &DbSchema, ctx: &mut ValidationContext) {
+fn validate_relationship(
+    rel: &RelationshipPattern,
+    schema: &DbSchema,
+    ctx: &mut ValidationContext,
+) {
     match rel {
         RelationshipPattern::Regular(details) => {
             if let Some(rel_type) = &details.rel_type {
                 if !schema.has_relationship_type(rel_type) {
-                    ctx.errors.push(format!("Relationship type '{}' not in schema", rel_type));
+                    ctx.errors
+                        .push(format!("Relationship type '{}' not in schema", rel_type));
                 }
             }
             if let Some(props) = &details.properties {
                 for prop in props {
                     if !schema.has_property_in_relationships(&prop.key) {
-                        ctx.errors.push(format!("Property '{}' not in schema", prop.key));
+                        ctx.errors
+                            .push(format!("Property '{}' not in schema", prop.key));
                     }
                 }
             }
-        },
+        }
         RelationshipPattern::OptionalRelationship(_) => {
             // Skip validation for optional relationships
         }

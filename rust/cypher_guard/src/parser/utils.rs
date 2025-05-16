@@ -1,8 +1,4 @@
-use nom::{
-    bytes::complete::take_while1,
-    character::complete::char,
-    IResult,
-};
+use nom::{bytes::complete::take_while1, character::complete::char, IResult};
 
 pub fn identifier(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)

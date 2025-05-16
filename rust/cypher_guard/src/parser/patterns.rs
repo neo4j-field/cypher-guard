@@ -9,7 +9,7 @@ use nom::{
 };
 
 use crate::parser::ast::*;
-use crate::parser::utils::{identifier, string_literal, number_literal, opt_identifier};
+use crate::parser::utils::{identifier, number_literal, opt_identifier, string_literal};
 
 pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
@@ -25,7 +25,13 @@ pub fn property(input: &str) -> IResult<&str, Property> {
     let (input, _) = char(':')(input)?;
     let (input, _) = multispace0(input)?;
     let (input, value) = property_value(input)?;
-    Ok((input, Property { key: key.to_string(), value }))
+    Ok((
+        input,
+        Property {
+            key: key.to_string(),
+            value,
+        },
+    ))
 }
 
 pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
@@ -43,11 +49,14 @@ pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
     let (input, label) = opt(preceded(tuple((multispace0, char(':'))), identifier))(input)?;
     let (input, properties) = opt(preceded(multispace0, property_map))(input)?;
     let (input, _) = char(')')(input)?;
-    Ok((input, NodePattern {
-        variable: var,
-        label: label.map(|s| s.to_string()),
-        properties,
-    }))
+    Ok((
+        input,
+        NodePattern {
+            variable: var,
+            label: label.map(|s| s.to_string()),
+            properties,
+        },
+    ))
 }
 
 pub fn length_range(input: &str) -> IResult<&str, LengthRange> {
@@ -96,13 +105,16 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
         (_, Some("->")) => Direction::Right,
         _ => Direction::Undirected,
     };
-    Ok((input, RelationshipDetails {
-        variable,
-        direction,
-        properties,
-        rel_type: rel_type.map(|s| s.to_string()),
-        length: rel_length.or(length),
-    }))
+    Ok((
+        input,
+        RelationshipDetails {
+            variable,
+            direction,
+            properties,
+            rel_type: rel_type.map(|s| s.to_string()),
+            length: rel_length.or(length),
+        },
+    ))
 }
 
 pub fn relationship(input: &str) -> IResult<&str, RelationshipPattern> {
@@ -162,12 +174,18 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
         char('{'),
         tuple((
             opt(map(number_literal, |n| n as u32)),
-            opt(preceded(tuple((char(','), multispace0)), map(number_literal, |n| n as u32))),
+            opt(preceded(
+                tuple((char(','), multispace0)),
+                map(number_literal, |n| n as u32),
+            )),
         )),
         char('}'),
     )(input)?;
     let (min, max) = quant;
-    Ok((input, MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max })))
+    Ok((
+        input,
+        MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max }),
+    ))
 }
 
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
@@ -196,7 +214,7 @@ mod tests {
             PatternElement::Relationship(RelationshipPattern::OptionalRelationship(details)) => {
                 assert_eq!(details.rel_type, Some("KNOWS".to_string()));
                 assert_eq!(details.direction, Direction::Right);
-            },
+            }
             _ => panic!("Expected OptionalRelationship"),
         }
     }
@@ -215,7 +233,7 @@ mod tests {
             PatternElement::Relationship(RelationshipPattern::Regular(details)) => {
                 assert_eq!(details.rel_type, Some("KNOWS".to_string()));
                 assert_eq!(details.direction, Direction::Right);
-            },
+            }
             _ => panic!("Expected Regular relationship"),
         }
     }
