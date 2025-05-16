@@ -169,7 +169,7 @@ Cypher Guard is composed of several focused submodules:
 ---
 
 ### Summary of Flow
-
+```
 [Cypher Query String]
         ↓
 parser.rs → query()
@@ -184,88 +184,6 @@ lib.rs → get_cypher_validation_errors()
         ↓
 schema.rs → checks labels, rel types, and properties against DbSchema
         ↓
-errors.rs → returns a CypherGuardError or Vec<String> with issues
+errors.rs → returns a CypherGuardError or Vec<String> with issues```
 
 
-
-📁 File-by-File Role
-src/lib.rs
-Exposes public functions like:
-
-validate_cypher_with_schema(query, schema)
-
-get_cypher_validation_errors(query, schema)
-
-Delegates parsing to parser::query
-
-Delegates validation to schema + error logic
-
-src/parser.rs
-Re-exports query() from parser::clauses::query
-
-This is the entry point for parsing a full Cypher query
-
-src/parser/clauses.rs
-Parses top-level clauses:
-
-MATCH, RETURN
-
-Builds MatchClause, ReturnClause from strings
-
-Calls into match_element and pattern_element_sequence
-
-src/parser/patterns.rs
-Parses the inner graph structure:
-
-NodePattern via node_pattern()
-
-RelationshipPattern via relationship_pattern()
-
-Repeating paths via quantified_path_pattern()
-
-These functions build the PatternElement list
-
-src/parser/ast.rs
-Defines all AST types:
-
-Query, MatchClause, PatternElement, NodePattern, etc.
-
-These types are instantiated by the functions in clauses.rs and patterns.rs
-
-The AST is fully constructed here using nom-parsed values
-
-src/schema.rs
-Defines DbSchema
-
-Implements methods to check:
-
-has_label(label)
-
-has_relationship_type(type)
-
-has_property_in_nodes(key)
-
-has_property_in_relationships(key)
-
-Used during AST traversal to validate each element
-
-src/errors.rs
-Defines the CypherGuardError enum
-
-Used to distinguish between:
-
-Syntax errors (e.g., invalid query string)
-
-Validation errors (e.g., unknown label)
-
-src/main.rs
-CLI entry point
-
-Likely reads from stdin, calls validate_cypher_with_schema, and prints results
-
-src/parser/utils.rs
-Helper functions used during parsing:
-
-identifier(), number_literal(), opt_identifier()
-
-These are reused across patterns.rs and clauses.rs
