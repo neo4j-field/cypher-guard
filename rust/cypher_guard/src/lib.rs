@@ -10,7 +10,6 @@ pub use schema::DbSchema;
 
 use crate::parser::ast::{MatchElement, NodePattern, PatternElement, RelationshipPattern};
 use crate::parser::clauses::parse_query;
-use crate::parser::clauses::Clause;
 use std::collections::HashSet;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 

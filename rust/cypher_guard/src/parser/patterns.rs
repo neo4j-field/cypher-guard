@@ -72,6 +72,7 @@ pub fn length_range(input: &str) -> IResult<&str, LengthRange> {
     Ok((input, LengthRange { min, max }))
 }
 
+#[allow(dead_code)]
 pub fn relationship_type(input: &str) -> IResult<&str, String> {
     let (input, _) = char(':')(input)?;
     let (input, rel_type) = identifier(input)?;
@@ -117,6 +118,7 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     ))
 }
 
+#[allow(dead_code)]
 pub fn relationship(input: &str) -> IResult<&str, RelationshipPattern> {
     let (input, _) = char('-')(input)?;
     let (input, rel_type) = opt(relationship_type)(input)?;

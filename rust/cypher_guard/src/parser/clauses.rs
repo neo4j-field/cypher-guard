@@ -13,6 +13,7 @@ use crate::parser::patterns::*;
 use crate::parser::utils::identifier;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Clause {
     Match(MatchClause),
     OptionalMatch(MatchClause),
@@ -63,6 +64,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
 }
 
 // Update the parser to handle OPTIONAL MATCH
+#[allow(dead_code)]
 pub fn clause(input: &str) -> IResult<&str, Clause> {
     alt((
         map(
