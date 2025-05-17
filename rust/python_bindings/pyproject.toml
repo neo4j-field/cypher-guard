@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "cypher_guard"
+version = "0.1.0"
+description = "Python bindings for Cypher Guard"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "src"
+module-name = "cypher_guard" 

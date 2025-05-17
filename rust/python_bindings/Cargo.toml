@@ -3,6 +3,21 @@ name = "cypher_guard_python_bindings"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "cypher_guard"
+crate-type = ["cdylib"]
+
 [dependencies]
-pyo3.workspace = true
-cypher-guard = {path = "../cypher_guard" }
+cypher-guard = { path = "../cypher_guard" }
+pyo3 = { workspace = true, features = ["extension-module"] }
+
+[build-dependencies]
+pyo3-build-config = "0.21.2"
+
+[build]
+rustflags = [
+    "-C", "link-arg=-undefined",
+    "-C", "link-arg=dynamic_lookup",
+    "-C", "link-arg=-framework",
+    "-C", "link-arg=CoreFoundation"
+]

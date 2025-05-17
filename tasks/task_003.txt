@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Implement Schema Loading from JSON
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Implement functionality to load DbSchema from a JSON file using serde_json.
+# Details:
+Add a function `load_schema(path: &str) -> Result<DbSchema, Error>`. Use serde_json to parse the file into the DbSchema struct.
+
+# Test Strategy:
+Test with valid and invalid JSON files. Verify schema fields are populated correctly.
