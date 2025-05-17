@@ -15,7 +15,7 @@ schema_json = '''
     },
     "rel_props": {
         "KNOWS": [
-            {"name": "since", "neo4j_type": {"type": "STRING"}}
+            {"name": "since", "neo4j_type": {"type": "DATETIME"}}
         ],
         "ACTED_IN": [
             {"name": "role", "neo4j_type": {"type": "STRING"}}
@@ -74,23 +74,41 @@ invalid_queries = [
     "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since, b.invalid_property"  # 'invalid_property' is not a valid property
 ]
 
-# Test valid queries
-print("Testing valid queries:")
-for query in valid_queries:
-    is_valid = validate_cypher_py(query, schema_json)
-    print(f"Query: {query}")
-    print(f"Valid: {is_valid}\n")
+def test_valid_queries():
+    print("Testing valid queries:")
+    print("Schema JSON:", schema_json)  # Debug: Print schema JSON
+    for query in valid_queries:
+        print(f"\nQuery: {query}")
+        try:
+            errors = get_validation_errors_py(query, schema_json)  # Debug: Get validation errors
+            print(f"Validation errors: {errors}")  # Debug: Print validation errors
+            is_valid = validate_cypher_py(query, schema_json)
+            print(f"Valid: {is_valid}")
+            assert is_valid, f"Query should be valid: {query}"
+        except Exception as e:
+            print(f"Error during validation: {str(e)}")  # Debug: Print any exceptions
+            raise
+        print()
 
-# Test valid QPPs
-print("Testing valid QPPs:")
-for query in valid_qpps:
-    is_valid = validate_cypher_py(query, schema_json)
-    print(f"Query: {query}")
-    print(f"Valid: {is_valid}\n")
+def test_valid_qpps():
+    print("Testing valid QPPs:")
+    for query in valid_qpps:
+        is_valid = validate_cypher_py(query, schema_json)
+        print(f"Query: {query}")
+        print(f"Valid: {is_valid}")
+        assert is_valid, f"Query should be valid: {query}"
+        print()
 
-# Test invalid queries
-print("Testing invalid queries:")
-for query in invalid_queries:
-    errors = get_validation_errors_py(query, schema_json)
-    print(f"Query: {query}")
-    print(f"Errors: {errors}\n") 
+def test_invalid_queries():
+    print("Testing invalid queries:")
+    for query in invalid_queries:
+        errors = get_validation_errors_py(query, schema_json)
+        print(f"Query: {query}")
+        print(f"Errors: {errors}")
+        assert len(errors) > 0, f"Query should have validation errors: {query}"
+        print()
+
+if __name__ == "__main__":
+    test_valid_queries()
+    test_valid_qpps()
+    test_invalid_queries() 

@@ -359,16 +359,32 @@ impl DbSchema {
 
     /// Check if a property exists
     pub fn has_node_property(&self, label: &str, name: &str) -> bool {
-        self.node_props
+        println!("Checking node property: label={}, name={}", label, name); // Debug
+        if !self.has_label(label) {
+            println!("Label '{}' not found in schema", label); // Debug
+            return false;
+        }
+        let result = self.node_props
             .get(label)
-            .map_or_else(|| false, |props| props.iter().any(|p| p.name == name))
+            .map(|props| props.iter().any(|p| p.name == name))
+            .unwrap_or(false);
+        println!("Node property check result: {}", result); // Debug
+        result
     }
 
     /// Check if a relationship property exists
     pub fn has_relationship_property(&self, rel_type: &str, name: &str) -> bool {
-        self.rel_props
+        println!("Checking relationship property: type={}, name={}", rel_type, name); // Debug
+        if !self.has_relationship_type(rel_type) {
+            println!("Relationship type '{}' not found in schema", rel_type); // Debug
+            return false;
+        }
+        let result = self.rel_props
             .get(rel_type)
-            .map_or_else(|| false, |props| props.iter().any(|p| p.name == name))
+            .map(|props| props.iter().any(|p| p.name == name))
+            .unwrap_or(false);
+        println!("Relationship property check result: {}", result); // Debug
+        result
     }
 
     /// Get all node properties for a label
@@ -478,10 +494,16 @@ impl DbSchema {
 
     /// Load a DbSchema from a JSON string
     pub fn from_json_str(s: &str) -> Result<Self> {
-        serde_json::from_str(s).map_err(|e| {
+        println!("Loading schema from JSON: {}", s); // Debug: Print input JSON
+        let schema = serde_json::from_str::<DbSchema>(s).map_err(|e| {
             eprintln!("JSON parse error: {}", e);
             CypherGuardError::SchemaError
-        })
+        })?;
+        println!("Loaded schema: {:?}", schema); // Debug: Print loaded schema
+        println!("Node properties: {:?}", schema.node_props); // Debug: Print node properties
+        println!("Relationship properties: {:?}", schema.rel_props); // Debug: Print relationship properties
+        println!("Relationships: {:?}", schema.relationships); // Debug: Print relationships
+        Ok(schema)
     }
 
     /// Serialize a DbSchema to a JSON string

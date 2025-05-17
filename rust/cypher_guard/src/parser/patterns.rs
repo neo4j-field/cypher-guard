@@ -43,11 +43,15 @@ pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
 }
 
 pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
+    println!("Parsing node pattern: {}", input);
     let (input, _) = multispace0(input)?;
     let (input, _) = char('(')(input)?;
     let (input, var) = opt_identifier(input)?;
+    println!("Node variable: {:?}", var);
     let (input, label) = opt(preceded(tuple((multispace0, char(':'))), identifier))(input)?;
+    println!("Node label: {:?}", label);
     let (input, properties) = opt(preceded(multispace0, property_map))(input)?;
+    println!("Node properties: {:?}", properties);
     let (input, _) = char(')')(input)?;
     Ok((
         input,
@@ -82,7 +86,9 @@ pub fn relationship_type(input: &str) -> IResult<&str, String> {
 pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     let (input, left) = opt(preceded(multispace0, alt((tag("<-"), tag("-")))))(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, rel) = opt(delimited(
+    
+    // Try to parse relationship details in brackets first
+    let (input, rel) = match delimited(
         char('['),
         tuple((
             opt_identifier,
@@ -91,7 +97,14 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
             opt(length_range),
         )),
         char(']'),
-    ))(input)?;
+    )(input) {
+        Ok((input, details)) => (input, Some(details)),
+        Err(e) => {
+            eprintln!("Relationship details parse error: {:?}", e);
+            (input, None)
+        }
+    };
+    
     let (input, length) = if rel.is_none() {
         opt(length_range)(input)?
     } else {
@@ -142,25 +155,29 @@ pub fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement
     let (mut input, first_node) = node_pattern(input)?;
     let mut elements = vec![PatternElement::Node(first_node)];
     loop {
-        // Skip whitespace before attempting to parse another relationship
         let (rest, _) = multispace0(input)?;
-        if rest.is_empty() {
+        // Stop if the next input is a clause keyword or empty
+        let trimmed = rest.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with("RETURN") {
             break;
         }
-        // Try to parse a relationship segment: -[ ... ]-> or -[ ... ]-
         let rel_res = relationship_details(rest);
-        if let Ok((input2, details)) = rel_res {
-            let (input3, node) = node_pattern(input2)?;
-            let rel = if is_optional.is_some() {
-                RelationshipPattern::OptionalRelationship(details)
-            } else {
-                RelationshipPattern::Regular(details)
-            };
-            elements.push(PatternElement::Relationship(rel));
-            elements.push(PatternElement::Node(node));
-            input = input3;
-        } else {
-            break;
+        match rel_res {
+            Ok((input2, details)) => {
+                let (input3, node) = node_pattern(input2)?;
+                let rel = if is_optional.is_some() {
+                    RelationshipPattern::OptionalRelationship(details)
+                } else {
+                    RelationshipPattern::Regular(details)
+                };
+                elements.push(PatternElement::Relationship(rel));
+                elements.push(PatternElement::Node(node));
+                input = input3;
+            }
+            Err(e) => {
+                eprintln!("Relationship parse error: {:?}", e);
+                break;
+            }
         }
     }
     Ok((input, elements))
@@ -191,10 +208,13 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
 }
 
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
+    println!("Parsing match element: {}", input);
     if let Ok((input2, qpp)) = quantified_path_pattern(input) {
+        println!("Found quantified path pattern: {:?}", qpp);
         return Ok((input2, qpp));
     }
     let (input, pattern) = pattern_element_sequence(input)?;
+    println!("Found regular pattern: {:?}", pattern);
     Ok((input, MatchElement::Pattern(pattern)))
 }
 

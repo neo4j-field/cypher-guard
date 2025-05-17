@@ -1,24 +1,38 @@
-use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema};
 use pyo3::prelude::*;
+use std::io::Write;
+use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema};
 
 #[pyfunction]
-fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
-    let schema = match DbSchema::from_json_str(schema_json) {
-        Ok(s) => s,
-        Err(_) => return Ok(false),
-    };
-    match validate_cypher_with_schema(query, &schema) {
-        Ok(valid) => Ok(valid),
-        Err(_) => Ok(false),
-    }
+pub fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
+    println!("[PYBIND] Validating query: {}", query);
+    println!("[PYBIND] Schema JSON: {}", schema_json);
+    std::io::stdout().flush().unwrap();
+    let schema = DbSchema::from_json_str(schema_json).map_err(|e| {
+        println!("[PYBIND] Schema error: {:?}", e);
+        std::io::stdout().flush().unwrap();
+        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid schema")
+    })?;
+    println!("[PYBIND] Schema loaded successfully");
+    std::io::stdout().flush().unwrap();
+    validate_cypher_with_schema(query, &schema).map_err(|e| {
+        println!("[PYBIND] Validation error: {:?}", e);
+        std::io::stdout().flush().unwrap();
+        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid query")
+    })
 }
 
 #[pyfunction]
-fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<String>> {
-    let schema = match DbSchema::from_json_str(schema_json) {
-        Ok(s) => s,
-        Err(_) => return Ok(vec!["Invalid schema JSON".to_string()]),
-    };
+pub fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<String>> {
+    println!("[PYBIND] Getting validation errors for query: {}", query);
+    println!("[PYBIND] Schema JSON: {}", schema_json);
+    std::io::stdout().flush().unwrap();
+    let schema = DbSchema::from_json_str(schema_json).map_err(|e| {
+        println!("[PYBIND] Schema error: {:?}", e);
+        std::io::stdout().flush().unwrap();
+        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid schema")
+    })?;
+    println!("[PYBIND] Schema loaded successfully");
+    std::io::stdout().flush().unwrap();
     Ok(get_cypher_validation_errors(query, &schema))
 }
 
