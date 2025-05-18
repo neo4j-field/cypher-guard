@@ -183,4 +183,9 @@ def test_path_variable_with_predicate():
 if __name__ == "__main__":
     test_valid_queries()
     test_valid_qpps()
-    test_invalid_queries() 
+    test_quantified_path_pattern()
+    test_invalid_queries()
+    test_path_variable_with_predicate()
+
+
+    

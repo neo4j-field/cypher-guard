@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::{many1, separated_list1},
+    multi::separated_list1,
     sequence::{preceded, tuple},
     IResult,
 };
@@ -53,10 +53,13 @@ pub fn match_clause(input: &str) -> IResult<&str, MatchClause> {
     println!("After MATCH whitespace: {}", input);
     let (input, elements) = match_element_list(input)?;
     println!("Match clause elements: {:?}", elements);
-    Ok((input, MatchClause { 
-        elements,
-        is_optional: is_optional.is_some(),
-    }))
+    Ok((
+        input,
+        MatchClause {
+            elements,
+            is_optional: is_optional.is_some(),
+        },
+    ))
 }
 
 // Parses a return item: either an identifier or a dotted property access (e.g., a, a.name)
@@ -79,12 +82,7 @@ pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
     let (input, items) =
         separated_list1(tuple((multispace0, char(','), multispace0)), return_item)(input)?;
     println!("Return clause items: {:?}", items); // Debug
-    Ok((
-        input,
-        ReturnClause {
-            items,
-        },
-    ))
+    Ok((input, ReturnClause { items }))
 }
 
 // Parses a numeric literal
@@ -99,7 +97,7 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
     let (input, _) = char('(')(input)?;
     let (input, args) = separated_list1(
         tuple((multispace0, char(','), multispace0)),
-        map(identifier, |s| s.to_string())
+        map(identifier, |s| s.to_string()),
     )(input)?;
     let (input, _) = char(')')(input)?;
     Ok((input, (function, args)))
@@ -121,11 +119,18 @@ fn where_condition(input: &str) -> IResult<&str, WhereCondition> {
             tuple((
                 function_call,
                 multispace0,
-                alt((tag(">"), tag("<"), tag(">="), tag("<="), tag("="), tag("<>"))),
+                alt((
+                    tag(">"),
+                    tag("<"),
+                    tag(">="),
+                    tag("<="),
+                    tag("="),
+                    tag("<>"),
+                )),
                 multispace0,
                 alt((numeric_literal, map(identifier, |s| s.to_string()))),
             )),
-            |((function, args), _, operator, _, right)| WhereCondition::FunctionCall {
+            |((function, args), _, _operator, _, _right)| WhereCondition::FunctionCall {
                 function,
                 arguments: args,
             },
@@ -135,11 +140,18 @@ fn where_condition(input: &str) -> IResult<&str, WhereCondition> {
             tuple((
                 path_property,
                 multispace0,
-                alt((tag(">"), tag("<"), tag(">="), tag("<="), tag("="), tag("<>"))),
+                alt((
+                    tag(">"),
+                    tag("<"),
+                    tag(">="),
+                    tag("<="),
+                    tag("="),
+                    tag("<>"),
+                )),
                 multispace0,
                 alt((numeric_literal, map(identifier, |s| s.to_string()))),
             )),
-            |((path_var, property), _, operator, _, right)| WhereCondition::PathProperty {
+            |((path_var, property), _, _operator, _, _right)| WhereCondition::PathProperty {
                 path_var,
                 property,
             },
@@ -149,7 +161,14 @@ fn where_condition(input: &str) -> IResult<&str, WhereCondition> {
             tuple((
                 map(identifier, |s| s.to_string()),
                 multispace0,
-                alt((tag(">"), tag("<"), tag(">="), tag("<="), tag("="), tag("<>"))),
+                alt((
+                    tag(">"),
+                    tag("<"),
+                    tag(">="),
+                    tag("<="),
+                    tag("="),
+                    tag("<>"),
+                )),
                 multispace0,
                 alt((numeric_literal, map(identifier, |s| s.to_string()))),
             )),
@@ -170,7 +189,7 @@ pub fn where_clause(input: &str) -> IResult<&str, WhereClause> {
     let (input, _) = multispace1(input)?;
     let (input, conditions) = separated_list1(
         tuple((multispace0, tag("AND"), multispace0)),
-        where_condition
+        where_condition,
     )(input)?;
     println!("Where conditions: {:?}", conditions);
     Ok((input, WhereClause { conditions }))
@@ -187,9 +206,14 @@ fn set_clause(input: &str) -> IResult<&str, SetClause> {
     let (input, _) = multispace0(input)?;
     let (input, value) = alt((
         map(string_literal, PropertyValue::String),
-        map(numeric_literal, |s| PropertyValue::Number(s.parse().unwrap())),
+        map(numeric_literal, |s| {
+            PropertyValue::Number(s.parse().unwrap())
+        }),
     ))(input)?;
-    println!("Parsed set clause: variable={}, property={}, value={:?}", variable, property, value);
+    println!(
+        "Parsed set clause: variable={}, property={}, value={:?}",
+        variable, property, value
+    );
     Ok((
         input,
         SetClause {
@@ -207,10 +231,8 @@ fn on_create_clause(input: &str) -> IResult<&str, OnCreateClause> {
     let (input, _) = multispace1(input)?;
     let (input, _) = tag("SET")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, set_clauses) = separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        set_clause
-    )(input)?;
+    let (input, set_clauses) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input)?;
     println!("Parsed set clauses: {:?}", set_clauses);
     Ok((input, OnCreateClause { set_clauses }))
 }
@@ -222,10 +244,8 @@ fn on_match_clause(input: &str) -> IResult<&str, OnMatchClause> {
     let (input, _) = multispace1(input)?;
     let (input, _) = tag("SET")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, set_clauses) = separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        set_clause
-    )(input)?;
+    let (input, set_clauses) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input)?;
     Ok((input, OnMatchClause { set_clauses }))
 }
 
@@ -269,22 +289,22 @@ fn match_element(input: &str) -> IResult<&str, MatchElement> {
 // Parses a quantified path pattern with optional WHERE clause and path variable
 fn quantified_path_pattern(input: &str) -> IResult<&str, QuantifiedPathPattern> {
     println!("Parsing quantified path pattern: {}", input);
-    
+
     // Parse optional path variable
     let (input, path_var) = opt(preceded(
         tuple((multispace0, char('='), multispace0)),
-        map(identifier, |s| s.to_string())
+        map(identifier, |s| s.to_string()),
     ))(input)?;
-    
+
     // Parse the pattern
     let (input, pattern) = pattern(input)?;
-    
+
     // Parse length range
     let (input, length) = opt(length_range)(input)?;
-    
+
     // Parse optional WHERE clause
     let (input, where_clause) = opt(where_clause)(input)?;
-    
+
     Ok((
         input,
         QuantifiedPathPattern {
@@ -319,10 +339,8 @@ pub fn relationship_type(input: &str) -> IResult<&str, String> {
 // Parses a property map
 pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
     let (input, _) = char('{')(input)?;
-    let (input, props) = separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        property
-    )(input)?;
+    let (input, props) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), property)(input)?;
     let (input, _) = char('}')(input)?;
     Ok((input, props))
 }
@@ -339,7 +357,9 @@ fn property(input: &str) -> IResult<&str, Property> {
 fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
         map(string_literal, PropertyValue::String),
-        map(numeric_literal, |s| PropertyValue::Number(s.parse().unwrap())),
+        map(numeric_literal, |s| {
+            PropertyValue::Number(s.parse().unwrap())
+        }),
     ))(input)
 }
 
@@ -383,17 +403,21 @@ pub fn clause(input: &str) -> IResult<&str, Clause> {
     alt((
         map(
             tuple((tag("OPTIONAL MATCH"), multispace1, match_element_list)),
-            |(_, _, elements)| Clause::OptionalMatch(MatchClause { 
-                elements,
-                is_optional: true,
-            }),
+            |(_, _, elements)| {
+                Clause::OptionalMatch(MatchClause {
+                    elements,
+                    is_optional: true,
+                })
+            },
         ),
         map(
             tuple((tag("MATCH"), multispace1, match_element_list)),
-            |(_, _, elements)| Clause::Match(MatchClause { 
-                elements,
-                is_optional: false,
-            }),
+            |(_, _, elements)| {
+                Clause::Match(MatchClause {
+                    elements,
+                    is_optional: false,
+                })
+            },
         ),
         map(merge_clause, Clause::Merge),
         map(create_clause, Clause::Create),

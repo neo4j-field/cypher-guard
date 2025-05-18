@@ -8,10 +8,13 @@ mod schema;
 use errors::CypherGuardError;
 pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
 
-use crate::parser::ast::{MatchElement, NodePattern, PatternElement, RelationshipPattern, Query, WhereCondition, WhereClause};
+use crate::parser::ast::{
+    MatchElement, NodePattern, PatternElement, Query, RelationshipPattern, WhereClause,
+    WhereCondition,
+};
 use crate::parser::clauses::parse_query;
-use std::collections::HashSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Tracks validation state (errors + alias scope)
@@ -97,7 +100,10 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                     }
                                 }
                                 VarInfo::Relationship { rel_type } => {
-                                    println!("Relationship variable '{}' has type '{}'", var, rel_type); // Debug: Print relationship type
+                                    println!(
+                                        "Relationship variable '{}' has type '{}'",
+                                        var, rel_type
+                                    ); // Debug: Print relationship type
                                     if !schema.has_relationship_property(rel_type, prop) {
                                         let error = format!(
                                             "Property '{}' not in schema for relationship type '{}'",
@@ -112,10 +118,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                 }
                             }
                         } else {
-                            let error = format!(
-                                "Variable '{}' not found in MATCH clause",
-                                var
-                            );
+                            let error = format!("Variable '{}' not found in MATCH clause", var);
                             println!("Validation error: {}", error); // Debug: Print validation error
                             ctx.errors.push(error);
                         }
@@ -138,12 +141,16 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
             validate_match_element(el, ctx.schema, ctx);
         }
     }
-    
+
     // Validate WHERE clause if present
     if let Some(where_clause) = &query.where_clause {
         for condition in &where_clause.conditions {
             match condition {
-                WhereCondition::Comparison { left, operator: _, right: _ } => {
+                WhereCondition::Comparison {
+                    left,
+                    operator: _,
+                    right: _,
+                } => {
                     if let Some((var, prop)) = left.split_once('.') {
                         if let Some(var_info) = ctx.var_types.get(var) {
                             match var_info {
@@ -178,7 +185,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
             }
         }
     }
-    
+
     // Validate return clause
     if let Some(return_clause) = &query.return_clause {
         for item in &return_clause.items {
@@ -202,8 +209,8 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                             }
                         }
                         VarInfo::Path => {
-                                    // Path property validation if needed
-                                }
+                            // Path property validation if needed
+                        }
                     }
                 } else {
                     ctx.errors.push(format!("Variable '{}' not defined", var));
@@ -220,12 +227,12 @@ fn validate_match_element(el: &MatchElement, schema: &DbSchema, ctx: &mut Valida
         MatchElement::QuantifiedPathPattern(qpp) => {
             // Validate the pattern
             validate_pattern(&qpp.pattern, schema, ctx);
-            
+
             // Validate the WHERE clause if present
             if let Some(where_clause) = &qpp.where_clause {
                 validate_where_clause(where_clause, schema, ctx);
             }
-            
+
             // Record path variable if present
             if let Some(path_var) = &qpp.path_variable {
                 ctx.var_types.insert(path_var.clone(), VarInfo::Path);
@@ -242,12 +249,30 @@ fn validate_pattern(pattern: &[PatternElement], schema: &DbSchema, ctx: &mut Val
                 // Record variable if present
                 if let Some(var) = &node.variable {
                     if let Some(label) = &node.label {
-                        ctx.var_types.insert(var.clone(), VarInfo::Node { label: label.clone() });
-                        println!("Recorded node variable: {} -> {:?}", var, ctx.var_types.get(var)); // Debug: Print recorded node variable
+                        ctx.var_types.insert(
+                            var.clone(),
+                            VarInfo::Node {
+                                label: label.clone(),
+                            },
+                        );
+                        println!(
+                            "Recorded node variable: {} -> {:?}",
+                            var,
+                            ctx.var_types.get(var)
+                        ); // Debug: Print recorded node variable
                     } else {
                         // Record node variable without label
-                        ctx.var_types.insert(var.clone(), VarInfo::Node { label: "".to_string() });
-                        println!("Recorded node variable without label: {} -> {:?}", var, ctx.var_types.get(var)); // Debug: Print recorded node variable
+                        ctx.var_types.insert(
+                            var.clone(),
+                            VarInfo::Node {
+                                label: "".to_string(),
+                            },
+                        );
+                        println!(
+                            "Recorded node variable without label: {} -> {:?}",
+                            var,
+                            ctx.var_types.get(var)
+                        ); // Debug: Print recorded node variable
                     }
                 }
                 validate_node(node, schema, ctx)
@@ -257,12 +282,30 @@ fn validate_pattern(pattern: &[PatternElement], schema: &DbSchema, ctx: &mut Val
                 if let RelationshipPattern::Regular(details) = rel {
                     if let Some(var) = &details.variable {
                         if let Some(rel_type) = &details.rel_type {
-                            ctx.var_types.insert(var.clone(), VarInfo::Relationship { rel_type: rel_type.clone() });
-                            println!("Recorded relationship variable: {} -> {:?}", var, ctx.var_types.get(var)); // Debug: Print recorded relationship variable
+                            ctx.var_types.insert(
+                                var.clone(),
+                                VarInfo::Relationship {
+                                    rel_type: rel_type.clone(),
+                                },
+                            );
+                            println!(
+                                "Recorded relationship variable: {} -> {:?}",
+                                var,
+                                ctx.var_types.get(var)
+                            ); // Debug: Print recorded relationship variable
                         } else {
                             // Record relationship variable without type
-                            ctx.var_types.insert(var.clone(), VarInfo::Relationship { rel_type: "".to_string() });
-                            println!("Recorded relationship variable without type: {} -> {:?}", var, ctx.var_types.get(var)); // Debug: Print recorded relationship variable
+                            ctx.var_types.insert(
+                                var.clone(),
+                                VarInfo::Relationship {
+                                    rel_type: "".to_string(),
+                                },
+                            );
+                            println!(
+                                "Recorded relationship variable without type: {} -> {:?}",
+                                var,
+                                ctx.var_types.get(var)
+                            ); // Debug: Print recorded relationship variable
                         }
                     }
                 }
@@ -323,10 +366,18 @@ fn validate_relationship(
 }
 
 /// Validate a WHERE clause
-fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mut ValidationContext) {
+fn validate_where_clause(
+    where_clause: &WhereClause,
+    schema: &DbSchema,
+    ctx: &mut ValidationContext,
+) {
     for condition in &where_clause.conditions {
         match condition {
-            WhereCondition::Comparison { left, operator: _, right } => {
+            WhereCondition::Comparison {
+                left,
+                operator: _,
+                right,
+            } => {
                 validate_property_access(left, schema, ctx);
                 // Validate the type of the right-hand side literal
                 if let Some((var, prop)) = left.split_once('.') {
@@ -335,8 +386,14 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                             VarInfo::Node { label } => {
                                 if let Some(prop_info) = schema.get_node_property(label, prop) {
                                     // Check if the right-hand side literal matches the property type
-                                    let is_quoted = right.starts_with('\'') && right.ends_with('\'') && right.len() >= 2;
-                                    let unquoted = if is_quoted { &right[1..right.len()-1] } else { right.as_str() };
+                                    let is_quoted = right.starts_with('\'')
+                                        && right.ends_with('\'')
+                                        && right.len() >= 2;
+                                    let unquoted = if is_quoted {
+                                        &right[1..right.len() - 1]
+                                    } else {
+                                        right.as_str()
+                                    };
                                     match prop_info.neo4j_type {
                                         PropertyType::STRING => {
                                             if !is_quoted {
@@ -363,7 +420,9 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
-                                            if is_quoted || !(unquoted == "true" || unquoted == "false") {
+                                            if is_quoted
+                                                || !(unquoted == "true" || unquoted == "false")
+                                            {
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
                                                     prop
@@ -384,9 +443,17 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
-                                if let Some(prop_info) = schema.get_relationship_property(rel_type, prop) {
-                                    let is_quoted = right.starts_with('\'') && right.ends_with('\'') && right.len() >= 2;
-                                    let unquoted = if is_quoted { &right[1..right.len()-1] } else { right.as_str() };
+                                if let Some(prop_info) =
+                                    schema.get_relationship_property(rel_type, prop)
+                                {
+                                    let is_quoted = right.starts_with('\'')
+                                        && right.ends_with('\'')
+                                        && right.len() >= 2;
+                                    let unquoted = if is_quoted {
+                                        &right[1..right.len() - 1]
+                                    } else {
+                                        right.as_str()
+                                    };
                                     match prop_info.neo4j_type {
                                         PropertyType::STRING => {
                                             if !is_quoted {
@@ -413,7 +480,9 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
-                                            if is_quoted || !(unquoted == "true" || unquoted == "false") {
+                                            if is_quoted
+                                                || !(unquoted == "true" || unquoted == "false")
+                                            {
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
                                                     prop
@@ -440,38 +509,29 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                     }
                 }
             }
-            WhereCondition::FunctionCall { function, arguments } => {
+            WhereCondition::FunctionCall {
+                function,
+                arguments,
+            } => {
                 // Validate function arguments
                 for arg in arguments {
                     validate_property_access(arg, schema, ctx);
                 }
-                
+
                 // Validate specific functions
                 match function.as_str() {
                     "point.distance" => {
                         if arguments.len() != 2 {
-                            ctx.errors.push("point.distance requires exactly 2 arguments".to_string());
+                            ctx.errors
+                                .push("point.distance requires exactly 2 arguments".to_string());
                         }
                         // Check that both arguments are point properties
                         for arg in arguments {
-                            if let Some((var, prop)) = arg.split_once('.') {
-                                if let Some(var_info) = ctx.var_types.get(var) {
-                                    match var_info {
-                                        VarInfo::Node { label } => {
-                                            if !schema.has_node_property(label, prop) {
-                                                ctx.errors.push(format!(
-                                                    "Property '{}' not in schema for label '{}'",
-                                                    prop, label
-                                                ));
-                                            }
-                                        }
-                                        _ => {
-                                            ctx.errors.push(format!(
-                                                "point.distance requires point properties from nodes"
-                                            ));
-                                        }
-                                    }
-                                }
+                            if !arg.contains('.') {
+                                ctx.errors.push(
+                                    "point.distance requires point properties from nodes"
+                                        .to_string(),
+                                );
                             }
                         }
                     }
@@ -490,22 +550,19 @@ fn validate_where_clause(where_clause: &WhereClause, schema: &DbSchema, ctx: &mu
                                     // These are valid path properties
                                 }
                                 _ => {
-                                    ctx.errors.push(format!(
-                                        "Invalid path property '{}'",
-                                        property
-                                    ));
+                                    ctx.errors
+                                        .push(format!("Invalid path property '{}'", property));
                                 }
                             }
                         }
                         _ => {
-                            ctx.errors.push(format!(
-                                "Variable '{}' is not a path variable",
-                                path_var
-                            ));
+                            ctx.errors
+                                .push(format!("Variable '{}' is not a path variable", path_var));
                         }
                     }
                 } else {
-                    ctx.errors.push(format!("Variable '{}' not defined", path_var));
+                    ctx.errors
+                        .push(format!("Variable '{}' not defined", path_var));
                 }
             }
         }
@@ -540,10 +597,7 @@ fn validate_property_access(expr: &str, schema: &DbSchema, ctx: &mut ValidationC
                             // These are valid path properties
                         }
                         _ => {
-                            ctx.errors.push(format!(
-                                "Invalid path property '{}'",
-                                prop
-                            ));
+                            ctx.errors.push(format!("Invalid path property '{}'", prop));
                         }
                     }
                 }
@@ -615,21 +669,36 @@ mod tests {
     #[test]
     fn test_path_variable_with_predicate() {
         let mut schema = DbSchema::new();
-        schema.add_node_property("Station", &DbSchemaProperty {
-            name: "name".to_string(),
-            neo4j_type: PropertyType::STRING,
-            ..Default::default()
-        }).unwrap();
-        schema.add_node_property("Station", &DbSchemaProperty {
-            name: "location".to_string(),
-            neo4j_type: PropertyType::POINT,
-            ..Default::default()
-        }).unwrap();
-        schema.add_relationship_property("LINK", &DbSchemaProperty {
-            name: "distance".to_string(),
-            neo4j_type: PropertyType::FLOAT,
-            ..Default::default()
-        }).unwrap();
+        schema
+            .add_node_property(
+                "Station",
+                &DbSchemaProperty {
+                    name: "name".to_string(),
+                    neo4j_type: PropertyType::STRING,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        schema
+            .add_node_property(
+                "Station",
+                &DbSchemaProperty {
+                    name: "location".to_string(),
+                    neo4j_type: PropertyType::POINT,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        schema
+            .add_relationship_property(
+                "LINK",
+                &DbSchemaProperty {
+                    name: "distance".to_string(),
+                    neo4j_type: PropertyType::FLOAT,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let query = "MATCH (bfr:Station {name: 'London Blackfriars'}),
                     (ndl:Station {name: 'North Dulwich'})

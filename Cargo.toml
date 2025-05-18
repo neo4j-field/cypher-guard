@@ -16,10 +16,12 @@ pyo3 = { version = "0.21.2", features = ["extension-module"] }
 thiserror = "1.0"
 nom = "7"
 
-
 [profile.release]
 debug = 2
 lto = "thin"
+
+[workspace.dev-dependencies]
+cargo-tarpaulin = "0.18.0"
 
 [profile.test.package.proptest]
 opt-level = 3

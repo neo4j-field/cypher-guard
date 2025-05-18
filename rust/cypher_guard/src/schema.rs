@@ -366,7 +366,8 @@ impl DbSchema {
             println!("Label '{}' not found in schema", label); // Debug
             return false;
         }
-        let result = self.node_props
+        let result = self
+            .node_props
             .get(label)
             .map(|props| props.iter().any(|p| p.name == name))
             .unwrap_or(false);
@@ -376,12 +377,16 @@ impl DbSchema {
 
     /// Check if a relationship property exists
     pub fn has_relationship_property(&self, rel_type: &str, name: &str) -> bool {
-        println!("Checking relationship property: type={}, name={}", rel_type, name); // Debug
+        println!(
+            "Checking relationship property: type={}, name={}",
+            rel_type, name
+        ); // Debug
         if !self.has_relationship_type(rel_type) {
             println!("Relationship type '{}' not found in schema", rel_type); // Debug
             return false;
         }
-        let result = self.rel_props
+        let result = self
+            .rel_props
             .get(rel_type)
             .map(|props| props.iter().any(|p| p.name == name))
             .unwrap_or(false);

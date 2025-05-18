@@ -1,6 +1,6 @@
+use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema};
 use pyo3::prelude::*;
 use std::io::Write;
-use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema};
 
 #[pyfunction]
 pub fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
