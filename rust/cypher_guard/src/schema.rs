@@ -19,6 +19,8 @@ pub enum PropertyType {
     FLOAT,
     /// Boolean property
     BOOLEAN,
+    /// Point property (for spatial data)
+    POINT,
     /// DateTime property
     DATETIME,
     /// Custom enum type (referenced by name)
@@ -707,6 +709,7 @@ mod tests {
     #[test]
     fn test_add_and_remove_relationship_property() {
         let mut schema = DbSchema::new();
+        schema.add_relationship(&create_knows_rel()).unwrap();
         assert!(schema
             .add_relationship_property("KNOWS", &create_knows_since_property())
             .is_ok());

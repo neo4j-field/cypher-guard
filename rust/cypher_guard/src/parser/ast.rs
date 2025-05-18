@@ -1,7 +1,10 @@
 // Root of the AST
 #[derive(Debug, PartialEq, Clone)]
 pub struct Query {
-    pub match_clause: MatchClause,
+    pub match_clause: Option<MatchClause>,
+    pub merge_clause: Option<MergeClause>,
+    pub create_clause: Option<CreateClause>,
+    pub where_clause: Option<WhereClause>,
     pub return_clause: Option<ReturnClause>,
 }
 
@@ -15,6 +18,37 @@ pub struct ReturnClause {
 #[derive(Debug, PartialEq, Clone)]
 pub struct MatchClause {
     pub elements: Vec<MatchElement>,
+    pub is_optional: bool,
+}
+
+// WHERE clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhereClause {
+    pub conditions: Vec<WhereCondition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum WhereCondition {
+    Comparison {
+        left: String,
+        operator: String,
+        right: String,
+    },
+    FunctionCall {
+        function: String,
+        arguments: Vec<String>,
+    },
+    PathProperty {
+        path_var: String,
+        property: String,
+    },
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct PathProperty {
+    pub path_var: String,
+    pub property: String,
+    pub value: PropertyValue,
 }
 
 // Elements of a MATCH clause
@@ -29,6 +63,8 @@ pub struct QuantifiedPathPattern {
     pub pattern: Vec<PatternElement>,
     pub min: Option<u32>,
     pub max: Option<u32>,
+    pub where_clause: Option<WhereClause>,
+    pub path_variable: Option<String>,
 }
 
 // Nodes and relationships that form a pattern
@@ -54,6 +90,7 @@ pub struct RelationshipDetails {
     pub properties: Option<Vec<Property>>,
     pub rel_type: Option<String>,
     pub length: Option<LengthRange>,
+    pub where_clause: Option<WhereClause>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -86,4 +123,38 @@ pub struct Property {
 pub enum PropertyValue {
     String(String),
     Number(i64),
+}
+
+// MERGE clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct MergeClause {
+    pub elements: Vec<MatchElement>,
+    pub on_create: Option<OnCreateClause>,
+    pub on_match: Option<OnMatchClause>,
+}
+
+// CREATE clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct CreateClause {
+    pub elements: Vec<MatchElement>,
+}
+
+// ON CREATE clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct OnCreateClause {
+    pub set_clauses: Vec<SetClause>,
+}
+
+// ON MATCH clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct OnMatchClause {
+    pub set_clauses: Vec<SetClause>,
+}
+
+// SET clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct SetClause {
+    pub variable: String,
+    pub property: String,
+    pub value: PropertyValue,
 }

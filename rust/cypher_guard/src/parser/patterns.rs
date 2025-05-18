@@ -1,15 +1,16 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{char, multispace0, multispace1},
-    combinator::{map, opt},
-    multi::separated_list1,
+    bytes::complete::{tag, take_while1},
+    character::complete::{char, digit1, multispace0, multispace1},
+    combinator::{map, opt, recognize},
+    multi::{many1, separated_list1},
     sequence::{delimited, preceded, tuple},
     IResult,
 };
 
 use crate::parser::ast::*;
-use crate::parser::utils::{identifier, number_literal, opt_identifier, string_literal};
+use crate::parser::clauses::{property_map, relationship_direction, relationship_type, where_clause};
+use crate::parser::utils::{identifier, number_literal, string_literal};
 
 pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
@@ -34,177 +35,200 @@ pub fn property(input: &str) -> IResult<&str, Property> {
     ))
 }
 
-pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
-    delimited(
-        tuple((multispace0, char('{'))),
-        separated_list1(tuple((multispace0, char(','), multispace0)), property),
-        tuple((multispace0, char('}'))),
-    )(input)
-}
-
 pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
     println!("Parsing node pattern: {}", input);
-    let (input, _) = multispace0(input)?;
     let (input, _) = char('(')(input)?;
-    let (input, var) = opt_identifier(input)?;
-    println!("Node variable: {:?}", var);
-    let (input, label) = opt(preceded(tuple((multispace0, char(':'))), identifier))(input)?;
-    println!("Node label: {:?}", label);
-    let (input, properties) = opt(preceded(multispace0, property_map))(input)?;
-    println!("Node properties: {:?}", properties);
+    println!("After parsing '(': {}", input);
+    let (input, variable) = opt(identifier)(input)?;
+    println!("After parsing variable: {:?}, remaining input: {}", variable, input);
+    let (input, label) = opt(preceded(char(':'), identifier))(input)?;
+    println!("After parsing label: {:?}, remaining input: {}", label, input);
+    let (input, _) = multispace0(input)?;
+    let (input, properties) = opt(property_map)(input)?;
+    println!("After parsing properties: {:?}, remaining input: {}", properties, input);
     let (input, _) = char(')')(input)?;
-    Ok((
-        input,
-        NodePattern {
-            variable: var,
-            label: label.map(|s| s.to_string()),
-            properties,
-        },
-    ))
-}
-
-pub fn length_range(input: &str) -> IResult<&str, LengthRange> {
-    let (input, _) = char('*')(input)?;
-    let (input, min) = opt(map(number_literal, |n| n as u32))(input)?;
-    let (input, max) = if let Ok((input, _)) = char::<&str, nom::error::Error<&str>>('.')(input) {
-        let (input, _) = char('.')(input)?;
-        let (input, max) = opt(map(number_literal, |n| n as u32))(input)?;
-        (input, max)
-    } else {
-        (input, None)
+    println!("After parsing ')': {}", input);
+    let result = NodePattern {
+        variable: variable.map(|s| s.to_string()),
+        label: label.map(|s| s.to_string()),
+        properties,
     };
-    Ok((input, LengthRange { min, max }))
-}
-
-#[allow(dead_code)]
-pub fn relationship_type(input: &str) -> IResult<&str, String> {
-    let (input, _) = char(':')(input)?;
-    let (input, rel_type) = identifier(input)?;
-    Ok((input, rel_type.to_string()))
+    println!("Node pattern result: {:?}", result);
+    Ok((input, result))
 }
 
 pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
-    let (input, left) = opt(preceded(multispace0, alt((tag("<-"), tag("-")))))(input)?;
+    println!("Parsing relationship details: {}", input);
+    // Parse relationship details (no direction)
+    let (input, _) = char('[')(input)?;
+    println!("After parsing '[': {}", input);
+    let (input, variable) = opt(identifier)(input)?;
+    println!("After parsing variable: {:?}, remaining input: {}", variable, input);
+    let (input, rel_type) = opt(relationship_type)(input)?;
+    println!("After parsing rel_type: {:?}, remaining input: {}", rel_type, input);
     let (input, _) = multispace0(input)?;
-    
-    // Try to parse relationship details in brackets first
-    let (input, rel) = match delimited(
-        char('['),
-        tuple((
-            opt_identifier,
-            opt(preceded(tuple((multispace0, char(':'))), identifier)),
-            opt(preceded(multispace0, property_map)),
-            opt(length_range),
-        )),
-        char(']'),
-    )(input) {
-        Ok((input, details)) => (input, Some(details)),
-        Err(e) => {
-            eprintln!("Relationship details parse error: {:?}", e);
-            (input, None)
-        }
+    let (input, properties) = opt(property_map)(input)?;
+    println!("After parsing properties: {:?}, remaining input: {}", properties, input);
+    let (input, _) = char(']')(input)?;
+    println!("After parsing ']': {}", input);
+    // Parse length range if present
+    let (input, length) = opt(length_range)(input)?;
+    println!("After parsing length: {:?}, remaining input: {}", length, input);
+    // Parse optional WHERE clause
+    let (input, where_clause) = opt(where_clause)(input)?;
+    println!("After parsing where_clause: {:?}, remaining input: {}", where_clause, input);
+    let result = RelationshipDetails {
+        variable: variable.map(|s| s.to_string()),
+        direction: Direction::Undirected, // Will be set by pattern parser
+        properties,
+        rel_type,
+        length,
+        where_clause,
     };
-    
-    let (input, length) = if rel.is_none() {
-        opt(length_range)(input)?
-    } else {
-        (input, None)
-    };
-    let (input, _) = multispace0(input)?;
-    let (input, right) = opt(alt((tag("->"), tag("-"))))(input)?;
+    println!("Relationship details result: {:?}", result);
+    Ok((input, result))
+}
 
-    let (variable, rel_type, properties, rel_length) = rel.unwrap_or((None, None, None, None));
-    let direction = match (left, right) {
-        (Some("<-"), _) => Direction::Left,
-        (_, Some("->")) => Direction::Right,
-        _ => Direction::Undirected,
-    };
+pub fn length_range(input: &str) -> IResult<&str, LengthRange> {
+    let (input, _) = char('{')(input)?;
+    let (input, min) = opt(digit1)(input)?;
+    let (input, _) = char(',')(input)?;
+    let (input, max) = opt(digit1)(input)?;
+    let (input, _) = char('}')(input)?;
     Ok((
         input,
-        RelationshipDetails {
-            variable,
-            direction,
-            properties,
-            rel_type: rel_type.map(|s| s.to_string()),
-            length: rel_length.or(length),
+        LengthRange {
+            min: min.map(|s| s.parse().unwrap()),
+            max: max.map(|s| s.parse().unwrap()),
         },
     ))
 }
 
-#[allow(dead_code)]
-pub fn relationship(input: &str) -> IResult<&str, RelationshipPattern> {
-    let (input, _) = char('-')(input)?;
+pub fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
+    println!("Parsing relationship pattern: {}", input);
+    let (input, _) = char('[')(input)?;
+    let (input, variable) = opt(identifier)(input)?;
     let (input, rel_type) = opt(relationship_type)(input)?;
-    let (input, direction) = alt((
-        map(tag("->"), |_| Direction::Right),
-        map(tag("<-"), |_| Direction::Left),
-        map(tag("-"), |_| Direction::Right),
-    ))(input)?;
-    let details = RelationshipDetails {
-        rel_type,
-        direction,
-        length: None,
-        properties: None,
-        variable: None,
-    };
-    Ok((input, RelationshipPattern::Regular(details)))
+    let (input, _) = multispace0(input)?;
+    let (input, properties) = opt(property_map)(input)?;
+    let (input, _) = char(']')(input)?;
+    let (input, length) = opt(length_range)(input)?;
+    let (input, where_clause) = opt(where_clause)(input)?;
+    Ok((
+        input,
+        RelationshipPattern::Regular(RelationshipDetails {
+            variable: variable.map(|s| s.to_string()),
+            direction: Direction::Undirected,
+            properties,
+            rel_type,
+            length,
+            where_clause,
+        }),
+    ))
 }
 
 pub fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement>> {
+    println!("Parsing pattern element sequence: {}", input);
     let (input, is_optional) = opt(tuple((tag("OPTIONAL"), multispace1)))(input)?;
     let (mut input, first_node) = node_pattern(input)?;
     let mut elements = vec![PatternElement::Node(first_node)];
+
     loop {
         let (rest, _) = multispace0(input)?;
-        // Stop if the next input is a clause keyword or empty
-        let trimmed = rest.trim_start();
-        if trimmed.is_empty() || trimmed.starts_with("RETURN") {
+        // Check for a dash or arrow (start of a relationship)
+        let rel_start = {
+            if let Ok((after, _)) = tag::<&str, &str, nom::error::Error<&str>>("<-")(rest) {
+                Ok((after, "<-"))
+            } else if let Ok((after, _)) = tag::<&str, &str, nom::error::Error<&str>>("-")(rest) {
+                Ok((after, "-"))
+            } else {
+                Err(nom::Err::Error(nom::error::Error::new(rest, nom::error::ErrorKind::Tag)))
+            }
+        };
+        if let Ok((after_left, left)) = rel_start {
+            // Parse relationship details
+            let (after_details, details) = relationship_details(after_left)?;
+            // Parse right dash/arrow
+            let right_parse = {
+                if let Ok((after, _)) = tag::<&str, &str, nom::error::Error<&str>>("->")(after_details) {
+                    Ok((after, "->"))
+                } else if let Ok((after, _)) = tag::<&str, &str, nom::error::Error<&str>>("-")(after_details) {
+                    Ok((after, "-"))
+                } else {
+                    Err(nom::Err::Error(nom::error::Error::new(after_details, nom::error::ErrorKind::Tag)))
+                }
+            };
+            let (after_right, right) = right_parse?;
+            // Determine direction
+            let direction = match (left, right) {
+                ("-", "->") => Direction::Right,
+                ("<-", "-") => Direction::Left,
+                ("-", "-") => Direction::Undirected,
+                ("<-", "->") => Direction::Undirected, // Technically invalid, treat as undirected
+                _ => Direction::Undirected,
+            };
+            let mut details = details;
+            details.direction = direction;
+            let rel = if is_optional.is_some() {
+                RelationshipPattern::OptionalRelationship(details)
+            } else {
+                RelationshipPattern::Regular(details)
+            };
+            elements.push(PatternElement::Relationship(rel));
+            // Parse the next node
+            let (after_node, node) = node_pattern(after_right)?;
+            elements.push(PatternElement::Node(node));
+            input = after_node;
+        } else {
             break;
         }
-        let rel_res = relationship_details(rest);
-        match rel_res {
-            Ok((input2, details)) => {
-                let (input3, node) = node_pattern(input2)?;
-                let rel = if is_optional.is_some() {
-                    RelationshipPattern::OptionalRelationship(details)
-                } else {
-                    RelationshipPattern::Regular(details)
-                };
-                elements.push(PatternElement::Relationship(rel));
-                elements.push(PatternElement::Node(node));
-                input = input3;
-            }
-            Err(e) => {
-                eprintln!("Relationship parse error: {:?}", e);
-                break;
-            }
-        }
     }
+    println!("Pattern element sequence result: {:?}", elements);
     Ok((input, elements))
 }
 
 pub fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
-    let (input, pattern) = delimited(
-        tuple((multispace0, char('('))),
-        pattern_element_sequence,
-        tuple((char(')'), multispace0)),
-    )(input)?;
-    let (input, quant) = delimited(
-        char('{'),
-        tuple((
-            opt(map(number_literal, |n| n as u32)),
-            opt(preceded(
-                tuple((char(','), multispace0)),
-                map(number_literal, |n| n as u32),
-            )),
-        )),
-        char('}'),
-    )(input)?;
-    let (min, max) = quant;
+    println!("Parsing quantified path pattern: {}", input);
+    // Parse optional path variable
+    let (input, path_var) = opt(preceded(
+        tuple((multispace0, char('='), multispace0)),
+        map(identifier, |s| s.to_string())
+    ))(input)?;
+    println!("After parsing path_var: {:?}, remaining input: {}", path_var, input);
+    
+    // Parse the pattern
+    let (input, _) = char('(')(input)?;
+    let (input, pattern) = pattern_element_sequence(input)?;
+    let (input, _) = char(')')(input)?;
+    println!("After parsing pattern: {:?}, remaining input: {}", pattern, input);
+    
+    // Parse length range
+    let (input, length) = opt(length_range)(input)?;
+    println!("After parsing length: {:?}, remaining input: {}", length, input);
+    
+    // Parse optional WHERE clause
+    let (input, where_clause) = opt(where_clause)(input)?;
+    println!("After parsing where_clause: {:?}, remaining input: {}", where_clause, input);
+    
     Ok((
         input,
-        MatchElement::QuantifiedPathPattern(QuantifiedPathPattern { pattern, min, max }),
+        MatchElement::QuantifiedPathPattern(QuantifiedPathPattern {
+            pattern,
+            min: length.as_ref().and_then(|l| l.min),
+            max: length.as_ref().and_then(|l| l.max),
+            where_clause,
+            path_variable: path_var,
+        }),
     ))
+}
+
+pub fn pattern(input: &str) -> IResult<&str, Vec<PatternElement>> {
+    let (input, elements) = many1(alt((
+        map(node_pattern, PatternElement::Node),
+        map(relationship_details, |details| PatternElement::Relationship(RelationshipPattern::Regular(details))),
+    )))(input)?;
+    println!("Found regular pattern: {:?}", elements);
+    Ok((input, elements))
 }
 
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
@@ -257,6 +281,46 @@ mod tests {
                 assert_eq!(details.direction, Direction::Right);
             }
             _ => panic!("Expected Regular relationship"),
+        }
+    }
+
+    #[test]
+    fn test_node_pattern() {
+        let input = "(a:Person {name: 'Alice'})";
+        let result = node_pattern(input);
+        assert!(result.is_ok());
+        let (_, node) = result.unwrap();
+        assert_eq!(node.variable, Some("a".to_string()));
+        assert_eq!(node.label, Some("Person".to_string()));
+    }
+
+    #[test]
+    fn test_relationship_pattern() {
+        let input = "[r:KNOWS {since: 2020}]";
+        let result = relationship_pattern(input);
+        assert!(result.is_ok());
+        let (_, rel) = result.unwrap();
+        match rel {
+            RelationshipPattern::Regular(details) => {
+                assert_eq!(details.variable, Some("r".to_string()));
+                assert_eq!(details.rel_type, Some("KNOWS".to_string()));
+            }
+            _ => panic!("Expected Regular relationship pattern"),
+        }
+    }
+
+    #[test]
+    fn test_quantified_path_pattern() {
+        let input = "((a)-[:KNOWS]->(b)){1,3}";
+        let result = quantified_path_pattern(input);
+        assert!(result.is_ok());
+        let (_, match_elem) = result.unwrap();
+        match match_elem {
+            MatchElement::QuantifiedPathPattern(qpp) => {
+                assert_eq!(qpp.min, Some(1));
+                assert_eq!(qpp.max, Some(3));
+            }
+            _ => panic!("Expected QuantifiedPathPattern"),
         }
     }
 }

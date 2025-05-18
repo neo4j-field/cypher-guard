@@ -1,13 +1,13 @@
-use nom::{bytes::complete::take_while1, character::complete::char, IResult};
+use nom::{bytes::complete::take_while1, character::complete::char, branch::alt, IResult};
 
 pub fn identifier(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)
 }
 
 pub fn string_literal(input: &str) -> IResult<&str, String> {
-    let (input, _) = char('"')(input)?;
-    let (input, s) = take_while1(|c| c != '"')(input)?;
-    let (input, _) = char('"')(input)?;
+    let (input, quote) = alt((char('\''), char('"')))(input)?;
+    let (input, s) = take_while1(|c| c != quote)(input)?;
+    let (input, _) = char(quote)(input)?;
     Ok((input, s.to_string()))
 }
 
