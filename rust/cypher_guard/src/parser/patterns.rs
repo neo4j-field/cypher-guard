@@ -10,7 +10,7 @@ use nom::{
 
 use crate::parser::ast::*;
 use crate::parser::clauses::{property_map, relationship_type, where_clause};
-use crate::parser::utils::{identifier, string_literal, number_literal};
+use crate::parser::utils::{identifier, number_literal, string_literal};
 
 pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
