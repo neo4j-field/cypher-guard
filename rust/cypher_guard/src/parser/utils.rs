@@ -4,6 +4,8 @@ pub fn identifier(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn string_literal(input: &str) -> IResult<&str, String> {
     let (input, quote) = alt((char('\''), char('"')))(input)?;
     let (input, s) = take_while1(|c| c != quote)(input)?;
@@ -11,11 +13,15 @@ pub fn string_literal(input: &str) -> IResult<&str, String> {
     Ok((input, s.to_string()))
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn number_literal(input: &str) -> IResult<&str, i64> {
     let (input, n) = take_while1(|c: char| c.is_ascii_digit())(input)?;
     Ok((input, n.parse().unwrap()))
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn opt_identifier(input: &str) -> IResult<&str, Option<String>> {
     let (input, _) = nom::character::complete::multispace0(input)?;
     match identifier(input) {

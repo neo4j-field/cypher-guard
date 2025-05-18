@@ -12,6 +12,8 @@ use crate::parser::ast::*;
 use crate::parser::clauses::{property_map, relationship_type, where_clause};
 use crate::parser::utils::{identifier, number_literal, string_literal};
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
         map(string_literal, PropertyValue::String),
@@ -19,6 +21,8 @@ pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     ))(input)
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn property(input: &str) -> IResult<&str, Property> {
     let (input, _) = multispace0(input)?;
     let (input, key) = identifier(input)?;
@@ -128,6 +132,8 @@ pub fn length_range(input: &str) -> IResult<&str, LengthRange> {
     ))
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     println!("Parsing relationship pattern: {}", input);
     let (input, _) = char('[')(input)?;
@@ -221,6 +227,8 @@ pub fn pattern_element_sequence(input: &str) -> IResult<&str, Vec<PatternElement
     Ok((input, elements))
 }
 
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
     println!("Parsing quantified path pattern: {}", input);
     // Parse optional path variable
@@ -268,17 +276,8 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, MatchElement> {
     ))
 }
 
-pub fn pattern(input: &str) -> IResult<&str, Vec<PatternElement>> {
-    let (input, elements) = many1(alt((
-        map(node_pattern, PatternElement::Node),
-        map(relationship_details, |details| {
-            PatternElement::Relationship(RelationshipPattern::Regular(details))
-        }),
-    )))(input)?;
-    println!("Found regular pattern: {:?}", elements);
-    Ok((input, elements))
-}
-
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
     println!("Parsing match element: {}", input);
     if let Ok((input2, qpp)) = quantified_path_pattern(input) {
@@ -288,6 +287,17 @@ pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
     let (input, pattern) = pattern_element_sequence(input)?;
     println!("Found regular pattern: {:?}", pattern);
     Ok((input, MatchElement::Pattern(pattern)))
+}
+
+pub fn pattern(input: &str) -> IResult<&str, Vec<PatternElement>> {
+    let (input, elements) = many1(alt((
+        map(node_pattern, PatternElement::Node),
+        map(relationship_details, |details| {
+            PatternElement::Relationship(RelationshipPattern::Regular(details))
+        }),
+    )))(input)?;
+    println!("Found regular pattern: {:?}", elements);
+    Ok((input, elements))
 }
 
 #[cfg(test)]

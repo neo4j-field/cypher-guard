@@ -81,6 +81,11 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 
             println!("Variable mapping: {:?}", ctx.var_types); // Debug: Print the variable mapping
 
+            // Validate WHERE clause if present
+            if let Some(where_clause) = &ast.where_clause {
+                validate_where_clause(where_clause, schema, &mut ctx);
+            }
+
             // Validate return clause
             if let Some(return_clause) = &ast.return_clause {
                 for item in &return_clause.items {

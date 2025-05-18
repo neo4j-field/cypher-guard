@@ -209,6 +209,8 @@ fn set_clause(input: &str) -> IResult<&str, SetClause> {
         map(numeric_literal, |s| {
             PropertyValue::Number(s.parse().unwrap())
         }),
+        map(tag("true"), |_| PropertyValue::String("true".to_string())),
+        map(tag("false"), |_| PropertyValue::String("false".to_string())),
     ))(input)?;
     println!(
         "Parsed set clause: variable={}, property={}, value={:?}",
@@ -278,6 +280,8 @@ pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
 }
 
 // Parses a single match element (pattern or quantified)
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 fn match_element(input: &str) -> IResult<&str, MatchElement> {
     println!("Parsing match element: {}", input);
     alt((
@@ -287,6 +291,8 @@ fn match_element(input: &str) -> IResult<&str, MatchElement> {
 }
 
 // Parses a quantified path pattern with optional WHERE clause and path variable
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 fn quantified_path_pattern(input: &str) -> IResult<&str, QuantifiedPathPattern> {
     println!("Parsing quantified path pattern: {}", input);
 
@@ -318,6 +324,8 @@ fn quantified_path_pattern(input: &str) -> IResult<&str, QuantifiedPathPattern> 
 }
 
 // Parses a relationship direction
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 pub fn relationship_direction(input: &str) -> IResult<&str, Direction> {
     println!("Parsing relationship direction: {}", input);
     let result = alt((
@@ -346,6 +354,8 @@ pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
 }
 
 // Parses a single property
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 fn property(input: &str) -> IResult<&str, Property> {
     let (input, key) = map(identifier, |s| s.to_string())(input)?;
     let (input, _) = tuple((multispace0, char(':'), multispace0))(input)?;
@@ -354,6 +364,8 @@ fn property(input: &str) -> IResult<&str, Property> {
 }
 
 // Parses a property value
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
         map(string_literal, PropertyValue::String),
@@ -372,6 +384,8 @@ fn string_literal(input: &str) -> IResult<&str, String> {
 }
 
 // Parses a relationship with optional WHERE clause
+#[allow(dead_code)]
+// TODO: Clean up unused functions or refactor to use them
 fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     println!("Parsing relationship details: {}", input);
     // Parse relationship details (no direction)
