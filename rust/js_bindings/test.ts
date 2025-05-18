@@ -1,4 +1,6 @@
-import { validateCypher, getValidationErrors } from './index';
+const nativeBinding = require('./dist/index.js');
+
+console.log('Exported functions:', nativeBinding);
 
 const schemaJson = `{
     "node_props": {
@@ -24,8 +26,8 @@ const schemaJson = `{
 
 // Test valid query
 const validQuery = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
-console.log("Valid query test:", validateCypher(validQuery, schemaJson));
+console.log("Valid query test:", nativeBinding.validateCypherJs(validQuery, schemaJson));
 
 // Test invalid query
 const invalidQuery = "MATCH (a:Person)-[r:FOLLOWS]->(b:Person) RETURN a.name";
-console.log("Invalid query test:", getValidationErrors(invalidQuery, schemaJson)); 
+console.log("Invalid query test:", nativeBinding.getValidationErrorsJs(invalidQuery, schemaJson)); 
