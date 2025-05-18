@@ -1,0 +1,23 @@
+{
+  "name": "cypher-guard",
+  "version": "0.1.0",
+  "description": "Cypher query validation for Neo4j",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "napi build --platform --release",
+    "test": "ts-node test.ts"
+  },
+  "keywords": [
+    "neo4j",
+    "cypher",
+    "validation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.16.5",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
+} 
