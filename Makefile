@@ -14,7 +14,7 @@ build-python:
 	cd rust/python_bindings && maturin build
 
 test-python:
-	python test_cypher_guard.py
+	pytest rust/python_bindings/tests/test_cypher_guard.py -vv
 
 build-js:
 	cd rust/js_bindings && npm install && npm run build
