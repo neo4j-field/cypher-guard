@@ -42,6 +42,19 @@ pub enum PropertyType {
     // ENUM(String),
 }
 
+impl fmt::Display for PropertyType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PropertyType::STRING => write!(f, "STRING"),
+            PropertyType::INTEGER => write!(f, "INTEGER"),
+            PropertyType::FLOAT => write!(f, "FLOAT"),
+            PropertyType::BOOLEAN => write!(f, "BOOLEAN"),
+            PropertyType::POINT => write!(f, "POINT"),
+            PropertyType::DATETIME => write!(f, "DATETIME"),
+        }
+    }
+}
+
 impl PropertyType {
     pub fn from_string(s: &str) -> Result<Self> {
         match s.to_uppercase().as_str() {
@@ -104,17 +117,6 @@ impl PropertyType {
         PropertyType::DATETIME
     }
 
-    fn to_string(&self) -> String {
-        match self {
-            PropertyType::STRING => "STRING".to_string(),
-            PropertyType::INTEGER => "INTEGER".to_string(),
-            PropertyType::FLOAT => "FLOAT".to_string(),
-            PropertyType::BOOLEAN => "BOOLEAN".to_string(),
-            PropertyType::POINT => "POINT".to_string(),
-            PropertyType::DATETIME => "DATETIME".to_string(),
-        }
-    }
-
     #[classmethod]
     #[pyo3(name = "from_string", signature = (s))]
     fn py_from_string(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
@@ -133,7 +135,7 @@ impl PropertyType {
     }
 
     fn __repr__(&self) -> String {
-        format!("PropertyType.{}", self.to_string())
+        format!("PropertyType.{}", self)
     }
 
     fn __str__(&self) -> String {
@@ -342,7 +344,7 @@ impl DbSchemaProperty {
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
         dict.set_item("name", &self.name)?;
-        dict.set_item("neo4j_type", &self.neo4j_type.to_string())?;
+        dict.set_item("neo4j_type", self.neo4j_type.to_string())?;
         if let Some(enum_values) = &self.enum_values {
             dict.set_item("enum_values", enum_values)?;
         }
@@ -362,11 +364,11 @@ impl DbSchemaProperty {
     }
 
     fn __repr__(&self) -> String {
-        format!("DbSchemaProperty(name={}, neo4j_type={}, enum_values={:?}, min_value={:?}, max_value={:?}, distinct_value_count={:?}, example_values={:?})", self.name, self.neo4j_type.to_string(), self.enum_values, self.min_value, self.max_value, self.distinct_value_count, self.example_values)
+        format!("DbSchemaProperty(name={}, neo4j_type={}, enum_values={:?}, min_value={:?}, max_value={:?}, distinct_value_count={:?}, example_values={:?})", self.name, self.neo4j_type, self.enum_values, self.min_value, self.max_value, self.distinct_value_count, self.example_values)
     }
 
     fn __str__(&self) -> String {
-        format!("{}: {}", self.name, self.neo4j_type.to_string())
+        format!("{}: {}", self.name, self.neo4j_type)
     }
 }
 /// Structure representing a relationship in the schema.
@@ -562,7 +564,7 @@ impl DbSchemaConstraint {
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
-        dict.set_item("id", &self.id)?;
+        dict.set_item("id", self.id)?;
         dict.set_item("name", &self.name)?;
         dict.set_item("constraint_type", &self.constraint_type)?;
         dict.set_item("entity_type", &self.entity_type)?;
@@ -683,10 +685,10 @@ impl DbSchemaIndex {
         let dict = pyo3::types::PyDict::new_bound(py);
         dict.set_item("label", &self.label)?;
         dict.set_item("properties", &self.properties)?;
-        dict.set_item("size", &self.size)?;
+        dict.set_item("size", self.size)?;
         dict.set_item("index_type", &self.index_type)?;
-        dict.set_item("values_selectivity", &self.values_selectivity)?;
-        dict.set_item("distinct_values", &self.distinct_values)?;
+        dict.set_item("values_selectivity", self.values_selectivity)?;
+        dict.set_item("distinct_values", self.distinct_values)?;
         Ok(dict.into())
     }
 

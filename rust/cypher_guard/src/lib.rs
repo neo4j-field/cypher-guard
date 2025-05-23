@@ -1,6 +1,3 @@
-#[cfg(feature = "python-bindings")]
-use pyo3::prelude::*;
-
 mod errors;
 mod parser;
 mod schema;
