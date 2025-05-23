@@ -1,8 +1,3 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fmt;
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 use crate::errors::CypherGuardError;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
@@ -10,6 +5,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyType};
 #[cfg(feature = "python-bindings")]
 use pyo3::PyObject;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
@@ -46,12 +46,12 @@ impl PropertyType {
     pub fn from_string(s: &str) -> Result<Self> {
         match s.to_uppercase().as_str() {
             "STRING" | "STR" => Ok(PropertyType::STRING),
-            "INTEGER" | "INT"  => Ok(PropertyType::INTEGER),
+            "INTEGER" | "INT" => Ok(PropertyType::INTEGER),
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
-            "POINT"  => Ok(PropertyType::POINT),
+            "POINT" => Ok(PropertyType::POINT),
             "DATETIME" => Ok(PropertyType::DATETIME),
-            _ => Err(CypherGuardError::SchemaError)
+            _ => Err(CypherGuardError::SchemaError),
         }
     }
 }
@@ -67,41 +67,43 @@ impl PropertyType {
             "BOOLEAN" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
             "DATETIME" => Ok(PropertyType::DATETIME),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid property type: {}", type_name)))
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Invalid property type: {}",
+                type_name
+            ))),
         }
     }
-    
+
     #[classmethod]
     fn string(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::STRING
     }
-    
+
     #[classmethod]
     fn integer(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::INTEGER
     }
-    
+
     #[classmethod]
     fn float(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::FLOAT
     }
-    
+
     #[classmethod]
     fn boolean(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::BOOLEAN
     }
-    
+
     #[classmethod]
     fn point(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::POINT
     }
-    
+
     #[classmethod]
     fn datetime(_cls: &Bound<'_, PyType>) -> Self {
         PropertyType::DATETIME
     }
-    
-    
+
     fn to_string(&self) -> String {
         match self {
             PropertyType::STRING => "STRING".to_string(),
@@ -116,7 +118,6 @@ impl PropertyType {
     #[classmethod]
     #[pyo3(name = "from_string", signature = (s))]
     fn py_from_string(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
-        
         // Case insensitive matching for simple types
         match s.trim().to_uppercase().as_str() {
             "STRING" | "STR" => Ok(PropertyType::STRING),
@@ -130,16 +131,15 @@ impl PropertyType {
             ))
         }
     }
-    
+
     fn __repr__(&self) -> String {
         format!("PropertyType.{}", self.to_string())
     }
-    
+
     fn __str__(&self) -> String {
         self.to_string()
     }
 }
-
 
 /// Structure representing a user-defined enum type for properties.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -259,41 +259,53 @@ impl DbSchemaProperty {
         // Convert string neo4j_type to PropertyType enum
         let property_type = match PropertyType::from_string(&neo4j_type) {
             Ok(property_type) => property_type,
-            Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid property type: {}", e))),
+            Err(e) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Invalid property type: {}",
+                    e
+                )))
+            }
         };
-        
+
         let mut prop = Self::new(&name, property_type);
-        
+
         if let Some(values) = enum_values {
             prop.set_enum_values(values);
         }
-        
+
         if let Some(value) = min_value {
             prop.set_min_value(value);
         }
-        
+
         if let Some(value) = max_value {
             prop.set_max_value(value);
         }
-        
+
         if let Some(value) = distinct_value_count {
             prop.set_distinct_value_count(value);
         }
-        
+
         if let Some(values) = example_values {
             prop.set_example_values(values);
         }
-        
+
         Ok(prop)
     }
 
     #[classmethod]
     #[pyo3(name = "from_dict", signature = (dict))]
     fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
-        let name = dict.get_item("name")?.ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?.extract::<String>()?;
+        let name = dict
+            .get_item("name")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?
+            .extract::<String>()?;
         let neo4j_type = match dict.get_item("neo4j_type")? {
-            Some(value) =>  value.extract::<String>()?,
-            None => return Err(pyo3::exceptions::PyKeyError::new_err("Missing 'neo4j_type' field")),
+            Some(value) => value.extract::<String>()?,
+            None => {
+                return Err(pyo3::exceptions::PyKeyError::new_err(
+                    "Missing 'neo4j_type' field",
+                ))
+            }
         };
         let enum_values = match dict.get_item("enum_values")? {
             Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
@@ -315,7 +327,38 @@ impl DbSchemaProperty {
             Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
             _ => None,
         };
-        Self::py_new(name, neo4j_type.to_string(), enum_values, min_value, max_value, distinct_value_count, example_values)
+        Self::py_new(
+            name,
+            neo4j_type.to_string(),
+            enum_values,
+            min_value,
+            max_value,
+            distinct_value_count,
+            example_values,
+        )
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("name", &self.name)?;
+        dict.set_item("neo4j_type", &self.neo4j_type.to_string())?;
+        if let Some(enum_values) = &self.enum_values {
+            dict.set_item("enum_values", enum_values)?;
+        }
+        if let Some(min_value) = self.min_value {
+            dict.set_item("min_value", min_value)?;
+        }
+        if let Some(max_value) = self.max_value {
+            dict.set_item("max_value", max_value)?;
+        }
+        if let Some(distinct_value_count) = self.distinct_value_count {
+            dict.set_item("distinct_value_count", distinct_value_count)?;
+        }
+        if let Some(example_values) = &self.example_values {
+            dict.set_item("example_values", example_values)?;
+        }
+        Ok(dict.into())
     }
 }
 /// Structure representing a relationship in the schema.
@@ -323,13 +366,13 @@ impl DbSchemaProperty {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
     /// Start node label of the relationship
-    
+    #[pyo3(get, set)]
     pub start: String,
     /// End node label of the relationship
-    
+    #[pyo3(get, set)]
     pub end: String,
     /// Type of the relationship
-    
+    #[pyo3(get, set)]
     pub rel_type: String,
 }
 
@@ -338,50 +381,202 @@ pub struct DbSchemaRelationshipPattern {
 impl DbSchemaRelationshipPattern {
     #[new]
     fn py_new(start: &str, end: &str, rel_type: &str) -> PyResult<Self> {
-        Ok(Self { start: start.to_string(), end: end.to_string(), rel_type: rel_type.to_string() })
+        Ok(Self {
+            start: start.to_string(),
+            end: end.to_string(),
+            rel_type: rel_type.to_string(),
+        })
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let start = dict
+            .get_item("start")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'start' field"))?
+            .extract::<String>()?;
+        let end = dict
+            .get_item("end")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'end' field"))?
+            .extract::<String>()?;
+        let rel_type = dict
+            .get_item("rel_type")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'rel_type' field"))?
+            .extract::<String>()?;
+        Ok(Self {
+            start,
+            end,
+            rel_type,
+        })
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("start", &self.start)?;
+        dict.set_item("end", &self.end)?;
+        dict.set_item("rel_type", &self.rel_type)?;
+
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DbSchemaRelationshipPattern(start={}, end={}, rel_type={})",
+            self.start, self.end, self.rel_type
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("(:{})-[:{}]->(:{})", self.start, self.rel_type, self.end)
     }
 }
 /// Structure representing a constraint in the schema.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]  
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
     /// ID of the constraint
-    
+    #[pyo3(get, set)]
     pub id: i64,
     /// Name of the constraint
-    
+    #[pyo3(get, set)]
     pub name: String,
     /// Type of the constraint  
-    
+    #[pyo3(get, set)]
     pub constraint_type: String,
     /// Entity type of the constraint
-    
+    #[pyo3(get, set)]
     pub entity_type: String,
     /// Labels or types of the constraint
-    
+    #[pyo3(get, set)]
     pub labels_or_types: Vec<String>,
     /// Properties of the constraint
-    
+    #[pyo3(get, set)]
     pub properties: Vec<String>,
     /// Owned index of the constraint
-    
+    #[pyo3(get, set)]
     pub owned_index: String,
+}
+
+impl DbSchemaConstraint {
+    pub fn new(
+        id: i64,
+        name: String,
+        constraint_type: String,
+        entity_type: String,
+        labels_or_types: Vec<String>,
+        properties: Vec<String>,
+        owned_index: String,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index,
+        }
+    }
 }
 
 #[cfg(feature = "python-bindings")]
 #[pymethods]
 impl DbSchemaConstraint {
     #[new]
-    fn py_new(id: i64, name: String, constraint_type: String, entity_type: String, labels_or_types: Vec<String>, properties: Vec<String>, owned_index: String) -> PyResult<Self> {
-        Ok(Self { 
-            id, 
-            name, 
-            constraint_type, 
-            entity_type, 
-            labels_or_types, 
-            properties, 
-            owned_index 
+    #[pyo3(signature = (id, name, constraint_type, entity_type, labels_or_types, properties, owned_index))]
+    fn py_new(
+        id: i64,
+        name: String,
+        constraint_type: String,
+        entity_type: String,
+        labels_or_types: Vec<String>,
+        properties: Vec<String>,
+        owned_index: String,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index,
         })
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let id = dict
+            .get_item("id")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'id' field"))?
+            .extract::<i64>()?;
+        let name = dict
+            .get_item("name")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?
+            .extract::<String>()?;
+        let constraint_type = dict
+            .get_item("constraint_type")?
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err("Missing 'constraint_type' field")
+            })?
+            .extract::<String>()?;
+        let entity_type = dict
+            .get_item("entity_type")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'entity_type' field"))?
+            .extract::<String>()?;
+        let labels_or_types = dict
+            .get_item("labels_or_types")?
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err("Missing 'labels_or_types' field")
+            })?
+            .extract::<Vec<String>>()?;
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'properties' field"))?
+            .extract::<Vec<String>>()?;
+        let owned_index = dict
+            .get_item("owned_index")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'owned_index' field"))?
+            .extract::<String>()?;
+        Ok(Self {
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index,
+        })
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("id", &self.id)?;
+        dict.set_item("name", &self.name)?;
+        dict.set_item("constraint_type", &self.constraint_type)?;
+        dict.set_item("entity_type", &self.entity_type)?;
+        dict.set_item("labels_or_types", &self.labels_or_types)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("owned_index", &self.owned_index)?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={})", self.id, self.name, self.constraint_type, self.entity_type, self.labels_or_types.join(", "), self.properties.join(", "), self.owned_index)
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} CONSTRAINT {} ON {} ({}).{{{}}}",
+            self.constraint_type,
+            self.name,
+            self.entity_type,
+            self.labels_or_types.join(", "),
+            self.properties.join(", ")
+        )
     }
 }
 
@@ -390,38 +585,114 @@ impl DbSchemaConstraint {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
     /// Label of the index
-    
+    #[pyo3(get, set)]
     pub label: String,
     /// Properties of the index
-    
+    #[pyo3(get, set)]
     pub properties: Vec<String>,
     /// Size of the index
-    
+    #[pyo3(get, set)]
     pub size: i64,
     /// Type of the index
-    
+    #[pyo3(get, set)]
     pub index_type: String,
     /// Values selectivity of the index
-    
+    #[pyo3(get, set)]
     pub values_selectivity: f64,
     /// Distinct values of the index
-    
+    #[pyo3(get, set)]
     pub distinct_values: i64,
 }
 
 #[cfg(feature = "python-bindings")]
 #[pymethods]
 impl DbSchemaIndex {
+    /// Create an index
     #[new]
-    fn py_new(label: String, properties: Vec<String>, size: i64, index_type: String, values_selectivity: f64, distinct_values: i64) -> PyResult<Self> {
-        Ok(Self { 
-            label, 
-            properties, 
-            size, 
-            index_type, 
-            values_selectivity, 
-            distinct_values 
+    fn py_new(
+        label: String,
+        properties: Vec<String>,
+        size: i64,
+        index_type: String,
+        values_selectivity: f64,
+        distinct_values: i64,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
         })
+    }
+
+    /// Create an index from a Python dictionary
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let label = dict
+            .get_item("label")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'label' field"))?
+            .extract::<String>()?;
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'properties' field"))?
+            .extract::<Vec<String>>()?;
+        let size = dict
+            .get_item("size")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'size' field"))?
+            .extract::<i64>()?;
+        let index_type = dict
+            .get_item("index_type")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'index_type' field"))?
+            .extract::<String>()?;
+        let values_selectivity = dict
+            .get_item("values_selectivity")?
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err("Missing 'values_selectivity' field")
+            })?
+            .extract::<f64>()?;
+        let distinct_values = dict
+            .get_item("distinct_values")?
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err("Missing 'distinct_values' field")
+            })?
+            .extract::<i64>()?;
+        Ok(Self {
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
+        })
+    }
+
+    /// Convert the index to a Python dictionary
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new_bound(py);
+        dict.set_item("label", &self.label)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("size", &self.size)?;
+        dict.set_item("index_type", &self.index_type)?;
+        dict.set_item("values_selectivity", &self.values_selectivity)?;
+        dict.set_item("distinct_values", &self.distinct_values)?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaIndex(label={}, properties=[{}], size={}, index_type={}, values_selectivity={}, distinct_values={})", self.label, self.properties.join(", "), self.size, self.index_type, self.values_selectivity, self.distinct_values)
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "INDEX {} ON {} ({})",
+            self.index_type,
+            self.label,
+            self.properties.join(", ")
+        )
     }
 }
 
@@ -430,10 +701,10 @@ impl DbSchemaIndex {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
-    
+    #[pyo3(get, set)]
     pub constraints: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
-    
+    #[pyo3(get, set)]
     pub indexes: Vec<DbSchemaIndex>,
 }
 
@@ -456,8 +727,97 @@ impl DbSchemaMetadata {
 #[pymethods]
 impl DbSchemaMetadata {
     #[new]
-    fn py_new(constraints: Vec<DbSchemaConstraint>, indexes: Vec<DbSchemaIndex>) -> PyResult<Self> {    
-        Ok(Self { constraints, indexes })
+    fn py_new(constraints: Vec<DbSchemaConstraint>, indexes: Vec<DbSchemaIndex>) -> PyResult<Self> {
+        Ok(Self {
+            constraints,
+            indexes,
+        })
+    }
+
+    /// Create metadata from a Python dictionary
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let constraints = match dict.get_item("constraints")? {
+            Some(items) => {
+                let iter = items.iter()?;
+                iter.map(|item| {
+                    let item = item?;
+                    if let Ok(item) = item.downcast::<PyDict>() {
+                        DbSchemaConstraint::py_from_dict(_cls, item)
+                    } else {
+                        Err(pyo3::exceptions::PyTypeError::new_err(
+                            "Invalid constraint type",
+                        ))
+                    }
+                })
+                .collect::<PyResult<Vec<_>>>()?
+            }
+            None => vec![],
+        };
+        let indexes = match dict.get_item("indexes")? {
+            Some(items) => {
+                let iter = items.iter()?;
+                iter.map(|item| {
+                    let item = item?;
+                    if let Ok(item) = item.downcast::<PyDict>() {
+                        DbSchemaIndex::py_from_dict(_cls, item)
+                    } else {
+                        Err(pyo3::exceptions::PyTypeError::new_err("Invalid index type"))
+                    }
+                })
+                .collect::<PyResult<Vec<_>>>()?
+            }
+            None => vec![],
+        };
+        Ok(Self {
+            constraints,
+            indexes,
+        })
+    }
+    /// Convert the metadata to a Python dictionary
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new_bound(py);
+        let constraints_dict: PyResult<Vec<PyObject>> =
+            self.constraints.iter().map(|c| c.py_to_dict(py)).collect();
+        dict.set_item("constraints", &constraints_dict?)?;
+        let indexes_dict: PyResult<Vec<PyObject>> =
+            self.indexes.iter().map(|i| i.py_to_dict(py)).collect();
+        dict.set_item("indexes", &indexes_dict?)?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DbSchemaMetadata(constraints=[{}], indexes=[{}])",
+            self.constraints
+                .iter()
+                .map(|c| c.__repr__())
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.indexes
+                .iter()
+                .map(|i| i.__repr__())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "DbSchemaMetadata(constraints=[{}], indexes=[{}])",
+            self.constraints
+                .iter()
+                .map(|c| c.__str__())
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.indexes
+                .iter()
+                .map(|i| i.__str__())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
     }
 }
 
@@ -468,15 +828,16 @@ impl DbSchemaMetadata {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
-    
+    #[pyo3(get, set)]
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship keys and vector of properties for each relationship type
-    
+    #[pyo3(get, set)]
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Vector of relationships
+    #[pyo3(get, set)]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     /// Metadata about the schema containing constraints and indexes
-    
+    #[pyo3(get, set)]
     pub metadata: DbSchemaMetadata,
 }
 
@@ -831,23 +1192,132 @@ impl fmt::Display for DbSchema {
 impl DbSchema {
     #[new]
     pub fn py_new(
-       
+        node_props: HashMap<String, Vec<DbSchemaProperty>>,
+        rel_props: HashMap<String, Vec<DbSchemaProperty>>,
+        relationships: Vec<DbSchemaRelationshipPattern>,
+        metadata: DbSchemaMetadata,
     ) -> PyResult<Self> {
-       todo!()
+        Ok(Self {
+            node_props,
+            rel_props,
+            relationships,
+            metadata,
+        })
     }
 
-    #[staticmethod]
-    fn from_dict() -> pyo3::PyResult<Self> {
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let node_props = match dict.get_item("node_props")? {
+            Some(items) => {
+                let items = items.downcast::<PyDict>()?;
+                let mut node_props = HashMap::new();
+                for (label, properties) in items.iter() {
+                    let properties_iter = properties.iter()?;
+                    let mut props = Vec::new();
+                    for property_item in properties_iter {
+                        let property = property_item?;
+                        if let Ok(property_dict) = property.downcast::<PyDict>() {
+                            props.push(DbSchemaProperty::py_from_dict(_cls, property_dict)?);
+                        } else {
+                            return Err(pyo3::exceptions::PyTypeError::new_err(
+                                "property is not a dictionary",
+                            ));
+                        }
+                    }
+                    node_props.insert(label.extract::<String>()?, props);
+                }
+                node_props
+            }
+            None => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "node_props is required",
+                ))
+            }
+        };
+
+        let rel_props = match dict.get_item("rel_props")? {
+            Some(items) => {
+                let items = items.downcast::<PyDict>()?;
+                let mut rel_props = HashMap::new();
+                for (rel_type, properties) in items.iter() {
+                    let properties_iter = properties.iter()?;
+                    let mut props = Vec::new();
+                    for property_item in properties_iter {
+                        let property = property_item?;
+                        if let Ok(property_dict) = property.downcast::<PyDict>() {
+                            props.push(DbSchemaProperty::py_from_dict(_cls, property_dict)?);
+                        } else {
+                            return Err(pyo3::exceptions::PyTypeError::new_err(
+                                "property is not a dictionary",
+                            ));
+                        }
+                    }
+                    rel_props.insert(rel_type.extract::<String>()?, props);
+                }
+                rel_props
+            }
+            None => HashMap::new(),
+        };
+
+        let relationships = match dict.get_item("relationships")? {
+            Some(items) => {
+                let iter = items.iter()?;
+                let mut relationships = Vec::new();
+                for item in iter {
+                    let rel = item?;
+                    if let Ok(rel_dict) = rel.downcast::<PyDict>() {
+                        relationships
+                            .push(DbSchemaRelationshipPattern::py_from_dict(_cls, rel_dict)?);
+                    } else {
+                        return Err(pyo3::exceptions::PyTypeError::new_err(
+                            "relationship is not a dictionary",
+                        ));
+                    }
+                }
+                relationships
+            }
+            None => Vec::new(),
+        };
+
+        let metadata = match dict.get_item("metadata")? {
+            Some(metadata) => {
+                if let Ok(metadata_dict) = metadata.downcast::<PyDict>() {
+                    DbSchemaMetadata::py_from_dict(_cls, metadata_dict)?
+                } else {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "metadata is not a dictionary",
+                    ));
+                }
+            }
+            None => DbSchemaMetadata::new(),
+        };
+
+        Ok(Self {
+            node_props,
+            rel_props,
+            relationships,
+            metadata,
+        })
+    }
+
+    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
+        todo!()
+    }
+
+    fn __repr__(&self) -> String {
+        todo!()
+    }
+
+    fn __str__(&self) -> String {
         todo!()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::remove_file;
-
 
     fn create_person_name_property() -> DbSchemaProperty {
         DbSchemaProperty::new("name", PropertyType::STRING)

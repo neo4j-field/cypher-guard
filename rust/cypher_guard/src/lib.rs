@@ -6,7 +6,10 @@ mod parser;
 mod schema;
 
 use errors::CypherGuardError;
-pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
+pub use schema::{
+    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
+    DbSchemaRelationshipPattern, PropertyType,
+};
 
 use crate::parser::ast::{
     MatchElement, NodePattern, PatternElement, Query, RelationshipPattern, WhereClause,
@@ -440,11 +443,10 @@ fn validate_where_clause(
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
-                                        }
-                                            // PropertyType::ENUM(_) => {
-                                            //     // Not supported in this check for now
-                                            // }
-                                        }
+                                        } // PropertyType::ENUM(_) => {
+                                          //     // Not supported in this check for now
+                                          // }
+                                    }
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
@@ -500,10 +502,9 @@ fn validate_where_clause(
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
-                                        }
-                                        // PropertyType::ENUM(_) => {
-                                        //     // Not supported in this check for now
-                                        // }
+                                        } // PropertyType::ENUM(_) => {
+                                          //     // Not supported in this check for now
+                                          // }
                                     }
                                 }
                             }

@@ -1,8 +1,9 @@
-use ::cypher_guard::{get_cypher_validation_errors, validate_cypher_with_schema, DbSchema, DbSchemaProperty, PropertyType};
+use ::cypher_guard::{
+    get_cypher_validation_errors, validate_cypher_with_schema, DbSchema, DbSchemaConstraint,
+    DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType,
+};
 use pyo3::prelude::*;
 use std::io::Write;
-
-
 
 #[pyfunction]
 pub fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
@@ -43,9 +44,10 @@ fn cypher_guard(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<PropertyType>()?;
-    // m.add_class::<DbSchemaRelationshipPattern>()?;
-    // m.add_class::<DbSchemaConstraint>()?;
-    // m.add_class::<DbSchemaIndex>()?;
+    m.add_class::<DbSchemaRelationshipPattern>()?;
+    m.add_class::<DbSchemaConstraint>()?;
+    m.add_class::<DbSchemaIndex>()?;
+    m.add_class::<DbSchemaMetadata>()?;
     m.add_function(wrap_pyfunction!(validate_cypher_py, m)?)?;
     m.add_function(wrap_pyfunction!(get_validation_errors_py, m)?)?;
     Ok(())
