@@ -1,8 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
-
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use crate::errors::CypherGuardError;
+#[cfg(feature = "python-bindings")]
+use pyo3::prelude::*;
+#[cfg(feature = "python-bindings")]
+use pyo3::types::{PyDict, PyList, PyType};
+#[cfg(feature = "python-bindings")]
+use pyo3::PyObject;
 
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
@@ -10,22 +17,129 @@ pub type Result<T> = std::result::Result<T, CypherGuardError>;
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum PropertyType {
     /// String property
+    #[pyo3(name = "STRING")]
     STRING,
     /// Integer property
+    #[pyo3(name = "INTEGER")]
     INTEGER,
     /// Float property
+    #[pyo3(name = "FLOAT")]
     FLOAT,
     /// Boolean property
+    #[pyo3(name = "BOOLEAN")]
     BOOLEAN,
     /// Point property (for spatial data)
+    #[pyo3(name = "POINT")]
     POINT,
     /// DateTime property
+    #[pyo3(name = "DATETIME")]
     DATETIME,
-    /// Custom enum type (referenced by name)
-    ENUM(String),
+    // / Custom enum type (referenced by name)
+    // #[cfg_attr(feature = "python-bindings", pyo3(name = "ENUM"))]
+    // ENUM(String),
 }
+
+impl PropertyType {
+    pub fn from_string(s: &str) -> Result<Self> {
+        match s.to_uppercase().as_str() {
+            "STRING" | "STR" => Ok(PropertyType::STRING),
+            "INTEGER" | "INT"  => Ok(PropertyType::INTEGER),
+            "FLOAT" => Ok(PropertyType::FLOAT),
+            "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
+            "POINT"  => Ok(PropertyType::POINT),
+            "DATETIME" => Ok(PropertyType::DATETIME),
+            _ => Err(CypherGuardError::SchemaError)
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl PropertyType {
+    #[new]
+    fn py_new(type_name: &str) -> PyResult<Self> {
+        match type_name.to_uppercase().as_str() {
+            "STRING" => Ok(PropertyType::STRING),
+            "INTEGER" => Ok(PropertyType::INTEGER),
+            "FLOAT" => Ok(PropertyType::FLOAT),
+            "BOOLEAN" => Ok(PropertyType::BOOLEAN),
+            "POINT" => Ok(PropertyType::POINT),
+            "DATETIME" => Ok(PropertyType::DATETIME),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid property type: {}", type_name)))
+        }
+    }
+    
+    #[classmethod]
+    fn string(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::STRING
+    }
+    
+    #[classmethod]
+    fn integer(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::INTEGER
+    }
+    
+    #[classmethod]
+    fn float(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::FLOAT
+    }
+    
+    #[classmethod]
+    fn boolean(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::BOOLEAN
+    }
+    
+    #[classmethod]
+    fn point(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::POINT
+    }
+    
+    #[classmethod]
+    fn datetime(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::DATETIME
+    }
+    
+    
+    fn to_string(&self) -> String {
+        match self {
+            PropertyType::STRING => "STRING".to_string(),
+            PropertyType::INTEGER => "INTEGER".to_string(),
+            PropertyType::FLOAT => "FLOAT".to_string(),
+            PropertyType::BOOLEAN => "BOOLEAN".to_string(),
+            PropertyType::POINT => "POINT".to_string(),
+            PropertyType::DATETIME => "DATETIME".to_string(),
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_string", signature = (s))]
+    fn py_from_string(_cls: &Bound<'_, PyType>, s: &str) -> PyResult<Self> {
+        
+        // Case insensitive matching for simple types
+        match s.trim().to_uppercase().as_str() {
+            "STRING" | "STR" => Ok(PropertyType::STRING),
+            "INTEGER" | "INT"  => Ok(PropertyType::INTEGER),
+            "FLOAT" => Ok(PropertyType::FLOAT),
+            "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
+            "POINT"  => Ok(PropertyType::POINT),
+            "DATETIME" => Ok(PropertyType::DATETIME),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                format!("Invalid property type: '{}'. Valid types: STRING, INTEGER, FLOAT, BOOLEAN, POINT, DATETIME", s)
+            ))
+        }
+    }
+    
+    fn __repr__(&self) -> String {
+        format!("PropertyType.{}", self.to_string())
+    }
+    
+    fn __str__(&self) -> String {
+        self.to_string()
+    }
+}
+
 
 /// Structure representing a user-defined enum type for properties.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -39,20 +153,28 @@ struct EnumType {
 /// Structure representing a property in the schema.
 /// This may be for either a node or a relationship.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaProperty {
     /// Name of the property
+    #[pyo3(get, set)]
     pub name: String,
     /// Neo4j type of the property
+    #[pyo3(get, set)]
     pub neo4j_type: PropertyType,
     /// Enum values for the property, optional
+    #[pyo3(get, set)]
     pub enum_values: Option<Vec<String>>,
     /// Minimum value for the property, optional
+    #[pyo3(get, set)]
     pub min_value: Option<f64>,
     /// Maximum value for the property, optional
+    #[pyo3(get, set)]
     pub max_value: Option<f64>,
     /// Distinct value count for the property, optional
+    #[pyo3(get, set)]
     pub distinct_value_count: Option<i64>,
     /// Example values for the property, optional
+    #[pyo3(get, set)]
     pub example_values: Option<Vec<String>>,
 }
 
@@ -120,59 +242,198 @@ impl DbSchemaProperty {
     }
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchemaProperty {
+    #[new]
+    #[pyo3(signature = (name, neo4j_type, enum_values=None, min_value=None, max_value=None, distinct_value_count=None, example_values=None))]
+    fn py_new(
+        name: String,
+        neo4j_type: String,
+        enum_values: Option<Vec<String>>,
+        min_value: Option<f64>,
+        max_value: Option<f64>,
+        distinct_value_count: Option<i64>,
+        example_values: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        // Convert string neo4j_type to PropertyType enum
+        let property_type = match PropertyType::from_string(&neo4j_type) {
+            Ok(property_type) => property_type,
+            Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid property type: {}", e))),
+        };
+        
+        let mut prop = Self::new(&name, property_type);
+        
+        if let Some(values) = enum_values {
+            prop.set_enum_values(values);
+        }
+        
+        if let Some(value) = min_value {
+            prop.set_min_value(value);
+        }
+        
+        if let Some(value) = max_value {
+            prop.set_max_value(value);
+        }
+        
+        if let Some(value) = distinct_value_count {
+            prop.set_distinct_value_count(value);
+        }
+        
+        if let Some(values) = example_values {
+            prop.set_example_values(values);
+        }
+        
+        Ok(prop)
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict", signature = (dict))]
+    fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let name = dict.get_item("name")?.ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?.extract::<String>()?;
+        let neo4j_type = match dict.get_item("neo4j_type")? {
+            Some(value) =>  value.extract::<String>()?,
+            None => return Err(pyo3::exceptions::PyKeyError::new_err("Missing 'neo4j_type' field")),
+        };
+        let enum_values = match dict.get_item("enum_values")? {
+            Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
+            _ => None,
+        };
+        let min_value = match dict.get_item("min_value")? {
+            Some(value) if !value.is_none() => Some(value.extract::<f64>()?),
+            _ => None,
+        };
+        let max_value = match dict.get_item("max_value")? {
+            Some(value) if !value.is_none() => Some(value.extract::<f64>()?),
+            _ => None,
+        };
+        let distinct_value_count = match dict.get_item("distinct_value_count")? {
+            Some(value) if !value.is_none() => Some(value.extract::<i64>()?),
+            _ => None,
+        };
+        let example_values = match dict.get_item("example_values")? {
+            Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
+            _ => None,
+        };
+        Self::py_new(name, neo4j_type.to_string(), enum_values, min_value, max_value, distinct_value_count, example_values)
+    }
+}
 /// Structure representing a relationship in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
     /// Start node label of the relationship
+    
     pub start: String,
     /// End node label of the relationship
+    
     pub end: String,
     /// Type of the relationship
+    
     pub rel_type: String,
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchemaRelationshipPattern {
+    #[new]
+    fn py_new(start: &str, end: &str, rel_type: &str) -> PyResult<Self> {
+        Ok(Self { start: start.to_string(), end: end.to_string(), rel_type: rel_type.to_string() })
+    }
+}
 /// Structure representing a constraint in the schema.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]  
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
     /// ID of the constraint
+    
     pub id: i64,
     /// Name of the constraint
+    
     pub name: String,
-    /// Type of the constraint
+    /// Type of the constraint  
+    
     pub constraint_type: String,
     /// Entity type of the constraint
+    
     pub entity_type: String,
     /// Labels or types of the constraint
+    
     pub labels_or_types: Vec<String>,
     /// Properties of the constraint
+    
     pub properties: Vec<String>,
     /// Owned index of the constraint
+    
     pub owned_index: String,
+}
+
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchemaConstraint {
+    #[new]
+    fn py_new(id: i64, name: String, constraint_type: String, entity_type: String, labels_or_types: Vec<String>, properties: Vec<String>, owned_index: String) -> PyResult<Self> {
+        Ok(Self { 
+            id, 
+            name, 
+            constraint_type, 
+            entity_type, 
+            labels_or_types, 
+            properties, 
+            owned_index 
+        })
+    }
 }
 
 /// Structure representing an index in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
     /// Label of the index
+    
     pub label: String,
     /// Properties of the index
+    
     pub properties: Vec<String>,
     /// Size of the index
+    
     pub size: i64,
     /// Type of the index
+    
     pub index_type: String,
     /// Values selectivity of the index
+    
     pub values_selectivity: f64,
     /// Distinct values of the index
+    
     pub distinct_values: i64,
+}
+
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchemaIndex {
+    #[new]
+    fn py_new(label: String, properties: Vec<String>, size: i64, index_type: String, values_selectivity: f64, distinct_values: i64) -> PyResult<Self> {
+        Ok(Self { 
+            label, 
+            properties, 
+            size, 
+            index_type, 
+            values_selectivity, 
+            distinct_values 
+        })
+    }
 }
 
 /// Structure representing metadata for the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
+    
     pub constraints: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
+    
     pub indexes: Vec<DbSchemaIndex>,
 }
 
@@ -191,18 +452,31 @@ impl DbSchemaMetadata {
     }
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchemaMetadata {
+    #[new]
+    fn py_new(constraints: Vec<DbSchemaConstraint>, indexes: Vec<DbSchemaIndex>) -> PyResult<Self> {    
+        Ok(Self { constraints, indexes })
+    }
+}
+
 /// Main schema struct for the graph database.
 /// This is a collection of node labels, relationship types, properties, enums, and metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
+    
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship keys and vector of properties for each relationship type
+    
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Vector of relationships
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     /// Metadata about the schema containing constraints and indexes
+    
     pub metadata: DbSchemaMetadata,
 }
 
@@ -500,7 +774,7 @@ impl DbSchema {
     }
 
     /// Load a DbSchema from a JSON string
-    pub fn from_json_str(s: &str) -> Result<Self> {
+    pub fn from_json_string(s: &str) -> Result<Self> {
         println!("Loading schema from JSON: {}", s); // Debug: Print input JSON
         let schema = serde_json::from_str::<DbSchema>(s).map_err(|e| {
             eprintln!("JSON parse error: {}", e);
@@ -513,9 +787,24 @@ impl DbSchema {
         Ok(schema)
     }
 
+    /// Load a DbSchema from a JSON file
+    pub fn from_json_file(path: &str) -> Result<Self> {
+        let file = File::open(path).map_err(|_| CypherGuardError::SchemaError)?;
+        let reader = BufReader::new(file);
+        let schema = serde_json::from_reader(reader).map_err(|_| CypherGuardError::SchemaError)?;
+        Ok(schema)
+    }
+
     /// Serialize a DbSchema to a JSON string
     pub fn to_json_string(&self) -> Result<String> {
         serde_json::to_string(self).map_err(|_| CypherGuardError::SchemaError)
+    }
+
+    /// Serialize a DbSchema to a JSON file
+    pub fn to_json_file(&self, path: &str) -> Result<()> {
+        let file = File::create(path).map_err(|_| CypherGuardError::SchemaError)?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, self).map_err(|_| CypherGuardError::SchemaError)
     }
 }
 
@@ -537,9 +826,28 @@ impl fmt::Display for DbSchema {
     }
 }
 
+#[cfg(feature = "python-bindings")]
+#[pymethods]
+impl DbSchema {
+    #[new]
+    pub fn py_new(
+       
+    ) -> PyResult<Self> {
+       todo!()
+    }
+
+    #[staticmethod]
+    fn from_dict() -> pyo3::PyResult<Self> {
+        todo!()
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::remove_file;
+
 
     fn create_person_name_property() -> DbSchemaProperty {
         DbSchemaProperty::new("name", PropertyType::STRING)
@@ -557,12 +865,12 @@ mod tests {
         DbSchemaProperty::new("since", PropertyType::DATETIME)
     }
 
-    fn create_favorite_color_property() -> DbSchemaProperty {
-        DbSchemaProperty::new(
-            "favorite_color",
-            PropertyType::ENUM("color_enum".to_string()),
-        )
-    }
+    // fn create_favorite_color_property() -> DbSchemaProperty {
+    //     DbSchemaProperty::new(
+    //         "favorite_color",
+    //         PropertyType::ENUM("color_enum".to_string()),
+    //     )
+    // }
 
     fn create_lives_in_rel() -> DbSchemaRelationshipPattern {
         DbSchemaRelationshipPattern {
@@ -615,7 +923,7 @@ mod tests {
             PropertyType::FLOAT,
             PropertyType::BOOLEAN,
             PropertyType::DATETIME,
-            PropertyType::ENUM("ColorEnum".to_string()),
+            // PropertyType::ENUM("ColorEnum".to_string()),
         ];
         for t in types {
             let serialized = serde_json::to_string(&t).unwrap();
@@ -741,9 +1049,9 @@ mod tests {
             .add_node_property("Person", &create_person_age_property())
             .unwrap();
 
-        schema
-            .add_node_property("Person", &create_favorite_color_property())
-            .unwrap();
+        // schema
+        //     .add_node_property("Person", &create_favorite_color_property())
+        //     .unwrap();
         let errors = schema.validate();
         assert!(
             errors.is_empty(),
@@ -798,7 +1106,7 @@ mod tests {
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}],
             "metadata": {"indexes":[], "constraints":[]}
         }"#;
-        let schema = DbSchema::from_json_str(json);
+        let schema = DbSchema::from_json_string(json);
         assert!(schema.is_ok());
         let schema = schema.unwrap();
         assert!(schema.has_label("Person"));
@@ -812,7 +1120,7 @@ mod tests {
             "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}]
         }"#;
-        let schema = DbSchema::from_json_str(json);
+        let schema = DbSchema::from_json_string(json);
         assert!(schema.is_ok());
         let schema = schema.unwrap();
         assert!(schema.has_label("Person"));
@@ -823,7 +1131,7 @@ mod tests {
     #[test]
     fn test_from_json_str_invalid() {
         let json = "not valid json";
-        let schema = DbSchema::from_json_str(json);
+        let schema = DbSchema::from_json_string(json);
         assert!(schema.is_err());
     }
 
@@ -926,5 +1234,17 @@ mod tests {
                 .name,
             "since"
         );
+    }
+
+    #[test]
+    fn test_round_trip_serialization() {
+        let schema = create_test_schema_valid();
+        let json = schema.to_json_file("test_schema.json");
+        assert!(json.is_ok());
+        let schema = DbSchema::from_json_file("test_schema.json");
+        assert!(schema.is_ok());
+        let schema = schema.unwrap();
+        assert_eq!(schema, create_test_schema_valid());
+        remove_file("test_schema.json").unwrap();
     }
 }

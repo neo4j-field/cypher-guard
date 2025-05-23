@@ -441,10 +441,10 @@ fn validate_where_clause(
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
                                         }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
+                                            // PropertyType::ENUM(_) => {
+                                            //     // Not supported in this check for now
+                                            // }
                                         }
-                                    }
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
@@ -501,9 +501,9 @@ fn validate_where_clause(
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
                                         }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
-                                        }
+                                        // PropertyType::ENUM(_) => {
+                                        //     // Not supported in this check for now
+                                        // }
                                     }
                                 }
                             }
@@ -620,12 +620,6 @@ mod tests {
     #[test]
     fn test_parse_single_query() {
         let query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
-        let schema = DbSchema {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: vec![],
-            metadata: Default::default(),
-        };
         match crate::parser::clauses::parse_query(query) {
             Ok((rest, ast)) => {
                 println!("Parsed AST: {:?}", ast);
