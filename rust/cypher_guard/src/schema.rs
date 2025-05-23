@@ -360,6 +360,14 @@ impl DbSchemaProperty {
         }
         Ok(dict.into())
     }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaProperty(name={}, neo4j_type={}, enum_values={:?}, min_value={:?}, max_value={:?}, distinct_value_count={:?}, example_values={:?})", self.name, self.neo4j_type.to_string(), self.enum_values, self.min_value, self.max_value, self.distinct_value_count, self.example_values)
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}: {}", self.name, self.neo4j_type.to_string())
+    }
 }
 /// Structure representing a relationship in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1302,15 +1310,74 @@ impl DbSchema {
     }
 
     fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        todo!()
+        let dict = PyDict::new_bound(py);
+
+        // Handle node properties
+        let node_props_dict = PyDict::new_bound(py);
+        for (label, properties) in &self.node_props {
+            let prop_list = PyList::empty_bound(py);
+            for prop in properties {
+                prop_list.append(prop.py_to_dict(py)?)?;
+            }
+            node_props_dict.set_item(label, prop_list)?;
+        }
+        dict.set_item("node_props", node_props_dict)?;
+
+        // Handle relationship properties
+        let rel_props_dict = PyDict::new_bound(py);
+        for (rel_type, properties) in &self.rel_props {
+            let prop_list = PyList::empty_bound(py);
+            for prop in properties {
+                prop_list.append(prop.py_to_dict(py)?)?;
+            }
+            rel_props_dict.set_item(rel_type, prop_list)?;
+        }
+        dict.set_item("rel_props", rel_props_dict)?;
+
+        // Handle relationships
+        let rel_list = PyList::empty_bound(py);
+        for rel in &self.relationships {
+            rel_list.append(rel.py_to_dict(py)?)?;
+        }
+        dict.set_item("relationships", rel_list)?;
+
+        // Handle metadata
+        dict.set_item("metadata", self.metadata.py_to_dict(py)?)?;
+
+        Ok(dict.into())
     }
 
     fn __repr__(&self) -> String {
-        todo!()
+        format!(
+            "DbSchema(node_props={:?}, rel_props={:?}, relationships={:?}, metadata={:?})",
+            self.node_props, self.rel_props, self.relationships, self.metadata
+        )
     }
 
     fn __str__(&self) -> String {
-        todo!()
+        format!(
+            "Nodes:\n{}\nRelationship Properties:\n{}\nRelationships:\n{}\nConstraints:\n{}\nIndexes:\n{}",
+            self.node_props.iter()
+                .map(|(k, props)| k.to_string() + ":\n" + props.iter().map(|p| p.__str__()).collect::<Vec<String>>().join("\n").as_str())
+                .collect::<Vec<String>>()
+                .join("\n"),
+            self.rel_props.iter()
+                .map(|(k, props)| k.to_string() + ":\n" + props.iter().map(|p| p.__str__()).collect::<Vec<String>>().join("\n").as_str())
+                .collect::<Vec<String>>()
+                .join("\n"),
+            self.relationships.iter()
+                .map(|c| c.__str__())
+                .collect::<Vec<String>>()
+                .join("\n"),
+            self.metadata.constraints.iter()
+                .map(|c| c.__str__())
+                .collect::<Vec<String>>()
+                .join("\n"),
+            self.metadata.indexes.iter()
+                .map(|c| c.__str__())
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
     }
 }
 

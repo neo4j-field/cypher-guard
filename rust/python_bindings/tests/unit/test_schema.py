@@ -253,8 +253,9 @@ def test_DbSchema_init_from_args_valid():
 
 def test_DbSchema_init_from_dict_valid():
     schema = DbSchema.from_dict({
-        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}, {"name": "age", "neo4j_type": "INTEGER"}]},
-        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER", "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}]},
+        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}, {"name": "age", "neo4j_type": "INTEGER"}], 
+                       "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}]},
+        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     })
@@ -274,10 +275,32 @@ def test_DbSchema_init_from_dict_valid():
 def test_DbSchema_to_dict_valid():
 
     d = {
-        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}, {"name": "age", "neo4j_type": "INTEGER"}]},
-        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER", "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}]},
+        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, {"name": "age", "neo4j_type": "INTEGER"}]},
+        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     }
     schema = DbSchema.from_dict(d)
     assert schema.to_dict() == d
+
+def test_DbSchema_str():
+    schema = DbSchema.from_dict({
+        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, {"name": "age", "neo4j_type": "INTEGER"}],
+                       "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
+        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
+        "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
+        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+    })
+    assert "Nodes:" in str(schema)
+    assert "nodeA:\nname: STRING\nage: INTEGER" in str(schema)
+    assert "nodeB:\ntitle: STRING" in str(schema)
+    assert "Relationship Properties:" in str(schema)
+    assert "relA:\nnum: INTEGER" in str(schema)
+    assert "Relationships:" in str(schema)
+    assert "(:nodeA)-[:relA]->(:nodeB)" in str(schema)
+    assert "Constraints:" in str(schema)
+    assert "UNIQUE CONSTRAINT CONSTRAINT_NAME ON NODE (label1, label2).{prop1, prop2}" in str(schema)
+    assert "Indexes:" in str(schema)
+    assert "INDEX BTREE ON INDEX_NAME (prop1, prop2)" in str(schema)
+
+
