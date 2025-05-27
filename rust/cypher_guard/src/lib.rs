@@ -10,7 +10,7 @@ pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
 
 use crate::parser::ast::{
     MatchElement, NodePattern, PatternElement, Query, RelationshipPattern, WhereClause,
-    WhereCondition,
+    WhereCondition, WithClause, WithItem,
 };
 use crate::parser::clauses::parse_query;
 use std::collections::HashMap;
@@ -123,7 +123,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                 }
                             }
                         } else {
-                            let error = format!("Variable '{}' not found in MATCH clause", var);
+                            let error = format!("Variable '{}' not defined in previous scope", var);
                             println!("Validation error: {}", error); // Debug: Print validation error
                             ctx.errors.push(error);
                         }
@@ -145,6 +145,11 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
         for el in &match_clause.elements {
             validate_match_element(el, ctx.schema, ctx);
         }
+    }
+
+    // Validate WITH clause if present
+    if let Some(with_clause) = &query.with_clause {
+        validate_with_clause(with_clause, ctx);
     }
 
     // Validate WHERE clause if present
@@ -180,7 +185,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                                 }
                             }
                         } else {
-                            ctx.errors.push(format!("Variable '{}' not defined", var));
+                            ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
                         }
                     }
                 }
@@ -218,10 +223,65 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                         }
                     }
                 } else {
-                    ctx.errors.push(format!("Variable '{}' not defined", var));
+                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
                 }
             }
         }
+    }
+}
+
+/// Validate a WITH clause
+fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
+    println!("Validating WITH clause: {:?}", with_clause);
+    println!("Current variable scope: {:?}", ctx.var_types);
+
+    // First, check all items for existence in the current scope
+    let mut new_var_types = HashMap::new();
+    let mut seen_aliases = HashSet::new();
+
+    for item in &with_clause.items {
+        println!("Processing WITH item: {:?}", item);
+        match item {
+            WithItem::Variable(var) => {
+                println!("Checking variable: {}", var);
+                if let Some(var_info) = ctx.var_types.get(var) {
+                    println!("Found variable info: {:?}", var_info);
+                    new_var_types.insert(var.clone(), var_info.clone());
+                } else {
+                    println!("Variable not found in scope");
+                    ctx.errors
+                        .push(format!("Variable '{}' not defined in previous scope", var));
+                    return; // Return early if we find an undefined variable
+                }
+            }
+            WithItem::Alias { expression, alias } => {
+                println!("Checking alias: {} AS {}", expression, alias);
+                if let Some(var_info) = ctx.var_types.get(expression) {
+                    println!("Found expression info: {:?}", var_info);
+                    new_var_types.insert(alias.clone(), var_info.clone());
+                    seen_aliases.insert(alias.clone());
+                } else {
+                    println!("Expression not found in scope");
+                    ctx.errors.push(format!(
+                        "Expression '{}' not defined in previous scope",
+                        expression
+                    ));
+                    return; // Return early if we find an undefined expression
+                }
+            }
+            WithItem::Wildcard => {
+                println!("Processing wildcard");
+                new_var_types.extend(ctx.var_types.clone());
+            }
+        }
+    }
+
+    println!("New variable scope: {:?}", new_var_types);
+    println!("Current errors: {:?}", ctx.errors);
+
+    // Only update the variable scope if we didn't find any errors
+    if ctx.errors.is_empty() {
+        ctx.var_types = new_var_types;
     }
 }
 
@@ -561,13 +621,11 @@ fn validate_where_clause(
                             }
                         }
                         _ => {
-                            ctx.errors
-                                .push(format!("Variable '{}' is not a path variable", path_var));
+                            ctx.errors.push(format!("Variable '{}' not defined in previous scope", path_var));
                         }
                     }
                 } else {
-                    ctx.errors
-                        .push(format!("Variable '{}' not defined", path_var));
+                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", path_var));
                 }
             }
         }
@@ -608,7 +666,7 @@ fn validate_property_access(expr: &str, schema: &DbSchema, ctx: &mut ValidationC
                 }
             }
         } else {
-            ctx.errors.push(format!("Variable '{}' not defined", var));
+            ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
         }
     }
 }
@@ -715,5 +773,59 @@ mod tests {
                     AS distance";
         let result = validate_cypher_with_schema(query, &schema);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_with_clause_validation() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person");
+        let query = "MATCH (a:Person) WITH a";
+        let errors = get_cypher_validation_errors(query, &schema);
+        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+    }
+
+    #[test]
+    fn test_with_clause_alias_validation() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person");
+        let query = "MATCH (a:Person) WITH a AS b";
+        let errors = get_cypher_validation_errors(query, &schema);
+        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+    }
+
+    #[test]
+    fn test_with_clause_wildcard_validation() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person");
+        let query = "MATCH (a:Person) WITH *";
+        let errors = get_cypher_validation_errors(query, &schema);
+        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+    }
+
+    #[test]
+    fn test_with_clause_undefined_variable() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person");
+        let query = "MATCH (a:Person) WITH b";
+        let errors = get_cypher_validation_errors(query, &schema);
+        assert!(!errors.is_empty(), "Expected errors for undefined variable");
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("not defined in previous scope")));
+    }
+
+    #[test]
+    fn test_with_clause_undefined_expression() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person");
+        let query = "MATCH (a:Person) WITH b AS c";
+        let errors = get_cypher_validation_errors(query, &schema);
+        assert!(
+            !errors.is_empty(),
+            "Expected errors for undefined expression"
+        );
+        assert!(errors
+            .iter()
+            .any(|e| e.contains("not defined in previous scope")));
     }
 }

@@ -9,8 +9,11 @@ use nom::{
 };
 
 use crate::parser::ast::*;
-use crate::parser::clauses::{match_clause, property_map, relationship_type, where_clause};
+use crate::parser::clauses::{property_map, relationship_type, where_clause};
 use crate::parser::utils::{identifier, number_literal, string_literal};
+
+#[cfg(test)]
+use crate::parser::clauses::match_clause;
 
 #[allow(dead_code)]
 // TODO: Clean up unused functions or refactor to use them

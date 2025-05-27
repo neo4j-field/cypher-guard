@@ -182,6 +182,28 @@ def test_path_variable_with_predicate_valid(schema_json: str):
     """
     assert validate_cypher_py(query, schema_json)
 
+def test_with_clause_valid(schema_json: str):
+    query = "MATCH (a:Person) WITH a RETURN a.name"
+    assert validate_cypher_py(query, schema_json)
+
+def test_with_clause_alias_valid(schema_json: str):
+    query = "MATCH (a:Person) WITH a AS b RETURN b.name"
+    assert validate_cypher_py(query, schema_json)
+
+def test_with_clause_wildcard_valid(schema_json: str):
+    query = "MATCH (a:Person) WITH * RETURN a.name"
+    assert validate_cypher_py(query, schema_json)
+
+def test_with_clause_invalid_variable(schema_json: str):
+    query = "MATCH (a:Person) WITH b RETURN b.name"
+    errors = get_validation_errors_py(query, schema_json)
+    assert errors and any("not defined in previous scope" in e for e in errors)
+
+def test_with_clause_invalid_alias_expression(schema_json: str):
+    query = "MATCH (a:Person) WITH b AS c RETURN c.name"
+    errors = get_validation_errors_py(query, schema_json)
+    assert errors and any("not defined in previous scope" in e for e in errors)
+
 
 
     
