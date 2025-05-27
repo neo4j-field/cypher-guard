@@ -364,7 +364,13 @@ impl DbSchemaProperty {
     }
 
     fn __repr__(&self) -> String {
-        format!("DbSchemaProperty(name={}, neo4j_type={}, enum_values={:?}, min_value={:?}, max_value={:?}, distinct_value_count={:?}, example_values={:?})", self.name, self.neo4j_type, self.enum_values, self.min_value, self.max_value, self.distinct_value_count, self.example_values)
+        format!("DbSchemaProperty(name={}, neo4j_type={}, enum_values={}, min_value={}, max_value={}, distinct_value_count={}, example_values={})", self.name, self.neo4j_type, match &self.enum_values {
+            Some(values) => format!("['{}']", values.join("', '")),
+            None => "None".to_string(),
+        }, self.min_value.map_or("None".to_string(), |v| v.to_string()), self.max_value.map_or("None".to_string(), |v| v.to_string()), self.distinct_value_count.map_or("None".to_string(), |v| v.to_string()), match &self.example_values {
+            Some(values) => format!("[{}]", values.join(", ")).to_string(),
+            None => "None".to_string(),
+        })
     }
 
     fn __str__(&self) -> String {
@@ -1351,8 +1357,32 @@ impl DbSchema {
 
     fn __repr__(&self) -> String {
         format!(
-            "DbSchema(node_props={:?}, rel_props={:?}, relationships={:?}, metadata={:?})",
-            self.node_props, self.rel_props, self.relationships, self.metadata
+            "DbSchema(node_props={}, rel_props={}, relationships={}, metadata={})",
+            {
+                let node_props = self.node_props
+                    .iter()
+                    .map(|(k, props)| format!("'{}': {}", k, props.iter().map(|p| p.__repr__()).collect::<Vec<String>>().join(", ")))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("{{{}}}", node_props)
+            },
+            {
+                let rel_props = self.rel_props
+                    .iter()
+                    .map(|(k, props)| format!("{}: {}", k, props.iter().map(|p| p.__repr__()).collect::<Vec<String>>().join(", ")))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("{{{}}}", rel_props)
+            },
+            {
+                let relationships = self.relationships
+                    .iter()
+                    .map(|c| c.__repr__())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("[{}]", relationships)
+            },
+            self.metadata.__repr__()
         )
     }
 

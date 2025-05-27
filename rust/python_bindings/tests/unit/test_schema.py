@@ -66,6 +66,23 @@ def test_DbSchemaProperty_to_dict_valid():
     prop = DbSchemaProperty("name", "STRING", ["value1", "value2"], None, None, None, None)
     assert prop.to_dict() == {"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}
 
+def test_DbSchemaProperty_repr_with_enum_values():
+    prop = DbSchemaProperty("name", "STRING", ["value1", "value2"], None, None, None, None)
+    assert prop.__repr__() == "DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None)"
+
+def test_DbSchemaProperty_repr_without_enum_values():
+    prop = DbSchemaProperty("name", "STRING", None, None, None, None, None)
+    assert prop.__repr__() == "DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=None, min_value=None, max_value=None, distinct_value_count=None, example_values=None)"
+
+
+def test_DbSchemaProperty_repr_with_min_max_distinct_value():
+    prop = DbSchemaProperty("name", "STRING", None, 1.2, 10, 2, None)
+    assert prop.__repr__() == "DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=None, min_value=1.2, max_value=10, distinct_value_count=2, example_values=None)"
+
+def test_DbSchemaProperty_str():
+    prop = DbSchemaProperty("name", "STRING", ["value1", "value2"], None, None, None, None)
+    assert str(prop) == "name: STRING"
+
 def test_DbSchemaRelationshipPattern_init_from_args_valid():
     rel = DbSchemaRelationshipPattern("nodeA", "nodeB", "REL_A")
     assert rel is not None
@@ -303,4 +320,16 @@ def test_DbSchema_str():
     assert "Indexes:" in str(schema)
     assert "INDEX BTREE ON INDEX_NAME (prop1, prop2)" in str(schema)
 
-
+def test_DbSchema_repr():
+    schema = DbSchema.from_dict({
+        "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, {"name": "age", "neo4j_type": "INTEGER"}],
+                       "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
+        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
+        "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
+        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+    })
+    assert "DbSchema(node_props={" in repr(schema)
+    assert "{'nodeA': DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None), DbSchemaProperty(name=age, neo4j_type=INTEGER, enum_values=None, min_value=None, max_value=None, distinct_value_count=None, example_values=None)" in repr(schema)
+    assert "'nodeB': DbSchemaProperty(name=title, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None)" in repr(schema)
+    assert "relationships=[DbSchemaRelationshipPattern(start=nodeA, end=nodeB, rel_type=relA)]," in repr(schema)
+    assert "metadata=DbSchemaMetadata(constraints=[DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME)], indexes=[DbSchemaIndex(label=INDEX_NAME, properties=[prop1, prop2], size=10, index_type=BTREE, values_selectivity=0.5, distinct_values=1000)])" in repr(schema)
