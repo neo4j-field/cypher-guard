@@ -123,7 +123,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
                                 }
                             }
                         } else {
-                            let error = format!("Variable '{}' not defined in previous scope", var);
+                            let error = format!("Variable '{}' not found in MATCH clause", var);
                             println!("Validation error: {}", error); // Debug: Print validation error
                             ctx.errors.push(error);
                         }
@@ -185,7 +185,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                                 }
                             }
                         } else {
-                            ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
+                            ctx.errors.push(format!("Variable '{}' not defined", var));
                         }
                     }
                 }
@@ -223,7 +223,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                         }
                     }
                 } else {
-                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
+                    ctx.errors.push(format!("Variable '{}' not defined", var));
                 }
             }
         }
@@ -621,11 +621,13 @@ fn validate_where_clause(
                             }
                         }
                         _ => {
-                            ctx.errors.push(format!("Variable '{}' not defined in previous scope", path_var));
+                            ctx.errors
+                                .push(format!("Variable '{}' is not a path variable", path_var));
                         }
                     }
                 } else {
-                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", path_var));
+                    ctx.errors
+                        .push(format!("Variable '{}' not defined", path_var));
                 }
             }
         }
@@ -666,7 +668,7 @@ fn validate_property_access(expr: &str, schema: &DbSchema, ctx: &mut ValidationC
                 }
             }
         } else {
-            ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
+            ctx.errors.push(format!("Variable '{}' not defined", var));
         }
     }
 }
