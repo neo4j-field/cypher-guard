@@ -20,6 +20,7 @@ pub enum Clause {
     Merge(MergeClause),
     Create(CreateClause),
     Return(ReturnClause),
+    With(WithClause),
     Query(Query),
 }
 
@@ -114,7 +115,6 @@ fn path_property(input: &str) -> IResult<&str, (String, String)> {
 // Parses a WHERE condition (e.g., a.age > 30, point.distance(a.location, b.location) > 10)
 fn where_condition(input: &str) -> IResult<&str, WhereCondition> {
     alt((
-        // Function call condition
         map(
             tuple((
                 function_call,
@@ -411,6 +411,36 @@ fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     ))
 }
 
+// Parses a WITH item: variable, alias, or wildcard
+fn with_item(input: &str) -> IResult<&str, WithItem> {
+    alt((
+        // Handle wildcard
+        map(tag("*"), |_| WithItem::Wildcard),
+        // Handle alias (e.g., a AS b)
+        map(
+            tuple((identifier, multispace0, tag("AS"), multispace1, identifier)),
+            |(expr, _, _, _, alias)| WithItem::Alias {
+                expression: expr.to_string(),
+                alias: alias.to_string(),
+            },
+        ),
+        // Handle simple variable
+        map(identifier, |s| WithItem::Variable(s.to_string())),
+    ))(input)
+}
+
+// Parses the WITH clause (e.g., WITH a, b AS c, *)
+pub fn with_clause(input: &str) -> IResult<&str, WithClause> {
+    println!("Parsing with clause: {}", input);
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("WITH")(input)?;
+    let (input, _) = multispace1(input)?;
+    let (input, items) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), with_item)(input)?;
+    println!("With clause items: {:?}", items);
+    Ok((input, WithClause { items }))
+}
+
 // Update the parser to handle OPTIONAL MATCH
 #[allow(dead_code)]
 pub fn clause(input: &str) -> IResult<&str, Clause> {
@@ -435,17 +465,25 @@ pub fn clause(input: &str) -> IResult<&str, Clause> {
         ),
         map(merge_clause, Clause::Merge),
         map(create_clause, Clause::Create),
-        // ... existing clause parsers ...
+        map(return_clause, Clause::Return),
+        map(with_clause, Clause::With),
     ))(input)
 }
 
 // Update the query parser to handle MERGE and CREATE
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
     println!("Parsing query: {}", input);
+    let (input, _) = multispace0(input)?;
     let (input, match_clause) = opt(match_clause)(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, merge_clause) = opt(merge_clause)(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, create_clause) = opt(create_clause)(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, with_clause) = opt(with_clause)(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, where_clause) = opt(where_clause)(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, return_clause) = opt(return_clause)(input)?;
     Ok((
         input,
@@ -453,6 +491,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             match_clause,
             merge_clause,
             create_clause,
+            with_clause,
             where_clause,
             return_clause,
         },
@@ -581,5 +620,71 @@ mod tests {
             }
             _ => panic!("Expected Pattern"),
         }
+    }
+
+    #[test]
+    fn test_with_clause_simple() {
+        let input = "WITH a";
+        let result = with_clause(input);
+        assert!(result.is_ok());
+        let (_, with) = result.unwrap();
+        assert_eq!(
+            with,
+            WithClause {
+                items: vec![WithItem::Variable("a".to_string())]
+            }
+        );
+    }
+
+    #[test]
+    fn test_with_clause_alias() {
+        let input = "WITH a AS b";
+        let result = with_clause(input);
+        assert!(result.is_ok());
+        let (_, with) = result.unwrap();
+        assert_eq!(
+            with,
+            WithClause {
+                items: vec![WithItem::Alias {
+                    expression: "a".to_string(),
+                    alias: "b".to_string()
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_with_clause_wildcard() {
+        let input = "WITH *";
+        let result = with_clause(input);
+        assert!(result.is_ok());
+        let (_, with) = result.unwrap();
+        assert_eq!(
+            with,
+            WithClause {
+                items: vec![WithItem::Wildcard]
+            }
+        );
+    }
+
+    #[test]
+    fn test_with_clause_multiple() {
+        let input = "WITH a, b AS c, *";
+        let result = with_clause(input);
+        assert!(result.is_ok());
+        let (_, with) = result.unwrap();
+        assert_eq!(
+            with,
+            WithClause {
+                items: vec![
+                    WithItem::Variable("a".to_string()),
+                    WithItem::Alias {
+                        expression: "b".to_string(),
+                        alias: "c".to_string()
+                    },
+                    WithItem::Wildcard
+                ]
+            }
+        );
     }
 }

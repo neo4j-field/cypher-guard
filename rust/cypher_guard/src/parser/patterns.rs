@@ -9,7 +9,7 @@ use nom::{
 };
 
 use crate::parser::ast::*;
-use crate::parser::clauses::{property_map, relationship_type, where_clause};
+use crate::parser::clauses::{match_clause, property_map, relationship_type, where_clause};
 use crate::parser::utils::{identifier, number_literal, string_literal};
 
 #[allow(dead_code)]
@@ -340,6 +340,20 @@ mod tests {
             }
             _ => panic!("Expected Regular relationship"),
         }
+    }
+
+    #[test]
+    fn test_direction_assignment() {
+        let input = "MATCH (a)-[:KNOWS]->(b)";
+        let (_, clause) = match_clause(input).unwrap();
+        let MatchElement::Pattern(pattern) = &clause.elements[0] else {
+            panic!()
+        };
+        let PatternElement::Relationship(RelationshipPattern::Regular(details)) = &pattern[1]
+        else {
+            panic!()
+        };
+        assert_eq!(details.direction, Direction::Right);
     }
 
     #[test]

@@ -4,6 +4,7 @@ pub struct Query {
     pub match_clause: Option<MatchClause>,
     pub merge_clause: Option<MergeClause>,
     pub create_clause: Option<CreateClause>,
+    pub with_clause: Option<WithClause>,
     pub where_clause: Option<WhereClause>,
     pub return_clause: Option<ReturnClause>,
 }
@@ -157,4 +158,16 @@ pub struct SetClause {
     pub variable: String,
     pub property: String,
     pub value: PropertyValue,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WithClause {
+    pub items: Vec<WithItem>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum WithItem {
+    Variable(String),                            // e.g. WITH a
+    Alias { expression: String, alias: String }, // e.g. WITH a AS b
+    Wildcard,                                    // e.g. WITH *
 }
