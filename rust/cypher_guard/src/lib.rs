@@ -1,12 +1,12 @@
-#[cfg(feature = "python-bindings")]
-use pyo3::prelude::*;
-
 mod errors;
 mod parser;
 mod schema;
 
 use errors::CypherGuardError;
-pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
+pub use schema::{
+    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
+    DbSchemaRelationshipPattern, PropertyType,
+};
 
 use crate::parser::ast::{
     MatchElement, NodePattern, PatternElement, Query, RelationshipPattern, WhereClause,
@@ -421,7 +421,7 @@ fn validate_where_clause(
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
                                                     prop
-                                                ));
+                                            ));
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
@@ -434,15 +434,17 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATETIME => {
+                                        PropertyType::DATE_TIME => {
                                             // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
-                                        }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
+                                        } // PropertyType::ENUM(_) => {
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
                                         }
                                     }
                                 }
@@ -481,7 +483,7 @@ fn validate_where_clause(
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
                                                     prop
-                                                ));
+                                            ));
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
@@ -494,15 +496,17 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATETIME => {
+                                        PropertyType::DATE_TIME => {
                                             // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
-                                        }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
+                                        } // PropertyType::ENUM(_) => {
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
                                         }
                                     }
                                 }
@@ -620,12 +624,6 @@ mod tests {
     #[test]
     fn test_parse_single_query() {
         let query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
-        let schema = DbSchema {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: vec![],
-            metadata: Default::default(),
-        };
         match crate::parser::clauses::parse_query(query) {
             Ok((rest, ast)) => {
                 println!("Parsed AST: {:?}", ast);

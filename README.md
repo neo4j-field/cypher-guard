@@ -76,8 +76,8 @@ schema_json = '''
         {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"}
     ],
     "metadata": {
-        "indexes": [],
-        "constraints": []
+        "index": [],
+        "constraint": []
     }
 }
 '''

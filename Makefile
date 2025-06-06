@@ -11,10 +11,10 @@ build: install-maturin
 	maturin develop
 
 build-python:
-	cd rust/python_bindings && maturin build
+	cd rust/python_bindings && maturin develop
 
 test-python:
-	pytest rust/python_bindings/tests/test_cypher_guard.py -vv
+	pytest rust/python_bindings/tests/ -vv
 
 build-js:
 	cd rust/js_bindings && npm install && npm run build

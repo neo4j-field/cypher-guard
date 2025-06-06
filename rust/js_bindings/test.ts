@@ -12,15 +12,15 @@ const schemaJson = `{
     },
     "rel_props": {
         "KNOWS": [
-            {"name": "since", "neo4j_type": {"type": "DATETIME"}}
+            {"name": "since", "neo4j_type": {"type": "DATE_TIME"}}
         ]
     },
     "relationships": [
         {"start": "Person", "end": "Person", "rel_type": "KNOWS"}
     ],
     "metadata": {
-        "indexes": [],
-        "constraints": []
+        "index": [],
+        "constraint": []
     }
 }`;
 
