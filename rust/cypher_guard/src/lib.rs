@@ -421,7 +421,7 @@ fn validate_where_clause(
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
                                                     prop
-                                                ));
+                                            ));
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
@@ -434,15 +434,18 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATETIME => {
+                                        PropertyType::DATE_TIME => {
                                             // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
                                         } // PropertyType::ENUM(_) => {
-                                          //     // Not supported in this check for now
-                                          // }
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
+                                        }
                                     }
                                 }
                             }
@@ -480,7 +483,7 @@ fn validate_where_clause(
                                                 ctx.errors.push(format!(
                                                     "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
                                                     prop
-                                                ));
+                                            ));
                                             }
                                         }
                                         PropertyType::BOOLEAN => {
@@ -493,15 +496,18 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATETIME => {
+                                        PropertyType::DATE_TIME => {
                                             // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
                                         PropertyType::POINT => {
                                             // Not supported in WHERE for now
                                         } // PropertyType::ENUM(_) => {
-                                          //     // Not supported in this check for now
-                                          // }
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
+                                        }
                                     }
                                 }
                             }

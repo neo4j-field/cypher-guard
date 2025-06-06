@@ -14,7 +14,7 @@ use std::io::{BufReader, BufWriter};
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Enum representing possible property types in the schema.
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
 #[cfg_attr(feature = "python-bindings", pyclass)]
@@ -35,11 +35,13 @@ pub enum PropertyType {
     #[pyo3(name = "POINT")]
     POINT,
     /// DateTime property
-    #[pyo3(name = "DATETIME")]
-    DATETIME,
-    // / Custom enum type (referenced by name)
-    // #[cfg_attr(feature = "python-bindings", pyo3(name = "ENUM"))]
-    // ENUM(String),
+    #[pyo3(name = "DATE_TIME")]
+    DATE_TIME,
+    /// List property
+    #[pyo3(name = "LIST")]
+    LIST, // / Custom enum type (referenced by name)
+          // #[cfg_attr(feature = "python-bindings", pyo3(name = "ENUM"))]
+          // ENUM(String),
 }
 
 impl fmt::Display for PropertyType {
@@ -50,7 +52,8 @@ impl fmt::Display for PropertyType {
             PropertyType::FLOAT => write!(f, "FLOAT"),
             PropertyType::BOOLEAN => write!(f, "BOOLEAN"),
             PropertyType::POINT => write!(f, "POINT"),
-            PropertyType::DATETIME => write!(f, "DATETIME"),
+            PropertyType::DATE_TIME => write!(f, "DATE_TIME"),
+            PropertyType::LIST => write!(f, "LIST"),
         }
     }
 }
@@ -63,7 +66,8 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATETIME" => Ok(PropertyType::DATETIME),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "LIST" => Ok(PropertyType::LIST),
             _ => Err(CypherGuardError::SchemaError),
         }
     }
@@ -79,7 +83,8 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATETIME" => Ok(PropertyType::DATETIME),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Invalid property type: {}",
                 type_name
@@ -114,7 +119,12 @@ impl PropertyType {
 
     #[classmethod]
     fn datetime(_cls: &Bound<'_, PyType>) -> Self {
-        PropertyType::DATETIME
+        PropertyType::DATE_TIME
+    }
+
+    #[classmethod]
+    fn list(_cls: &Bound<'_, PyType>) -> Self {
+        PropertyType::LIST
     }
 
     #[classmethod]
@@ -127,9 +137,10 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT"  => Ok(PropertyType::POINT),
-            "DATETIME" => Ok(PropertyType::DATETIME),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(
-                format!("Invalid property type: '{}'. Valid types: STRING, INTEGER, FLOAT, BOOLEAN, POINT, DATETIME", s)
+                format!("Invalid property type: '{}'. Valid types: STRING, INTEGER, FLOAT, BOOLEAN, POINT, DATE_TIME, LIST", s)
             ))
         }
     }
@@ -247,6 +258,20 @@ impl DbSchemaProperty {
 #[cfg(feature = "python-bindings")]
 #[pymethods]
 impl DbSchemaProperty {
+    #[classmethod]
+    fn extract_float_value_from_string_or_number(
+        _cls: &Bound<'_, PyType>,
+        value: Bound<'_, PyAny>,
+    ) -> Option<f64> {
+        if let Ok(num) = value.extract::<f64>() {
+            Some(num)
+        } else if let Ok(s) = value.extract::<String>() {
+            s.parse::<f64>().ok()
+        } else {
+            None
+        }
+    }
+
     #[new]
     #[pyo3(signature = (name, neo4j_type, enum_values=None, min_value=None, max_value=None, distinct_value_count=None, example_values=None))]
     fn py_new(
@@ -297,37 +322,87 @@ impl DbSchemaProperty {
     #[classmethod]
     #[pyo3(name = "from_dict", signature = (dict))]
     fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
-        let name = dict
-            .get_item("name")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?
-            .extract::<String>()?;
+        let name = match dict.get_item("name")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("property")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'name' or 'property' field",
+                    ))
+                }
+            },
+        };
         let neo4j_type = match dict.get_item("neo4j_type")? {
             Some(value) => value.extract::<String>()?,
-            None => {
-                return Err(pyo3::exceptions::PyKeyError::new_err(
-                    "Missing 'neo4j_type' field",
-                ))
-            }
-        };
-        let enum_values = match dict.get_item("enum_values")? {
-            Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
-            _ => None,
-        };
-        let min_value = match dict.get_item("min_value")? {
-            Some(value) if !value.is_none() => Some(value.extract::<f64>()?),
-            _ => None,
-        };
-        let max_value = match dict.get_item("max_value")? {
-            Some(value) if !value.is_none() => Some(value.extract::<f64>()?),
-            _ => None,
+            None => match dict.get_item("type")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'neo4j_type' or 'type' field",
+                    ))
+                }
+            },
         };
         let distinct_value_count = match dict.get_item("distinct_value_count")? {
             Some(value) if !value.is_none() => Some(value.extract::<i64>()?),
-            _ => None,
+            _ => match dict.get_item("distinct_values")? {
+                Some(value) if !value.is_none() => Some(value.extract::<i64>()?),
+                _ => None,
+            },
         };
+        let enum_values = match dict.get_item("enum_values")? {
+            Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
+            _ => match dict.get_item("values")? {
+                Some(value)
+                    if !value.is_none()
+                        && value.len().map_or(false, |len| {
+                            len == distinct_value_count.unwrap_or(0) as usize
+                        }) =>
+                {
+                    Some(value.extract::<Vec<String>>()?)
+                }
+                _ => None,
+            },
+        };
+
+        // Only set min and max values if the property type is INTEGER or FLOAT
+        let mut min_value: Option<f64> = None;
+        let mut max_value: Option<f64> = None;
+        if neo4j_type == "INTEGER" || neo4j_type == "FLOAT" {
+            min_value = match dict.get_item("min_value")? {
+                Some(value) if !value.is_none() => {
+                    Self::extract_float_value_from_string_or_number(_cls, value)
+                }
+                _ => match dict.get_item("min")? {
+                    Some(value) if !value.is_none() => {
+                        Self::extract_float_value_from_string_or_number(_cls, value)
+                    }
+                    _ => None,
+                },
+            };
+        };
+
+        if neo4j_type == "INTEGER" || neo4j_type == "FLOAT" {
+            max_value = match dict.get_item("max_value")? {
+                Some(value) if !value.is_none() => {
+                    Self::extract_float_value_from_string_or_number(_cls, value)
+                }
+                _ => match dict.get_item("max")? {
+                    Some(value) if !value.is_none() => {
+                        Self::extract_float_value_from_string_or_number(_cls, value)
+                    }
+                    _ => None,
+                },
+            };
+        };
+
         let example_values = match dict.get_item("example_values")? {
             Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
-            _ => None,
+            _ => match dict.get_item("values")? {
+                Some(value) if !value.is_none() => Some(value.extract::<Vec<String>>()?),
+                _ => None,
+            },
         };
         Self::py_new(
             name,
@@ -415,10 +490,17 @@ impl DbSchemaRelationshipPattern {
             .get_item("end")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'end' field"))?
             .extract::<String>()?;
-        let rel_type = dict
-            .get_item("rel_type")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'rel_type' field"))?
-            .extract::<String>()?;
+        let rel_type = match dict.get_item("rel_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("type")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'rel_type' or 'type' field for Relationship Pattern",
+                    ))
+                }
+            },
+        };
         Ok(Self {
             start,
             end,
@@ -457,7 +539,7 @@ pub struct DbSchemaConstraint {
     /// Name of the constraint
     #[pyo3(get, set)]
     pub name: String,
-    /// Type of the constraint  
+    /// Type of the constraint
     #[pyo3(get, set)]
     pub constraint_type: String,
     /// Entity type of the constraint
@@ -472,9 +554,13 @@ pub struct DbSchemaConstraint {
     /// Owned index of the constraint
     #[pyo3(get, set)]
     pub owned_index: String,
+    /// Property type of the constraint
+    #[pyo3(get, set)]
+    pub property_type: Option<String>,
 }
 
 impl DbSchemaConstraint {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: i64,
         name: String,
@@ -483,6 +569,7 @@ impl DbSchemaConstraint {
         labels_or_types: Vec<String>,
         properties: Vec<String>,
         owned_index: String,
+        property_type: Option<String>,
     ) -> Self {
         Self {
             id,
@@ -492,6 +579,7 @@ impl DbSchemaConstraint {
             labels_or_types,
             properties,
             owned_index,
+            property_type,
         }
     }
 }
@@ -499,8 +587,9 @@ impl DbSchemaConstraint {
 #[cfg(feature = "python-bindings")]
 #[pymethods]
 impl DbSchemaConstraint {
+    #[allow(clippy::too_many_arguments)]
     #[new]
-    #[pyo3(signature = (id, name, constraint_type, entity_type, labels_or_types, properties, owned_index))]
+    #[pyo3(signature = (id, name, constraint_type, entity_type, labels_or_types, properties, owned_index, property_type))]
     fn py_new(
         id: i64,
         name: String,
@@ -509,6 +598,7 @@ impl DbSchemaConstraint {
         labels_or_types: Vec<String>,
         properties: Vec<String>,
         owned_index: String,
+        property_type: Option<String>,
     ) -> PyResult<Self> {
         Ok(Self {
             id,
@@ -518,6 +608,7 @@ impl DbSchemaConstraint {
             labels_or_types,
             properties,
             owned_index,
+            property_type,
         })
     }
 
@@ -532,30 +623,62 @@ impl DbSchemaConstraint {
             .get_item("name")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'name' field"))?
             .extract::<String>()?;
-        let constraint_type = dict
-            .get_item("constraint_type")?
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'constraint_type' field")
-            })?
-            .extract::<String>()?;
-        let entity_type = dict
-            .get_item("entity_type")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'entity_type' field"))?
-            .extract::<String>()?;
-        let labels_or_types = dict
-            .get_item("labels_or_types")?
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'labels_or_types' field")
-            })?
-            .extract::<Vec<String>>()?;
+        let constraint_type = match dict.get_item("constraint_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("type")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'constraint_type' or 'type' field",
+                    ))
+                }
+            },
+        };
+        let entity_type = match dict.get_item("entity_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("entityType")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'entity_type' or 'entityType' field",
+                    ))
+                }
+            },
+        };
+        let labels_or_types = match dict.get_item("labels_or_types")? {
+            Some(value) => value.extract::<Vec<String>>()?,
+            None => match dict.get_item("labelsOrTypes")? {
+                Some(value) => value.extract::<Vec<String>>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'labels_or_types' or 'labelsOrTypes' field",
+                    ))
+                }
+            },
+        };
+
         let properties = dict
             .get_item("properties")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'properties' field"))?
             .extract::<Vec<String>>()?;
-        let owned_index = dict
-            .get_item("owned_index")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'owned_index' field"))?
-            .extract::<String>()?;
+        let owned_index = match dict.get_item("owned_index")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("ownedIndex")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'owned_index' or 'ownedIndex' field",
+                    ))
+                }
+            },
+        };
+        let property_type = match dict.get_item("property_type")? {
+            Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+            _ => match dict.get_item("propertyType")? {
+                Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+                _ => None,
+            },
+        };
         Ok(Self {
             id,
             name,
@@ -564,6 +687,7 @@ impl DbSchemaConstraint {
             labels_or_types,
             properties,
             owned_index,
+            property_type,
         })
     }
 
@@ -577,11 +701,21 @@ impl DbSchemaConstraint {
         dict.set_item("labels_or_types", &self.labels_or_types)?;
         dict.set_item("properties", &self.properties)?;
         dict.set_item("owned_index", &self.owned_index)?;
+        dict.set_item("property_type", &self.property_type)?;
         Ok(dict.into())
     }
 
     fn __repr__(&self) -> String {
-        format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={})", self.id, self.name, self.constraint_type, self.entity_type, self.labels_or_types.join(", "), self.properties.join(", "), self.owned_index)
+        format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={}, property_type={})", 
+            self.id,
+            self.name,
+            self.constraint_type,
+            self.entity_type,
+            self.labels_or_types.join(", "), 
+            self.properties.join(", "), 
+            self.owned_index,
+            self.property_type.as_ref().map_or("None".to_string(), |pt| pt.clone())
+        )
     }
 
     fn __str__(&self) -> String {
@@ -591,7 +725,7 @@ impl DbSchemaConstraint {
             self.name,
             self.entity_type,
             self.labels_or_types.join(", "),
-            self.properties.join(", ")
+            self.properties.join(", "),
         )
     }
 }
@@ -617,7 +751,7 @@ pub struct DbSchemaIndex {
     pub values_selectivity: f64,
     /// Distinct values of the index
     #[pyo3(get, set)]
-    pub distinct_values: i64,
+    pub distinct_values: f64,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -631,7 +765,7 @@ impl DbSchemaIndex {
         size: i64,
         index_type: String,
         values_selectivity: f64,
-        distinct_values: i64,
+        distinct_values: f64,
     ) -> PyResult<Self> {
         Ok(Self {
             label,
@@ -659,22 +793,37 @@ impl DbSchemaIndex {
             .get_item("size")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'size' field"))?
             .extract::<i64>()?;
-        let index_type = dict
-            .get_item("index_type")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("Missing 'index_type' field"))?
-            .extract::<String>()?;
-        let values_selectivity = dict
-            .get_item("values_selectivity")?
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'values_selectivity' field")
-            })?
-            .extract::<f64>()?;
-        let distinct_values = dict
-            .get_item("distinct_values")?
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err("Missing 'distinct_values' field")
-            })?
-            .extract::<i64>()?;
+        let index_type = match dict.get_item("index_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => dict
+                .get_item("type")?
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyKeyError::new_err("Missing 'index_type' or 'type' field")
+                })?
+                .extract::<String>()?,
+        };
+        let values_selectivity = match dict.get_item("values_selectivity")? {
+            Some(value) => value.extract::<f64>()?,
+            None => dict
+                .get_item("valuesSelectivity")?
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'values_selectivity' or 'valuesSelectivity' field",
+                    )
+                })?
+                .extract::<f64>()?,
+        };
+        let distinct_values = match dict.get_item("distinct_values")? {
+            Some(value) => value.extract::<f64>()?,
+            None => dict
+                .get_item("distinctValues")?
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyKeyError::new_err(
+                        "Missing 'distinct_values' or 'distinctValues' field",
+                    )
+                })?
+                .extract::<f64>()?,
+        };
         Ok(Self {
             label,
             properties,
@@ -718,10 +867,10 @@ impl DbSchemaIndex {
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
     #[pyo3(get, set)]
-    pub constraints: Vec<DbSchemaConstraint>,
+    pub constraint: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
     #[pyo3(get, set)]
-    pub indexes: Vec<DbSchemaIndex>,
+    pub index: Vec<DbSchemaIndex>,
 }
 
 impl Default for DbSchemaMetadata {
@@ -733,8 +882,8 @@ impl Default for DbSchemaMetadata {
 impl DbSchemaMetadata {
     pub fn new() -> Self {
         Self {
-            constraints: Vec::new(),
-            indexes: Vec::new(),
+            constraint: Vec::new(),
+            index: Vec::new(),
         }
     }
 }
@@ -743,18 +892,15 @@ impl DbSchemaMetadata {
 #[pymethods]
 impl DbSchemaMetadata {
     #[new]
-    fn py_new(constraints: Vec<DbSchemaConstraint>, indexes: Vec<DbSchemaIndex>) -> PyResult<Self> {
-        Ok(Self {
-            constraints,
-            indexes,
-        })
+    fn py_new(constraint: Vec<DbSchemaConstraint>, index: Vec<DbSchemaIndex>) -> PyResult<Self> {
+        Ok(Self { constraint, index })
     }
 
     /// Create metadata from a Python dictionary
     #[classmethod]
     #[pyo3(name = "from_dict", signature = (dict))]
     fn py_from_dict(_cls: &Bound<'_, PyType>, dict: &Bound<'_, PyDict>) -> PyResult<Self> {
-        let constraints = match dict.get_item("constraints")? {
+        let constraint = match dict.get_item("constraint")? {
             Some(items) => {
                 let iter = items.iter()?;
                 iter.map(|item| {
@@ -771,7 +917,7 @@ impl DbSchemaMetadata {
             }
             None => vec![],
         };
-        let indexes = match dict.get_item("indexes")? {
+        let index = match dict.get_item("index")? {
             Some(items) => {
                 let iter = items.iter()?;
                 iter.map(|item| {
@@ -786,33 +932,30 @@ impl DbSchemaMetadata {
             }
             None => vec![],
         };
-        Ok(Self {
-            constraints,
-            indexes,
-        })
+        Ok(Self { constraint, index })
     }
     /// Convert the metadata to a Python dictionary
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
-        let constraints_dict: PyResult<Vec<PyObject>> =
-            self.constraints.iter().map(|c| c.py_to_dict(py)).collect();
-        dict.set_item("constraints", &constraints_dict?)?;
-        let indexes_dict: PyResult<Vec<PyObject>> =
-            self.indexes.iter().map(|i| i.py_to_dict(py)).collect();
-        dict.set_item("indexes", &indexes_dict?)?;
+        let constraint_dict: PyResult<Vec<PyObject>> =
+            self.constraint.iter().map(|c| c.py_to_dict(py)).collect();
+        dict.set_item("constraint", &constraint_dict?)?;
+        let index_dict: PyResult<Vec<PyObject>> =
+            self.index.iter().map(|i| i.py_to_dict(py)).collect();
+        dict.set_item("index", &index_dict?)?;
         Ok(dict.into())
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "DbSchemaMetadata(constraints=[{}], indexes=[{}])",
-            self.constraints
+            "DbSchemaMetadata(constraint=[{}], index=[{}])",
+            self.constraint
                 .iter()
                 .map(|c| c.__repr__())
                 .collect::<Vec<String>>()
                 .join(", "),
-            self.indexes
+            self.index
                 .iter()
                 .map(|i| i.__repr__())
                 .collect::<Vec<String>>()
@@ -822,13 +965,13 @@ impl DbSchemaMetadata {
 
     fn __str__(&self) -> String {
         format!(
-            "DbSchemaMetadata(constraints=[{}], indexes=[{}])",
-            self.constraints
+            "DbSchemaMetadata(constraint=[{}], index=[{}])",
+            self.constraint
                 .iter()
                 .map(|c| c.__str__())
                 .collect::<Vec<String>>()
                 .join(", "),
-            self.indexes
+            self.index
                 .iter()
                 .map(|i| i.__str__())
                 .collect::<Vec<String>>()
@@ -852,7 +995,7 @@ pub struct DbSchema {
     /// Vector of relationships
     #[pyo3(get, set)]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
-    /// Metadata about the schema containing constraints and indexes
+    /// Metadata about the schema containing constraint and index
     #[pyo3(get, set)]
     pub metadata: DbSchemaMetadata,
 }
@@ -1197,8 +1340,8 @@ impl fmt::Display for DbSchema {
         for (rel_type, properties) in &self.rel_props {
             writeln!(f, "  {}: {:?}", rel_type, properties)?;
         }
-        writeln!(f, "Constraints: {:?}", self.metadata.constraints)?;
-        writeln!(f, "Indexes: {:?}", self.metadata.indexes)?;
+        writeln!(f, "Constraints: {:?}", self.metadata.constraint)?;
+        writeln!(f, "Indexes: {:?}", self.metadata.index)?;
         Ok(())
     }
 }
@@ -1359,23 +1502,46 @@ impl DbSchema {
         format!(
             "DbSchema(node_props={}, rel_props={}, relationships={}, metadata={})",
             {
-                let node_props = self.node_props
+                let node_props = self
+                    .node_props
                     .iter()
-                    .map(|(k, props)| format!("'{}': {}", k, props.iter().map(|p| p.__repr__()).collect::<Vec<String>>().join(", ")))
+                    .map(|(k, props)| {
+                        format!(
+                            "'{}': {}",
+                            k,
+                            props
+                                .iter()
+                                .map(|p| p.__repr__())
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                        )
+                    })
                     .collect::<Vec<String>>()
                     .join(", ");
                 format!("{{{}}}", node_props)
             },
             {
-                let rel_props = self.rel_props
+                let rel_props = self
+                    .rel_props
                     .iter()
-                    .map(|(k, props)| format!("{}: {}", k, props.iter().map(|p| p.__repr__()).collect::<Vec<String>>().join(", ")))
+                    .map(|(k, props)| {
+                        format!(
+                            "{}: {}",
+                            k,
+                            props
+                                .iter()
+                                .map(|p| p.__repr__())
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                        )
+                    })
                     .collect::<Vec<String>>()
                     .join(", ");
                 format!("{{{}}}", rel_props)
             },
             {
-                let relationships = self.relationships
+                let relationships = self
+                    .relationships
                     .iter()
                     .map(|c| c.__repr__())
                     .collect::<Vec<String>>()
@@ -1401,11 +1567,11 @@ impl DbSchema {
                 .map(|c| c.__str__())
                 .collect::<Vec<String>>()
                 .join("\n"),
-            self.metadata.constraints.iter()
+            self.metadata.constraint.iter()
                 .map(|c| c.__str__())
                 .collect::<Vec<String>>()
                 .join("\n"),
-            self.metadata.indexes.iter()
+            self.metadata.index.iter()
                 .map(|c| c.__str__())
                 .collect::<Vec<String>>()
                 .join("\n")
@@ -1431,7 +1597,7 @@ mod tests {
     }
 
     fn create_knows_since_property() -> DbSchemaProperty {
-        DbSchemaProperty::new("since", PropertyType::DATETIME)
+        DbSchemaProperty::new("since", PropertyType::DATE_TIME)
     }
 
     // fn create_favorite_color_property() -> DbSchemaProperty {
@@ -1491,7 +1657,7 @@ mod tests {
             PropertyType::INTEGER,
             PropertyType::FLOAT,
             PropertyType::BOOLEAN,
-            PropertyType::DATETIME,
+            PropertyType::DATE_TIME,
             // PropertyType::ENUM("ColorEnum".to_string()),
         ];
         for t in types {
@@ -1673,7 +1839,7 @@ mod tests {
             "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
             "rel_props": {},
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}],
-            "metadata": {"indexes":[], "constraints":[]}
+            "metadata": {"index":[], "constraint":[]}
         }"#;
         let schema = DbSchema::from_json_string(json);
         assert!(schema.is_ok());

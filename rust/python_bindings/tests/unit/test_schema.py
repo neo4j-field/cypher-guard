@@ -20,7 +20,7 @@ def test_PropertyType_integer():
 
 def test_PropertyType_datetime():
     prop = PropertyType.datetime()
-    assert prop == PropertyType.DATETIME
+    assert prop == PropertyType.DATE_TIME
 
 def test_PropertyType_float():
     prop = PropertyType.float()
@@ -123,17 +123,17 @@ def test_DbSchemaRelationshipPattern_to_dict_valid():
 
 
 def test_DbSchemaConstraint_init_from_args_valid():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     assert constraint is not None
     assert constraint.id == 1
     assert constraint.name == "CONSTRAINT_NAME"
 
 def test_DbSchemaConstraint_init_from_args_invalid_arg_type():
     with pytest.raises(TypeError):
-        DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], 10)
+        DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], 10, None)
 
 def test_DbSchemaConstraint_init_from_dict_valid():
-    constraint = DbSchemaConstraint.from_dict({"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"})
+    constraint = DbSchemaConstraint.from_dict({"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None})
     assert constraint is not None
     assert constraint.id == 1
     assert constraint.name == "CONSTRAINT_NAME" 
@@ -145,19 +145,19 @@ def test_DbSchemaConstraint_init_from_dict_valid():
 
 def test_DbSchemaConstraint_init_from_dict_invalid_arg_type():
     with pytest.raises(TypeError):
-        DbSchemaConstraint.from_dict({"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1"], "properties": ["prop1", "prop2"], "owned_index": 10})
+        DbSchemaConstraint.from_dict({"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1"], "properties": ["prop1", "prop2"], "owned_index": 10, "property_type": None})
 
 def test_DbSchemaConstraint_repr():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
-    assert constraint.__repr__() == "DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME)"
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
+    assert constraint.__repr__() == "DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME, property_type=None)"
 
 def test_DbSchemaConstraint_str():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     assert str(constraint) == "UNIQUE CONSTRAINT CONSTRAINT_NAME ON NODE (label1, label2).{prop1, prop2}"   
 
 def test_DbSchemaConstraint_to_dict_valid():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
-    assert constraint.to_dict() == {"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
+    assert constraint.to_dict() == {"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}
 
 def test_DbSchemaIndex_init_from_args_valid():
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
@@ -200,42 +200,42 @@ def test_DbSchemaIndex_to_dict_valid():
     assert index.to_dict() == {"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}
 
 def test_DbSchemaMetadata_init_from_args_valid():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
     metadata = DbSchemaMetadata([constraint], [index])
     assert metadata is not None
-    assert len(metadata.constraints) == 1
-    assert len(metadata.indexes) == 1
-    assert metadata.constraints[0].id == constraint.id
-    assert metadata.indexes[0].label == index.label
+    assert len(metadata.constraint) == 1
+    assert len(metadata.index) == 1
+    assert metadata.constraint[0].id == constraint.id
+    assert metadata.index[0].label == index.label
 
 def test_DbSchemaMetadata_init_from_dict_valid():
     constraint = {"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}
     index = {"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}
-    metadata = DbSchemaMetadata.from_dict({"constraints": [constraint], "indexes": [index]})
+    metadata = DbSchemaMetadata.from_dict({"constraint": [constraint], "index": [index]})
     assert metadata is not None
-    assert len(metadata.constraints) == 1
-    assert len(metadata.indexes) == 1
-    assert metadata.constraints[0].id == constraint["id"]
-    assert metadata.indexes[0].label == index["label"]
+    assert len(metadata.constraint) == 1
+    assert len(metadata.index) == 1
+    assert metadata.constraint[0].id == constraint["id"]
+    assert metadata.index[0].label == index["label"]
 
 def test_DbSchemaMetadata_to_dict_valid():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
     metadata = DbSchemaMetadata([constraint], [index])
-    assert metadata.to_dict() == {"constraints": [constraint.to_dict()], "indexes": [index.to_dict()]}
+    assert metadata.to_dict() == {"constraint": [constraint.to_dict()], "index": [index.to_dict()]}
 
 def test_DbSchemaMetadata_repr():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
     metadata = DbSchemaMetadata([constraint], [index])
-    assert metadata.__repr__() == "DbSchemaMetadata(constraints=[DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME)], indexes=[DbSchemaIndex(label=INDEX_NAME, properties=[prop1, prop2], size=10, index_type=BTREE, values_selectivity=0.5, distinct_values=1000)])"    
+    assert metadata.__repr__() == "DbSchemaMetadata(constraint=[DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME, property_type=None)], index=[DbSchemaIndex(label=INDEX_NAME, properties=[prop1, prop2], size=10, index_type=BTREE, values_selectivity=0.5, distinct_values=1000)])"    
 
 def test_DbSchemaMetadata_str():
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
     metadata = DbSchemaMetadata([constraint], [index])
-    assert str(metadata) == "DbSchemaMetadata(constraints=[UNIQUE CONSTRAINT CONSTRAINT_NAME ON NODE (label1, label2).{prop1, prop2}], indexes=[INDEX BTREE ON INDEX_NAME (prop1, prop2)])"
+    assert str(metadata) == "DbSchemaMetadata(constraint=[UNIQUE CONSTRAINT CONSTRAINT_NAME ON NODE (label1, label2).{prop1, prop2}], index=[INDEX BTREE ON INDEX_NAME (prop1, prop2)])"
 
 
 def test_DbSchema_init_from_args_valid():
@@ -243,7 +243,7 @@ def test_DbSchema_init_from_args_valid():
     node_b_props = [DbSchemaProperty("title", "STRING", ["value1", "value2"], None, None, None, None)]
     rel_a_props = [DbSchemaProperty("num", "INTEGER", None, None, None, None, None)]
     rel_a_pattern = DbSchemaRelationshipPattern("nodeA", "nodeB", "relA")
-    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME")
+    constraint = DbSchemaConstraint(1, "CONSTRAINT_NAME", "UNIQUE", "NODE", ["label1", "label2"], ["prop1", "prop2"], "INDEX_NAME", None)
     index = DbSchemaIndex("INDEX_NAME", ["prop1", "prop2"], 10, "BTREE", 0.5, 1000)
     metadata = DbSchemaMetadata([constraint], [index])
 
@@ -264,8 +264,8 @@ def test_DbSchema_init_from_args_valid():
     assert schema.node_props["nodeB"][0].name == "title"
     assert schema.rel_props["relA"][0].name == "num"
     assert schema.relationships[0].start == "nodeA"
-    assert schema.metadata.constraints[0].name == "CONSTRAINT_NAME"
-    assert schema.metadata.indexes[0].label == "INDEX_NAME"
+    assert schema.metadata.constraint[0].name == "CONSTRAINT_NAME"
+    assert schema.metadata.index[0].label == "INDEX_NAME"
 
 
 def test_DbSchema_init_from_dict_valid():
@@ -274,7 +274,7 @@ def test_DbSchema_init_from_dict_valid():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     })
     assert schema is not None
     assert len(schema.node_props) == 2
@@ -286,8 +286,8 @@ def test_DbSchema_init_from_dict_valid():
     assert schema.node_props["nodeA"][1].name == "age"
     assert schema.rel_props["relA"][0].name == "num"
     assert schema.relationships[0].start == "nodeA"
-    assert schema.metadata.constraints[0].name == "CONSTRAINT_NAME"
-    assert schema.metadata.indexes[0].label == "INDEX_NAME"
+    assert schema.metadata.constraint[0].name == "CONSTRAINT_NAME"
+    assert schema.metadata.index[0].label == "INDEX_NAME"
 
 def test_DbSchema_to_dict_valid():
 
@@ -295,7 +295,7 @@ def test_DbSchema_to_dict_valid():
         "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, {"name": "age", "neo4j_type": "INTEGER"}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     }
     schema = DbSchema.from_dict(d)
     assert schema.to_dict() == d
@@ -306,7 +306,7 @@ def test_DbSchema_str():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     })
     assert "Nodes:" in str(schema)
     assert "nodeA:\nname: STRING\nage: INTEGER" in str(schema)
@@ -326,10 +326,10 @@ def test_DbSchema_repr():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraints": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME"}], "indexes": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
     })
     assert "DbSchema(node_props={" in repr(schema)
     assert "{'nodeA': DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None), DbSchemaProperty(name=age, neo4j_type=INTEGER, enum_values=None, min_value=None, max_value=None, distinct_value_count=None, example_values=None)" in repr(schema)
     assert "'nodeB': DbSchemaProperty(name=title, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None)" in repr(schema)
     assert "relationships=[DbSchemaRelationshipPattern(start=nodeA, end=nodeB, rel_type=relA)]," in repr(schema)
-    assert "metadata=DbSchemaMetadata(constraints=[DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME)], indexes=[DbSchemaIndex(label=INDEX_NAME, properties=[prop1, prop2], size=10, index_type=BTREE, values_selectivity=0.5, distinct_values=1000)])" in repr(schema)
+    assert "metadata=DbSchemaMetadata(constraint=[DbSchemaConstraint(id=1, name=CONSTRAINT_NAME, constraint_type=UNIQUE, entity_type=NODE, labels_or_types=[label1, label2], properties=[prop1, prop2], owned_index=INDEX_NAME, property_type=None)], index=[DbSchemaIndex(label=INDEX_NAME, properties=[prop1, prop2], size=10, index_type=BTREE, values_selectivity=0.5, distinct_values=1000)])" in repr(schema)

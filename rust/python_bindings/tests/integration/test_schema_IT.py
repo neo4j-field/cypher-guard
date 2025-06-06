@@ -13,7 +13,12 @@ def test_load_DbSchema_from_neo4j_graphrag_package(init_data: None, neo4j_driver
     print()
     print(db_schema)
 
-    assert db_schema.node_props["Person"] == [{"name": "String"}, {"age": "Int"}]
+    assert len(db_schema.node_props["Person"]) == 2
+    assert db_schema.node_props["Person"][0].name == "name"
+    assert len(db_schema.metadata.index) == 1
+    assert len(db_schema.metadata.constraint) == 1
+    assert len(db_schema.relationships) == 1
+    
     
     
     
