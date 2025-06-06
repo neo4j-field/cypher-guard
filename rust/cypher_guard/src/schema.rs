@@ -356,9 +356,9 @@ impl DbSchemaProperty {
             _ => match dict.get_item("values")? {
                 Some(value)
                     if !value.is_none()
-                        && value.len().is_ok_and(|len| {
-                            len == distinct_value_count.unwrap_or(0) as usize
-                        }) =>
+                        && value
+                            .len()
+                            .is_ok_and(|len| len == distinct_value_count.unwrap_or(0) as usize) =>
                 {
                     Some(value.extract::<Vec<String>>()?)
                 }
