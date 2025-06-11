@@ -2,19 +2,26 @@
 use pyo3::prelude::*;
 
 mod errors;
-mod parser;
+pub mod parser {
+    pub mod ast;
+    pub mod clauses;
+    pub mod components;
+    pub mod patterns;
+    pub mod utils;
+}
 mod schema;
 
 use errors::CypherGuardError;
 pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
 
-use crate::parser::ast::{
-    MatchElement, NodePattern, PatternElement, Query, RelationshipPattern, WhereClause,
-    WhereCondition, WithClause, WithItem,
-};
-use crate::parser::clauses::parse_query;
+use parser::ast::*;
+use parser::clauses::*;
+use parser::components::*;
+use parser::patterns::*;
+use parser::utils::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use crate::schema::DbSchemaRelationshipPattern;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Tracks validation state (errors + alias scope)
@@ -81,6 +88,11 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 
             println!("Variable mapping: {:?}", ctx.var_types); // Debug: Print the variable mapping
 
+            // Validate WITH clause if present
+            if let Some(with_clause) = &ast.with_clause {
+                validate_with_clause(with_clause, &mut ctx);
+            }
+
             // Validate WHERE clause if present
             if let Some(where_clause) = &ast.where_clause {
                 validate_where_clause(where_clause, schema, &mut ctx);
@@ -140,6 +152,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 
 /// Validate a Cypher query against a schema
 fn validate_query(query: &Query, ctx: &mut ValidationContext) {
+    println!("DEBUG: Entered validate_query");
     // Validate match clause
     if let Some(match_clause) = &query.match_clause {
         for el in &match_clause.elements {
@@ -232,77 +245,110 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
 
 /// Validate a WITH clause
 fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
-    println!("Validating WITH clause: {:?}", with_clause);
-    println!("Current variable scope: {:?}", ctx.var_types);
+    println!("DEBUG: Entered validate_with_clause");
+    println!("DEBUG: Starting WITH clause validation");
+    println!("DEBUG: Current variable scope: {:?}", ctx.var_types);
+    println!("DEBUG: WITH clause items: {:?}", with_clause.items);
 
     // First, check all items for existence in the current scope
     let mut new_var_types = HashMap::new();
     let mut seen_aliases = HashSet::new();
+    let mut has_errors = false;
 
     for item in &with_clause.items {
-        println!("Processing WITH item: {:?}", item);
-        match item {
-            WithItem::Variable(var) => {
-                println!("Checking variable: {}", var);
-                if let Some(var_info) = ctx.var_types.get(var) {
-                    println!("Found variable info: {:?}", var_info);
-                    new_var_types.insert(var.clone(), var_info.clone());
-                } else {
-                    println!("Variable not found in scope");
-                    ctx.errors
-                        .push(format!("Variable '{}' not defined in previous scope", var));
-                    return; // Return early if we find an undefined variable
+        println!("DEBUG: Processing WITH item: {:?}", item);
+        match &item.expression {
+            WithExpression::Identifier(var) => {
+                println!("DEBUG: Checking identifier: {}", var);
+                println!("DEBUG: Current var_types keys: {:?}", ctx.var_types.keys().collect::<Vec<_>>());
+                if !ctx.var_types.contains_key(var) {
+                    println!("DEBUG: Variable {} not found in scope", var);
+                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
+                    println!("DEBUG: ctx.errors after push: {:?}", ctx.errors);
+                    has_errors = true;
+                } else if let Some(var_info) = ctx.var_types.get(var) {
+                    println!("DEBUG: Found variable info: {:?}", var_info);
+                    if let Some(alias) = &item.alias {
+                        println!("DEBUG: Adding alias {} with info {:?}", alias, var_info);
+                        new_var_types.insert(alias.clone(), var_info.clone());
+                        seen_aliases.insert(alias.clone());
+                    } else {
+                        println!("DEBUG: Adding variable {} with info {:?}", var, var_info);
+                        new_var_types.insert(var.clone(), var_info.clone());
+                    }
                 }
             }
-            WithItem::Alias { expression, alias } => {
-                println!("Checking alias: {} AS {}", expression, alias);
-                if let Some(var_info) = ctx.var_types.get(expression) {
-                    println!("Found expression info: {:?}", var_info);
-                    new_var_types.insert(alias.clone(), var_info.clone());
-                    seen_aliases.insert(alias.clone());
+            WithExpression::PropertyAccess { variable, property } => {
+                println!("DEBUG: Checking property access: {}.{}", variable, property);
+                if let Some(var_info) = ctx.var_types.get(variable) {
+                    println!("DEBUG: Found variable info: {:?}", var_info);
+                    if let Some(alias) = &item.alias {
+                        println!("DEBUG: Adding alias {} with info {:?}", alias, var_info);
+                        new_var_types.insert(alias.clone(), var_info.clone());
+                        seen_aliases.insert(alias.clone());
+                    }
                 } else {
-                    println!("Expression not found in scope");
-                    ctx.errors.push(format!(
-                        "Expression '{}' not defined in previous scope",
-                        expression
-                    ));
-                    return; // Return early if we find an undefined expression
+                    println!("DEBUG: Variable {} not found in scope", variable);
+                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", variable));
+                    has_errors = true;
                 }
             }
-            WithItem::Wildcard => {
-                println!("Processing wildcard");
+            WithExpression::FunctionCall { name, args } => {
+                println!("DEBUG: Checking function call: {}({:?})", name, args);
+                let mut args_valid = true;
+                // For now, we'll just validate that all arguments exist in scope
+                for arg in args {
+                    if let WithExpression::Identifier(var) = arg {
+                        println!("DEBUG: Checking function argument: {}", var);
+                        if !ctx.var_types.contains_key(var) {
+                            println!("DEBUG: Argument {} not found in scope", var);
+                            ctx.errors.push(format!(
+                                "Argument '{}' not defined in previous scope",
+                                var
+                            ));
+                            args_valid = false;
+                        }
+                    }
+                }
+                if args_valid {
+                    if let Some(alias) = &item.alias {
+                        println!("DEBUG: Adding function result alias: {}", alias);
+                        // For function calls, we'll create a new variable type
+                        new_var_types.insert(alias.clone(), VarInfo::Node { label: "".to_string() });
+                        seen_aliases.insert(alias.clone());
+                    }
+                } else {
+                    has_errors = true;
+                }
+            }
+            WithExpression::Wildcard => {
+                println!("DEBUG: Processing wildcard");
                 new_var_types.extend(ctx.var_types.clone());
             }
         }
     }
 
-    println!("New variable scope: {:?}", new_var_types);
-    println!("Current errors: {:?}", ctx.errors);
+    println!("DEBUG: New variable scope: {:?}", new_var_types);
+    println!("DEBUG: Current errors: {:?}", ctx.errors);
+    println!("DEBUG: Has errors: {}", has_errors);
 
     // Only update the variable scope if we didn't find any errors
-    if ctx.errors.is_empty() {
+    if !has_errors {
+        println!("DEBUG: Updating variable scope");
         ctx.var_types = new_var_types;
+    } else {
+        println!("DEBUG: Not updating variable scope due to errors");
     }
 }
 
-/// Validate one MatchElement (Pattern or Quantified)
+/// Validate one MatchElement
 fn validate_match_element(el: &MatchElement, schema: &DbSchema, ctx: &mut ValidationContext) {
-    match el {
-        MatchElement::Pattern(pat) => validate_pattern(pat, schema, ctx),
-        MatchElement::QuantifiedPathPattern(qpp) => {
-            // Validate the pattern
-            validate_pattern(&qpp.pattern, schema, ctx);
+    // Validate the pattern
+    validate_pattern(&el.pattern, schema, ctx);
 
-            // Validate the WHERE clause if present
-            if let Some(where_clause) = &qpp.where_clause {
-                validate_where_clause(where_clause, schema, ctx);
-            }
-
-            // Record path variable if present
-            if let Some(path_var) = &qpp.path_variable {
-                ctx.var_types.insert(path_var.clone(), VarInfo::Path);
-            }
-        }
+    // Record path variable if present
+    if let Some(path_var) = &el.path_var {
+        ctx.var_types.insert(path_var.clone(), VarInfo::Path);
     }
 }
 
@@ -376,6 +422,10 @@ fn validate_pattern(pattern: &[PatternElement], schema: &DbSchema, ctx: &mut Val
                 }
                 validate_relationship(rel, schema, ctx)
             }
+            PatternElement::QuantifiedPathPattern(qpp) => {
+                // Recursively validate the inner pattern
+                validate_pattern(&qpp.pattern, schema, ctx);
+            }
         }
     }
 }
@@ -405,27 +455,47 @@ fn validate_relationship(
     schema: &DbSchema,
     ctx: &mut ValidationContext,
 ) {
-    match rel {
-        RelationshipPattern::Regular(details) => {
-            if let Some(rel_type) = &details.rel_type {
-                if !schema.has_relationship_type(rel_type) {
-                    ctx.errors
-                        .push(format!("Relationship type '{}' not in schema", rel_type));
-                }
-                if let Some(props) = &details.properties {
-                    for prop in props {
-                        if !schema.has_relationship_property(rel_type, &prop.key) {
-                            ctx.errors.push(format!(
-                                "Property '{}' not in schema for relationship type '{}'",
-                                prop.key, rel_type
-                            ));
+    if let Some(rel_type) = rel.rel_type() {
+        if !schema.has_relationship_type(rel_type) {
+            ctx.errors
+                .push(format!("Relationship type '{}' not in schema", rel_type));
+        } else {
+            // Validate relationship direction
+            let direction = rel.direction();
+            let relationships = schema.relationships.iter()
+                .filter(|r| r.rel_type == rel_type)
+                .collect::<Vec<_>>();
+            
+            if !relationships.is_empty() {
+                let valid_direction = match direction {
+                    Direction::Right => relationships.iter().any(|r| r.start != r.end),
+                    Direction::Left => relationships.iter().any(|r| r.start != r.end),
+                    Direction::Undirected => relationships.iter().any(|r| r.start == r.end),
+                };
+                
+                if !valid_direction {
+                    ctx.errors.push(format!(
+                        "Invalid direction for relationship type '{}'. Expected {}",
+                        rel_type,
+                        match direction {
+                            Direction::Right => "right-directed",
+                            Direction::Left => "left-directed",
+                            Direction::Undirected => "undirected",
                         }
-                    }
+                    ));
                 }
             }
         }
-        RelationshipPattern::OptionalRelationship(_) => {
-            // Skip validation for optional relationships
+        
+        if let Some(props) = rel.properties() {
+            for prop in props {
+                if !schema.has_relationship_property(rel_type, &prop.key) {
+                    ctx.errors.push(format!(
+                        "Property '{}' not in schema for relationship type '{}'",
+                        prop.key, rel_type
+                    ));
+                }
+            }
         }
     }
 }
@@ -673,6 +743,17 @@ fn validate_property_access(expr: &str, schema: &DbSchema, ctx: &mut ValidationC
     }
 }
 
+impl<'a> ValidationContext<'a> {
+    pub fn new(schema: &'a DbSchema) -> Self {
+        Self {
+            errors: Vec::new(),
+            current_aliases: HashSet::new(),
+            var_types: HashMap::new(),
+            schema,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -717,7 +798,7 @@ mod tests {
     #[test]
     fn test_variable_length_relationship() {
         let query = "MATCH (d:Station { name: 'Denmark Hill' })<-[:CALLS_AT]-
-                    (n:Stop)-[:NEXT]->{1,10}(m:Stop)-[:CALLS_AT]->
+                    (n:Stop)-[:NEXT*1..10]->(m:Stop)-[:CALLS_AT]->
                     (a:Station { name: 'Clapham Junction' })
                     WHERE m.arrives < time('17:18')
                     RETURN n.departs AS departureTime";
@@ -829,5 +910,86 @@ mod tests {
         assert!(errors
             .iter()
             .any(|e| e.contains("not defined in previous scope")));
+    }
+
+    #[test]
+    fn test_validate_relationship_direction() {
+        let mut schema = DbSchema::new();
+        
+        // Add a directed relationship
+        let directed_rel = DbSchemaRelationshipPattern {
+            start: "Person".to_string(),
+            end: "Movie".to_string(),
+            rel_type: "ACTED_IN".to_string(),
+        };
+        schema.add_relationship(&directed_rel).unwrap();
+        
+        // Add an undirected relationship
+        let undirected_rel = DbSchemaRelationshipPattern {
+            start: "Person".to_string(),
+            end: "Person".to_string(),
+            rel_type: "KNOWS".to_string(),
+        };
+        schema.add_relationship(&undirected_rel).unwrap();
+        
+        // Test valid directed relationship
+        let valid_directed = RelationshipPattern::Regular(RelationshipDetails {
+            variable: Some("r".to_string()),
+            direction: Direction::Right,
+            properties: None,
+            rel_type: Some("ACTED_IN".to_string()),
+            length: None,
+            where_clause: None,
+            quantifier: None,
+            is_optional: false,
+        });
+        let mut ctx = ValidationContext::new(&schema);
+        validate_relationship(&valid_directed, &schema, &mut ctx);
+        assert!(ctx.errors.is_empty());
+        
+        // Test invalid directed relationship
+        let invalid_directed = RelationshipPattern::Regular(RelationshipDetails {
+            variable: Some("r".to_string()),
+            direction: Direction::Undirected,
+            properties: None,
+            rel_type: Some("ACTED_IN".to_string()),
+            length: None,
+            where_clause: None,
+            quantifier: None,
+            is_optional: false,
+        });
+        let mut ctx = ValidationContext::new(&schema);
+        validate_relationship(&invalid_directed, &schema, &mut ctx);
+        assert!(!ctx.errors.is_empty());
+        
+        // Test valid undirected relationship
+        let valid_undirected = RelationshipPattern::Regular(RelationshipDetails {
+            variable: Some("r".to_string()),
+            direction: Direction::Undirected,
+            properties: None,
+            rel_type: Some("KNOWS".to_string()),
+            length: None,
+            where_clause: None,
+            quantifier: None,
+            is_optional: false,
+        });
+        let mut ctx = ValidationContext::new(&schema);
+        validate_relationship(&valid_undirected, &schema, &mut ctx);
+        assert!(ctx.errors.is_empty());
+        
+        // Test invalid undirected relationship
+        let invalid_undirected = RelationshipPattern::Regular(RelationshipDetails {
+            variable: Some("r".to_string()),
+            direction: Direction::Right,
+            properties: None,
+            rel_type: Some("KNOWS".to_string()),
+            length: None,
+            where_clause: None,
+            quantifier: None,
+            is_optional: false,
+        });
+        let mut ctx = ValidationContext::new(&schema);
+        validate_relationship(&invalid_undirected, &schema, &mut ctx);
+        assert!(!ctx.errors.is_empty());
     }
 }

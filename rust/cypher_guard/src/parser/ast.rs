@@ -54,11 +54,12 @@ pub struct PathProperty {
 
 // Elements of a MATCH clause
 #[derive(Debug, PartialEq, Clone)]
-pub enum MatchElement {
-    Pattern(Vec<PatternElement>),
-    QuantifiedPathPattern(QuantifiedPathPattern),
+pub struct MatchElement {
+    pub path_var: Option<String>,
+    pub pattern: Vec<PatternElement>,
 }
 
+// Quantified path pattern details
 #[derive(Debug, PartialEq, Clone)]
 pub struct QuantifiedPathPattern {
     pub pattern: Vec<PatternElement>,
@@ -73,6 +74,7 @@ pub struct QuantifiedPathPattern {
 pub enum PatternElement {
     Node(NodePattern),
     Relationship(RelationshipPattern),
+    QuantifiedPathPattern(QuantifiedPathPattern),
 }
 
 // Node pattern
@@ -81,6 +83,13 @@ pub struct NodePattern {
     pub variable: Option<String>,
     pub label: Option<String>,
     pub properties: Option<Vec<Property>>,
+}
+
+// Quantifier
+#[derive(Debug, PartialEq, Clone)]
+pub struct Quantifier {
+    pub min: Option<u32>,
+    pub max: Option<u32>,
 }
 
 // Relationship pattern
@@ -92,12 +101,48 @@ pub struct RelationshipDetails {
     pub rel_type: Option<String>,
     pub length: Option<LengthRange>,
     pub where_clause: Option<WhereClause>,
+    pub quantifier: Option<Quantifier>,
+    pub is_optional: bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RelationshipPattern {
     Regular(RelationshipDetails),
     OptionalRelationship(RelationshipDetails),
+}
+
+impl RelationshipPattern {
+    pub fn direction(&self) -> Direction {
+        match self {
+            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
+                details.direction.clone()
+            }
+        }
+    }
+
+    pub fn rel_type(&self) -> Option<&str> {
+        match self {
+            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
+                details.rel_type.as_deref()
+            }
+        }
+    }
+
+    pub fn properties(&self) -> Option<&Vec<Property>> {
+        match self {
+            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
+                details.properties.as_ref()
+            }
+        }
+    }
+
+    pub fn quantifier(&self) -> Option<&Quantifier> {
+        match self {
+            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
+                details.quantifier.as_ref()
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -124,6 +169,7 @@ pub struct Property {
 pub enum PropertyValue {
     String(String),
     Number(i64),
+    FunctionCall { name: String, args: Vec<PropertyValue> },
 }
 
 // MERGE clause
@@ -166,8 +212,15 @@ pub struct WithClause {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum WithItem {
-    Variable(String),                            // e.g. WITH a
-    Alias { expression: String, alias: String }, // e.g. WITH a AS b
-    Wildcard,                                    // e.g. WITH *
+pub enum WithExpression {
+    Identifier(String),
+    PropertyAccess { variable: String, property: String },
+    FunctionCall { name: String, args: Vec<WithExpression> },
+    Wildcard,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WithItem {
+    pub expression: WithExpression,
+    pub alias: Option<String>,
 }
