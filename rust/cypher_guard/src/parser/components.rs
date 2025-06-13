@@ -4,11 +4,11 @@ use nom::{
     character::complete::{char, digit1, multispace0},
     combinator::{map, opt},
     multi::separated_list1,
-    sequence::{preceded, tuple, delimited, separated_pair},
+    sequence::tuple,
     IResult,
 };
 
-use crate::parser::ast::{*, Quantifier};
+use crate::parser::ast::{Quantifier, *};
 use crate::parser::utils::{identifier, number_literal, string_literal};
 
 // Shared property value parser
@@ -16,9 +16,9 @@ pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
         map(string_literal, PropertyValue::String),
         map(number_literal, PropertyValue::Number),
-        map(function_call, |(name, args)| PropertyValue::FunctionCall { 
-            name, 
-            args: args.into_iter().map(|arg| PropertyValue::String(arg)).collect() 
+        map(function_call, |(name, args)| PropertyValue::FunctionCall {
+            name,
+            args: args.into_iter().map(PropertyValue::String).collect(),
         }),
     ))(input)
 }
@@ -60,10 +60,8 @@ pub fn property(input: &str) -> IResult<&str, Property> {
 // Shared property map parser
 pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
     let (input, _) = char('{')(input)?;
-    let (input, properties) = separated_list1(
-        tuple((multispace0, char(','), multispace0)),
-        property,
-    )(input)?;
+    let (input, properties) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), property)(input)?;
     let (input, _) = char('}')(input)?;
     Ok((input, properties))
 }
@@ -76,22 +74,32 @@ pub fn relationship_type(input: &str) -> IResult<&str, String> {
     let mut input = input;
     // Parse additional types separated by |
     while let Ok((next_input, _)) = char::<&str, nom::error::Error<&str>>('|')(input) {
-        let (next_input, next_type) = take_while1(|c: char| c.is_alphanumeric() || c == '_')(next_input)?;
+        let (next_input, next_type) =
+            take_while1(|c: char| c.is_alphanumeric() || c == '_')(next_input)?;
         types.push(next_type);
         input = next_input;
     }
     let rel_type = types.join("|");
-    println!("Parsed relationship type: {}, remaining input: {}", rel_type, input);
+    println!(
+        "Parsed relationship type: {}, remaining input: {}",
+        rel_type, input
+    );
     Ok((input, rel_type))
 }
 
 // Variable length relationship parser
 pub fn variable_length_relationship(input: &str) -> IResult<&str, (String, Quantifier, bool)> {
-    println!("DEBUG: Starting variable_length_relationship with input: {}", input);
+    println!(
+        "DEBUG: Starting variable_length_relationship with input: {}",
+        input
+    );
     let (input, rel_type) = relationship_type(input)?;
     println!("DEBUG: Parsed relationship type: {}", rel_type);
     let (input, (quantifier, is_optional)) = quantifier(input)?;
-    println!("DEBUG: Parsed quantifier: {:?}, optional: {}", quantifier, is_optional);
+    println!(
+        "DEBUG: Parsed quantifier: {:?}, optional: {}",
+        quantifier, is_optional
+    );
     Ok((input, (rel_type, quantifier, is_optional)))
 }
 
@@ -118,24 +126,30 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     println!("DEBUG: After opening bracket: {}", input);
     let (input, variable) = opt(identifier)(input)?;
     println!("DEBUG: Parsed variable: {:?}", variable);
-    
+
     // Try to parse as variable length relationship first
-    let (input, rel_type_quantifier_optional) = if let Ok((input, (rel_type, quantifier, is_optional))) = variable_length_relationship(input) {
-        println!("DEBUG: Parsed as variable length relationship: {:?}, {:?}, optional: {}", rel_type, quantifier, is_optional);
-        (input, (Some(rel_type), Some(quantifier), is_optional))
-    } else {
-        // Fall back to regular relationship type
-        let (input, rel_type) = opt(relationship_type)(input)?;
-        println!("DEBUG: Parsed as regular relationship type: {:?}", rel_type);
-        (input, (rel_type, None, false))
-    };
-    
+    let (input, rel_type_quantifier_optional) =
+        if let Ok((input, (rel_type, quantifier, is_optional))) =
+            variable_length_relationship(input)
+        {
+            println!(
+                "DEBUG: Parsed as variable length relationship: {:?}, {:?}, optional: {}",
+                rel_type, quantifier, is_optional
+            );
+            (input, (Some(rel_type), Some(quantifier), is_optional))
+        } else {
+            // Fall back to regular relationship type
+            let (input, rel_type) = opt(relationship_type)(input)?;
+            println!("DEBUG: Parsed as regular relationship type: {:?}", rel_type);
+            (input, (rel_type, None, false))
+        };
+
     let (input, _) = multispace0(input)?;
     let (input, properties) = opt(property_map)(input)?;
     println!("DEBUG: Parsed properties: {:?}", properties);
     let (input, _) = char(']')(input)?;
     println!("DEBUG: After closing bracket: {}", input);
-    
+
     Ok((
         input,
         RelationshipDetails {
@@ -166,29 +180,48 @@ pub fn quantifier(input: &str) -> IResult<&str, (Quantifier, bool)> {
                 input = rest;
                 if let Ok((rest, max)) = digit1::<&str, nom::error::Error<&str>>(input) {
                     input = rest;
-                    quant = Some(Quantifier { min: Some(min.parse().unwrap()), max: Some(max.parse().unwrap()) });
+                    quant = Some(Quantifier {
+                        min: Some(min.parse().unwrap()),
+                        max: Some(max.parse().unwrap()),
+                    });
                 } else {
-                    quant = Some(Quantifier { min: Some(min.parse().unwrap()), max: None });
+                    quant = Some(Quantifier {
+                        min: Some(min.parse().unwrap()),
+                        max: None,
+                    });
                 }
             } else {
-                quant = Some(Quantifier { min: Some(min.parse().unwrap()), max: Some(min.parse().unwrap()) });
+                quant = Some(Quantifier {
+                    min: Some(min.parse().unwrap()),
+                    max: Some(min.parse().unwrap()),
+                });
             }
         } else {
             // Just *
-            quant = Some(Quantifier { min: Some(0), max: None });
+            quant = Some(Quantifier {
+                min: Some(0),
+                max: None,
+            });
         }
     } else if let Ok((rest, _)) = char::<&str, nom::error::Error<&str>>('+')(input) {
         input = rest;
-        quant = Some(Quantifier { min: Some(1), max: None });
+        quant = Some(Quantifier {
+            min: Some(1),
+            max: None,
+        });
     }
     // If quantifier was parsed, check for ?
     if let Some(q) = quant {
-        let (input, is_optional) = if let Ok((rest, _)) = char::<&str, nom::error::Error<&str>>('?')(input) {
-            (rest, true)
-        } else {
-            (input, false)
-        };
-        println!("DEBUG: Parsed quantifier: {:?}, optional: {}", q, is_optional);
+        let (input, is_optional) =
+            if let Ok((rest, _)) = char::<&str, nom::error::Error<&str>>('?')(input) {
+                (rest, true)
+            } else {
+                (input, false)
+            };
+        println!(
+            "DEBUG: Parsed quantifier: {:?}, optional: {}",
+            q, is_optional
+        );
         return Ok((input, (q, is_optional)));
     }
     println!("DEBUG: No quantifier found");
@@ -202,25 +235,19 @@ pub fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     println!("DEBUG: Starting relationship_pattern with input: {}", input);
     let (input, _) = multispace0(input)?;
     println!("DEBUG: After whitespace: {}", input);
-    
+
     // Parse the left side of the relationship
-    let (input, left) = alt((
-        tag("<-"),
-        tag("-"),
-    ))(input)?;
+    let (input, left) = alt((tag("<-"), tag("-")))(input)?;
     println!("DEBUG: Parsed left side: {}", left);
-    
+
     // Parse relationship details
     let (input, mut details) = relationship_details(input)?;
     println!("DEBUG: Parsed relationship details: {:?}", details);
-    
+
     // Parse the right side of the relationship
-    let (input, right) = alt((
-        tag("->"),
-        tag("-"),
-    ))(input)?;
+    let (input, right) = alt((tag("->"), tag("-")))(input)?;
     println!("DEBUG: Parsed right side: {}", right);
-    
+
     // Set direction based on arrows, ensuring it's set even for variable length relationships
     details.direction = match (left, right) {
         ("-", "->") => Direction::Right,
@@ -229,14 +256,17 @@ pub fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
         _ => Direction::Undirected,
     };
     println!("DEBUG: Set direction to: {:?}", details.direction);
-    
+
     // For variable length relationships, ensure direction is properly set
     if details.quantifier.is_some() {
-        println!("DEBUG: Variable length relationship with direction: {:?}", details.direction);
+        println!(
+            "DEBUG: Variable length relationship with direction: {:?}",
+            details.direction
+        );
     }
-    
+
     if details.is_optional {
         return Ok((input, RelationshipPattern::OptionalRelationship(details)));
     }
     Ok((input, RelationshipPattern::Regular(details)))
-} 
+}

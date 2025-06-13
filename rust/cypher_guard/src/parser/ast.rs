@@ -118,33 +118,29 @@ pub enum RelationshipPattern {
 impl RelationshipPattern {
     pub fn direction(&self) -> Direction {
         match self {
-            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
-                details.direction.clone()
-            }
+            RelationshipPattern::Regular(details)
+            | RelationshipPattern::OptionalRelationship(details) => details.direction.clone(),
         }
     }
 
     pub fn rel_type(&self) -> Option<&str> {
         match self {
-            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
-                details.rel_type.as_deref()
-            }
+            RelationshipPattern::Regular(details)
+            | RelationshipPattern::OptionalRelationship(details) => details.rel_type.as_deref(),
         }
     }
 
     pub fn properties(&self) -> Option<&Vec<Property>> {
         match self {
-            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
-                details.properties.as_ref()
-            }
+            RelationshipPattern::Regular(details)
+            | RelationshipPattern::OptionalRelationship(details) => details.properties.as_ref(),
         }
     }
 
     pub fn quantifier(&self) -> Option<&Quantifier> {
         match self {
-            RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
-                details.quantifier.as_ref()
-            }
+            RelationshipPattern::Regular(details)
+            | RelationshipPattern::OptionalRelationship(details) => details.quantifier.as_ref(),
         }
     }
 }
@@ -177,7 +173,10 @@ pub enum PropertyValue {
     Null,
     List(Vec<PropertyValue>),
     Map(std::collections::HashMap<String, PropertyValue>),
-    FunctionCall { name: String, args: Vec<PropertyValue> },
+    FunctionCall {
+        name: String,
+        args: Vec<PropertyValue>,
+    },
 }
 
 // MERGE clause
@@ -222,8 +221,14 @@ pub struct WithClause {
 #[derive(Debug, PartialEq, Clone)]
 pub enum WithExpression {
     Identifier(String),
-    PropertyAccess { variable: String, property: String },
-    FunctionCall { name: String, args: Vec<WithExpression> },
+    PropertyAccess {
+        variable: String,
+        property: String,
+    },
+    FunctionCall {
+        name: String,
+        args: Vec<WithExpression>,
+    },
     Wildcard,
 }
 

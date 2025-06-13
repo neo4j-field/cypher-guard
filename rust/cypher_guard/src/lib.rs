@@ -16,12 +16,8 @@ pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
 
 use parser::ast::*;
 use parser::clauses::*;
-use parser::components::*;
-use parser::patterns::*;
-use parser::utils::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use crate::schema::DbSchemaRelationshipPattern;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Tracks validation state (errors + alias scope)
@@ -95,7 +91,7 @@ pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<Strin
 
             // Validate WHERE clause if present
             if let Some(where_clause) = &ast.where_clause {
-                validate_where_clause(where_clause, schema, &mut ctx);
+                let _ = validate_where_clause(where_clause, schema, &mut ctx);
             }
 
             // Validate return clause
@@ -274,10 +270,14 @@ fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
         match &item.expression {
             WithExpression::Identifier(var) => {
                 println!("DEBUG: Checking identifier: {}", var);
-                println!("DEBUG: Current var_types keys: {:?}", ctx.var_types.keys().collect::<Vec<_>>());
+                println!(
+                    "DEBUG: Current var_types keys: {:?}",
+                    ctx.var_types.keys().collect::<Vec<_>>()
+                );
                 if !ctx.var_types.contains_key(var) {
                     println!("DEBUG: Variable {} not found in scope", var);
-                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", var));
+                    ctx.errors
+                        .push(format!("Variable '{}' not defined in previous scope", var));
                     println!("DEBUG: ctx.errors after push: {:?}", ctx.errors);
                     has_errors = true;
                 } else if let Some(var_info) = ctx.var_types.get(var) {
@@ -303,7 +303,10 @@ fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
                     }
                 } else {
                     println!("DEBUG: Variable {} not found in scope", variable);
-                    ctx.errors.push(format!("Variable '{}' not defined in previous scope", variable));
+                    ctx.errors.push(format!(
+                        "Variable '{}' not defined in previous scope",
+                        variable
+                    ));
                     has_errors = true;
                 }
             }
@@ -316,10 +319,8 @@ fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
                         println!("DEBUG: Checking function argument: {}", var);
                         if !ctx.var_types.contains_key(var) {
                             println!("DEBUG: Argument {} not found in scope", var);
-                            ctx.errors.push(format!(
-                                "Argument '{}' not defined in previous scope",
-                                var
-                            ));
+                            ctx.errors
+                                .push(format!("Argument '{}' not defined in previous scope", var));
                             args_valid = false;
                         }
                     }
@@ -328,7 +329,12 @@ fn validate_with_clause(with_clause: &WithClause, ctx: &mut ValidationContext) {
                     if let Some(alias) = &item.alias {
                         println!("DEBUG: Adding function result alias: {}", alias);
                         // For function calls, we'll create a new variable type
-                        new_var_types.insert(alias.clone(), VarInfo::Node { label: "".to_string() });
+                        new_var_types.insert(
+                            alias.clone(),
+                            VarInfo::Node {
+                                label: "".to_string(),
+                            },
+                        );
                         seen_aliases.insert(alias.clone());
                     }
                 } else {
@@ -476,17 +482,19 @@ fn validate_relationship(
         } else {
             // Validate relationship direction
             let direction = rel.direction();
-            let relationships = schema.relationships.iter()
+            let relationships = schema
+                .relationships
+                .iter()
                 .filter(|r| r.rel_type == rel_type)
                 .collect::<Vec<_>>();
-            
+
             if !relationships.is_empty() {
                 let valid_direction = match direction {
                     Direction::Right => relationships.iter().any(|r| r.start != r.end),
                     Direction::Left => relationships.iter().any(|r| r.start != r.end),
                     Direction::Undirected => relationships.iter().any(|r| r.start == r.end),
                 };
-                
+
                 if !valid_direction {
                     ctx.errors.push(format!(
                         "Invalid direction for relationship type '{}'. Expected {}",
@@ -500,7 +508,7 @@ fn validate_relationship(
                 }
             }
         }
-        
+
         if let Some(props) = rel.properties() {
             for prop in props {
                 if !schema.has_relationship_property(rel_type, &prop.key) {
@@ -543,7 +551,10 @@ fn validate_where_clause(
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
-                                println!("DEBUG: Checking relationship property: {}.{}", rel_type, prop);
+                                println!(
+                                    "DEBUG: Checking relationship property: {}.{}",
+                                    rel_type, prop
+                                );
                                 if !schema.has_relationship_property(rel_type, prop) {
                                     println!("DEBUG: Invalid relationship property");
                                     return Ok(false);
@@ -559,8 +570,14 @@ fn validate_where_clause(
                     }
                 }
             }
-            WhereCondition::FunctionCall { function, arguments } => {
-                println!("DEBUG: Processing function call: {}({:?})", function, arguments);
+            WhereCondition::FunctionCall {
+                function,
+                arguments,
+            } => {
+                println!(
+                    "DEBUG: Processing function call: {}({:?})",
+                    function, arguments
+                );
                 // Validate function arguments
                 for arg in arguments {
                     println!("DEBUG: Validating function argument: {}", arg);
@@ -662,7 +679,11 @@ fn validate_where_condition(
 ) -> Result<bool> {
     println!("DEBUG: Starting validate_where_condition");
     match condition {
-        WhereCondition::Comparison { left, operator: _, right: _ } => {
+        WhereCondition::Comparison {
+            left,
+            operator: _,
+            right: _,
+        } => {
             println!("DEBUG: Processing comparison: {}", left);
             // Validate property access
             if let Some((var, prop)) = left.split_once('.') {
@@ -677,7 +698,10 @@ fn validate_where_condition(
                             }
                         }
                         VarInfo::Relationship { rel_type } => {
-                            println!("DEBUG: Checking relationship property: {}.{}", rel_type, prop);
+                            println!(
+                                "DEBUG: Checking relationship property: {}.{}",
+                                rel_type, prop
+                            );
                             if !schema.has_relationship_property(rel_type, prop) {
                                 println!("DEBUG: Invalid relationship property");
                                 return Ok(false);
@@ -694,8 +718,14 @@ fn validate_where_condition(
             }
             Ok(true)
         }
-        WhereCondition::FunctionCall { function, arguments } => {
-            println!("DEBUG: Processing function call: {}({:?})", function, arguments);
+        WhereCondition::FunctionCall {
+            function,
+            arguments,
+        } => {
+            println!(
+                "DEBUG: Processing function call: {}({:?})",
+                function, arguments
+            );
             // Validate function arguments
             for arg in arguments {
                 println!("DEBUG: Validating function argument: {}", arg);

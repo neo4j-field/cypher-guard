@@ -1,20 +1,18 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, tag_no_case, take_while1},
+    bytes::complete::{tag, tag_no_case},
     character::complete::{char, digit1, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::{many1, separated_list1, separated_list0},
+    multi::{many1, separated_list0, separated_list1},
     sequence::{preceded, tuple},
     IResult,
 };
 
 use crate::parser::ast;
 use crate::parser::ast::{
-    CreateClause, Direction, MatchClause, MatchElement, MergeClause, OnCreateClause, OnMatchClause,
-    PatternElement, PropertyValue, Query, ReturnClause, SetClause, WithClause, WithExpression,
-    WithItem,
+    CreateClause, MatchClause, MatchElement, MergeClause, OnCreateClause, OnMatchClause,
+    PropertyValue, Query, ReturnClause, SetClause, WithClause, WithExpression, WithItem,
 };
-use crate::parser::components::*;
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
 
@@ -127,13 +125,15 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("(")(input)?;
     let (input, _) = multispace0(input)?;
-    
+
     // Parse arguments
     let (input, args) = separated_list0(
         tuple((multispace0, tag(","), multispace0)),
         alt((
             // Try to parse nested function calls
-            map(function_call, |(func, args)| format!("{}({})", func, args.join(", "))),
+            map(function_call, |(func, args)| {
+                format!("{}({})", func, args.join(", "))
+            }),
             // Try to parse property access
             map(property_access, |s| s),
             // Try to parse string literals
@@ -149,7 +149,7 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
             map(identifier, |s| s.to_string()),
         )),
     )(input)?;
-    
+
     let (input, _) = multispace0(input)?;
     let (input, _) = tag(")")(input)?;
     println!("[function_call] <<< EXIT: {}({:?})", function, args);
@@ -160,7 +160,7 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
 fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     println!("[where_condition] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
-    
+
     // Try to parse NOT
     if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("NOT")(input) {
         let (rest, _) = multispace1(rest)?;
@@ -172,12 +172,18 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("(")(input) {
         let (rest, condition) = where_condition(rest)?;
         let (rest, _) = tag::<&str, &str, nom::error::Error<&str>>(")")(rest)?;
-        return Ok((rest, ast::WhereCondition::Parenthesized(Box::new(condition))));
+        return Ok((
+            rest,
+            ast::WhereCondition::Parenthesized(Box::new(condition)),
+        ));
     }
 
     // Try to parse as a function call
     if let Ok((rest, (function, args))) = function_call(input) {
-        println!("[where_condition] Parsed function call: {}({:?})", function, args);
+        println!(
+            "[where_condition] Parsed function call: {}({:?})",
+            function, args
+        );
         return Ok((
             rest,
             ast::WhereCondition::FunctionCall {
@@ -229,13 +235,13 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
 
     // If comparison parsing failed, try to parse as a path property
     if let Ok((rest, (path_var, property))) = path_property(input) {
-        println!("[where_condition] Parsed path property: {}.{}", path_var, property);
+        println!(
+            "[where_condition] Parsed path property: {}.{}",
+            path_var, property
+        );
         return Ok((
             rest,
-            ast::WhereCondition::PathProperty {
-                path_var,
-                property,
-            },
+            ast::WhereCondition::PathProperty { path_var, property },
         ));
     }
 
@@ -252,14 +258,14 @@ pub fn where_clause(input: &str) -> IResult<&str, ast::WhereClause> {
     println!("[where_clause] After WHERE tag: input='{}'", input);
     let (input, _) = multispace1(input)?;
     println!("[where_clause] After WHERE whitespace: input='{}'", input);
-    
+
     // Parse conditions separated by AND or OR
     let (input, conditions) = separated_list1(
         tuple((multispace0, alt((tag("AND"), tag("OR"))), multispace0)),
         where_condition,
     )(input)?;
     println!("[where_clause] Parsed conditions: {:?}", conditions);
-    
+
     let clause = ast::WhereClause { conditions };
     println!("[where_clause] <<< EXIT: {:?}", clause);
     Ok((input, clause))
@@ -316,16 +322,17 @@ fn on_match_clause(input: &str) -> IResult<&str, OnMatchClause> {
     println!("DEBUG: After SET tag: {}", input);
     let (input, _) = multispace1(input)?;
     println!("DEBUG: After SET whitespace: {}", input);
-    let (input, set_clauses) = match separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input) {
-        Ok(res) => {
-            println!("DEBUG: Successfully parsed set_clauses");
-            res
-        },
-        Err(e) => {
-            println!("DEBUG: Failed to parse set_clauses: {:?}", e);
-            return Err(e);
-        }
-    };
+    let (input, set_clauses) =
+        match separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input) {
+            Ok(res) => {
+                println!("DEBUG: Successfully parsed set_clauses");
+                res
+            }
+            Err(e) => {
+                println!("DEBUG: Failed to parse set_clauses: {:?}", e);
+                return Err(e);
+            }
+        };
     println!("DEBUG: Parsed ON MATCH set clauses: {:?}", set_clauses);
     Ok((input, OnMatchClause { set_clauses }))
 }
@@ -341,15 +348,18 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
     println!("DEBUG: After parsing elements, remaining input: {}", input);
     let mut found_on_create = None;
     let mut found_on_match = None;
-    
+
     // Try up to two times (since there can be at most one ON CREATE and one ON MATCH)
     for i in 0..2 {
         println!("DEBUG: Attempt {} to parse ON clauses", i + 1);
         // Consume any whitespace before trying to parse ON clauses
         let (rest, _) = multispace0(input)?;
         input = rest;
-        println!("DEBUG: After consuming whitespace, remaining input: {}", input);
-        
+        println!(
+            "DEBUG: After consuming whitespace, remaining input: {}",
+            input
+        );
+
         if found_on_create.is_none() {
             println!("DEBUG: Trying to parse ON CREATE clause");
             match on_create_clause(input) {
@@ -358,7 +368,7 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
                     found_on_create = Some(clause);
                     input = rest;
                     continue;
-                },
+                }
                 Err(e) => {
                     println!("DEBUG: Failed to parse ON CREATE clause: {:?}", e);
                 }
@@ -372,7 +382,7 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
                     found_on_match = Some(clause);
                     input = rest;
                     continue;
-                },
+                }
                 Err(e) => {
                     println!("DEBUG: Failed to parse ON MATCH clause: {:?}", e);
                 }
@@ -381,7 +391,10 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
         println!("DEBUG: No more ON clauses found");
         break;
     }
-    println!("DEBUG: Final merge clause state - on_create: {:?}, on_match: {:?}", found_on_create, found_on_match);
+    println!(
+        "DEBUG: Final merge clause state - on_create: {:?}, on_match: {:?}",
+        found_on_create, found_on_match
+    );
     Ok((
         input,
         MergeClause {
@@ -407,9 +420,7 @@ fn with_item(input: &str) -> IResult<&str, WithItem> {
     println!("[with_item] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
     let (input, expr) = alt((
-        map(char('*'), |_| {
-            WithExpression::Wildcard
-        }),
+        map(char('*'), |_| WithExpression::Wildcard),
         map(property_access, |s| {
             let parts: Vec<&str> = s.split('.').collect();
             WithExpression::PropertyAccess {
@@ -417,11 +428,9 @@ fn with_item(input: &str) -> IResult<&str, WithItem> {
                 property: parts[1].to_string(),
             }
         }),
-        map(function_call, |(name, args)| {
-            WithExpression::FunctionCall {
-                name,
-                args: args.into_iter().map(|arg| WithExpression::Identifier(arg)).collect(),
-            }
+        map(function_call, |(name, args)| WithExpression::FunctionCall {
+            name,
+            args: args.into_iter().map(WithExpression::Identifier).collect(),
         }),
         map(identifier, |s| WithExpression::Identifier(s.to_string())),
     ))(input)?;
@@ -429,8 +438,14 @@ fn with_item(input: &str) -> IResult<&str, WithItem> {
         tuple((multispace0, tag("AS"), multispace1)),
         identifier,
     ))(input)?;
-    let result = WithItem { expression: expr, alias: alias.map(|s| s.to_string()) };
-    println!("[with_item] <<< EXIT: result={:?}, remaining input='{}'", result, input);
+    let result = WithItem {
+        expression: expr,
+        alias: alias.map(|s| s.to_string()),
+    };
+    println!(
+        "[with_item] <<< EXIT: result={:?}, remaining input='{}'",
+        result, input
+    );
     Ok((input, result))
 }
 
@@ -491,15 +506,17 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
 fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     println!("[property_value] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
-    
+
     // Try to parse as a list/array
     if let Ok((rest, _)) = char::<_, nom::error::Error<&str>>('[')(input) {
         let (rest, items) = separated_list0(
             tuple((multispace0, char(','), multispace0)),
             alt((
-                map(string_literal, |s| PropertyValue::String(s)),
+                map(string_literal, PropertyValue::String),
                 map(identifier, |s| PropertyValue::String(s.to_string())),
-                map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+                map(numeric_literal, |n| {
+                    PropertyValue::Number(n.parse().unwrap())
+                }),
                 map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
                 map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
                 map(tag_no_case("NULL"), |_| PropertyValue::Null),
@@ -518,9 +535,11 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
                 identifier,
                 tuple((multispace0, char(':'), multispace0)),
                 alt((
-                    map(string_literal, |s| PropertyValue::String(s)),
+                    map(string_literal, PropertyValue::String),
                     map(identifier, |s| PropertyValue::String(s.to_string())),
-                    map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+                    map(numeric_literal, |n| {
+                        PropertyValue::Number(n.parse().unwrap())
+                    }),
                     map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
                     map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
                     map(tag_no_case("NULL"), |_| PropertyValue::Null),
@@ -528,7 +547,8 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
             )),
         )(rest)?;
         let (rest, _) = char('}')(rest)?;
-        let map: std::collections::HashMap<String, PropertyValue> = pairs.into_iter()
+        let map: std::collections::HashMap<String, PropertyValue> = pairs
+            .into_iter()
             .map(|(k, _, v)| (k.to_string(), v))
             .collect();
         println!("[property_value] <<< EXIT: Map({:?})", map);
@@ -537,9 +557,11 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 
     // Try to parse as a primitive value
     let (input, value) = alt((
-        map(string_literal, |s| PropertyValue::String(s)),
+        map(string_literal, PropertyValue::String),
         map(identifier, |s| PropertyValue::String(s.to_string())),
-        map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+        map(numeric_literal, |n| {
+            PropertyValue::Number(n.parse().unwrap())
+        }),
         map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
         map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
         map(tag_no_case("NULL"), |_| PropertyValue::Null),
@@ -551,6 +573,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::ast::{PatternElement, Direction};
 
     #[test]
     fn test_optional_match_clause() {
@@ -595,7 +618,8 @@ mod tests {
 
     #[test]
     fn test_create_with_relationship() {
-        let input = "CREATE (a:Person {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'Bob'})";
+        let input =
+            "CREATE (a:Person {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'Bob'})";
         let (_, clause) = create_clause(input).unwrap();
         assert_eq!(clause.elements.len(), 1);
         if let PatternElement::Relationship(rel) = &clause.elements[0].pattern[1] {

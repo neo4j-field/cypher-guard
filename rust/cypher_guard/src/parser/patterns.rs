@@ -1,17 +1,17 @@
 use nom::{
+    branch::alt,
     bytes::complete::tag,
-    character::complete::{char, digit1, multispace0, multispace1},
+    character::complete::{char, digit1, multispace0},
     combinator::opt,
-    sequence::{tuple, terminated, preceded},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
-use nom::branch::alt;
 
 use crate::parser::ast::*;
+use crate::parser::clauses::where_clause;
+use crate::parser::components::*;
 use crate::parser::components::{property_map, relationship_type};
 use crate::parser::utils::identifier;
-use crate::parser::components::*;
-use crate::parser::clauses::where_clause;
 
 #[cfg(test)]
 use crate::parser::clauses::match_clause;
@@ -22,12 +22,21 @@ pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
         Ok((input, _)) => {
             println!("[node_pattern] After parsing '(': input='{}'", input);
             let (input, variable) = opt(identifier)(input)?;
-            println!("[node_pattern] After parsing variable: {:?}, input='{}'", variable, input);
+            println!(
+                "[node_pattern] After parsing variable: {:?}, input='{}'",
+                variable, input
+            );
             let (input, label) = opt(preceded(char(':'), identifier))(input)?;
-            println!("[node_pattern] After parsing label: {:?}, input='{}'", label, input);
+            println!(
+                "[node_pattern] After parsing label: {:?}, input='{}'",
+                label, input
+            );
             let (input, _) = multispace0(input)?;
             let (input, properties) = opt(property_map)(input)?;
-            println!("[node_pattern] After parsing properties: {:?}, input='{}'", properties, input);
+            println!(
+                "[node_pattern] After parsing properties: {:?}, input='{}'",
+                properties, input
+            );
             let (input, _) = char(')')(input)?;
             println!("[node_pattern] After parsing ')': input='{}'", input);
             let result = NodePattern {
@@ -37,7 +46,7 @@ pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
             };
             println!("[node_pattern] EXIT: {:?}", result);
             Ok((input, result))
-        },
+        }
         Err(e) => {
             println!("[node_pattern] Failed to parse '(': {:?}", e);
             Err(e)
@@ -50,27 +59,45 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
     let (input, _) = char('[')(input)?;
     println!("After parsing '[': {}", input);
     let (input, variable) = opt(identifier)(input)?;
-    println!("After parsing variable: {:?}, remaining input: {}", variable, input);
-    
+    println!(
+        "After parsing variable: {:?}, remaining input: {}",
+        variable, input
+    );
+
     // Try to parse as variable length relationship first
-    let (input, rel_type_quantifier_optional) = if let Ok((input, (rel_type, quantifier, is_optional))) = variable_length_relationship(input) {
-        println!("Parsed as variable length relationship: {:?}, {:?}, optional: {}", rel_type, quantifier, is_optional);
-        (input, (Some(rel_type), Some(quantifier), is_optional))
-    } else {
-        // Fall back to regular relationship type
-        let (input, rel_type) = opt(relationship_type)(input)?;
-        println!("After parsing rel_type: {:?}, remaining input: {}", rel_type, input);
-        (input, (rel_type, None, false))
-    };
-    
+    let (input, rel_type_quantifier_optional) =
+        if let Ok((input, (rel_type, quantifier, is_optional))) =
+            variable_length_relationship(input)
+        {
+            println!(
+                "Parsed as variable length relationship: {:?}, {:?}, optional: {}",
+                rel_type, quantifier, is_optional
+            );
+            (input, (Some(rel_type), Some(quantifier), is_optional))
+        } else {
+            // Fall back to regular relationship type
+            let (input, rel_type) = opt(relationship_type)(input)?;
+            println!(
+                "After parsing rel_type: {:?}, remaining input: {}",
+                rel_type, input
+            );
+            (input, (rel_type, None, false))
+        };
+
     let (input, _) = multispace0(input)?;
     let (input, properties) = opt(property_map)(input)?;
-    println!("After parsing properties: {:?}, remaining input: {}", properties, input);
+    println!(
+        "After parsing properties: {:?}, remaining input: {}",
+        properties, input
+    );
     let (input, _) = char(']')(input)?;
     println!("After parsing ']': {}", input);
     let (input, length) = opt(length_range)(input)?;
-    println!("After parsing length: {:?}, remaining input: {}", length, input);
-    
+    println!(
+        "After parsing length: {:?}, remaining input: {}",
+        length, input
+    );
+
     // Create relationship details with initial direction
     let details = RelationshipDetails {
         variable: variable.map(|s| s.to_string()),
@@ -82,12 +109,12 @@ pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
         quantifier: rel_type_quantifier_optional.1,
         is_optional: rel_type_quantifier_optional.2,
     };
-    
+
     // For variable length relationships, ensure we can handle direction
     if details.quantifier.is_some() {
         println!("DEBUG: Variable length relationship detected in details");
     }
-    
+
     Ok((input, details))
 }
 
@@ -123,8 +150,14 @@ pub fn relationship_pattern(input: &str) -> IResult<&str, RelationshipPattern> {
     Ok((input, RelationshipPattern::Regular(details)))
 }
 
-pub fn pattern_element_sequence(input: &str, allow_qpp: bool) -> IResult<&str, Vec<PatternElement>> {
-    println!("[pattern_element_sequence] >>> ENTER: input='{}', allow_qpp={}", input, allow_qpp);
+pub fn pattern_element_sequence(
+    input: &str,
+    allow_qpp: bool,
+) -> IResult<&str, Vec<PatternElement>> {
+    println!(
+        "[pattern_element_sequence] >>> ENTER: input='{}', allow_qpp={}",
+        input, allow_qpp
+    );
     let mut elements = Vec::new();
     let mut current_input = input;
 
@@ -150,16 +183,25 @@ pub fn pattern_element_sequence(input: &str, allow_qpp: bool) -> IResult<&str, V
                 let after_paren = &current_input[idx + 1..];
                 let after_paren_trim = after_paren.trim_start();
                 if after_paren_trim.starts_with('{') {
-                    println!("[pattern_element_sequence] Detected QPP at input='{}'", current_input);
+                    println!(
+                        "[pattern_element_sequence] Detected QPP at input='{}'",
+                        current_input
+                    );
                     match quantified_path_pattern(current_input) {
                         Ok((after, pattern)) => {
-                            println!("[pattern_element_sequence] Parsed QPP: {:?}, after='{}'", pattern, after);
+                            println!(
+                                "[pattern_element_sequence] Parsed QPP: {:?}, after='{}'",
+                                pattern, after
+                            );
                             elements.push(pattern);
                             current_input = after;
                             continue;
-                        },
+                        }
                         Err(e) => {
-                            println!("[pattern_element_sequence] quantified_path_pattern failed: {:?}", e);
+                            println!(
+                                "[pattern_element_sequence] quantified_path_pattern failed: {:?}",
+                                e
+                            );
                             break;
                         }
                     }
@@ -169,7 +211,10 @@ pub fn pattern_element_sequence(input: &str, allow_qpp: bool) -> IResult<&str, V
         // Try to parse a node first
         match node_pattern(current_input) {
             Ok((rest, node)) => {
-                println!("[pattern_element_sequence] Parsed node: {:?}, rest='{}'", node, rest);
+                println!(
+                    "[pattern_element_sequence] Parsed node: {:?}, rest='{}'",
+                    node, rest
+                );
                 elements.push(PatternElement::Node(node));
                 current_input = rest;
             }
@@ -178,12 +223,18 @@ pub fn pattern_element_sequence(input: &str, allow_qpp: bool) -> IResult<&str, V
                 // If we can't parse a node, try to parse a relationship
                 match relationship_pattern(current_input) {
                     Ok((rest, rel)) => {
-                        println!("[pattern_element_sequence] Parsed relationship: {:?}, rest='{}'", rel, rest);
+                        println!(
+                            "[pattern_element_sequence] Parsed relationship: {:?}, rest='{}'",
+                            rel, rest
+                        );
                         elements.push(PatternElement::Relationship(rel));
                         current_input = rest;
                     }
                     Err(e) => {
-                        println!("[pattern_element_sequence] relationship_pattern failed: {:?}", e);
+                        println!(
+                            "[pattern_element_sequence] relationship_pattern failed: {:?}",
+                            e
+                        );
                         break;
                     }
                 }
@@ -191,21 +242,36 @@ pub fn pattern_element_sequence(input: &str, allow_qpp: bool) -> IResult<&str, V
         }
 
         // If we've reached the end of the input or a clause boundary, stop
-        if current_input.is_empty() || current_input.starts_with("WHERE") || current_input.starts_with("RETURN") {
+        if current_input.is_empty()
+            || current_input.starts_with("WHERE")
+            || current_input.starts_with("RETURN")
+        {
             break;
         }
     }
 
-    println!("[pattern_element_sequence] <<< EXIT: elements={:?}, input='{}'", elements, current_input);
+    println!(
+        "[pattern_element_sequence] <<< EXIT: elements={:?}, input='{}'",
+        elements, current_input
+    );
     Ok((current_input, elements))
 }
 
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
     println!("[match_element] ENTER: input='{}'", input);
-    let (input, path_var) = opt(terminated(identifier, tuple((multispace0, char('='), multispace0))))(input)?;
-    println!("[match_element] After path variable: {:?}, input='{}'", path_var, input);
+    let (input, path_var) = opt(terminated(
+        identifier,
+        tuple((multispace0, char('='), multispace0)),
+    ))(input)?;
+    println!(
+        "[match_element] After path variable: {:?}, input='{}'",
+        path_var, input
+    );
     let (input, pattern) = pattern_element_sequence(input, true)?;
-    println!("[match_element] After pattern_element_sequence: pattern={:?}, input='{}'", pattern, input);
+    println!(
+        "[match_element] After pattern_element_sequence: pattern={:?}, input='{}'",
+        pattern, input
+    );
     Ok((
         input,
         MatchElement {
@@ -221,10 +287,7 @@ pub fn pattern(input: &str) -> IResult<&str, Vec<PatternElement>> {
 
 pub fn path_variable(input: &str) -> IResult<&str, String> {
     println!("[path_variable] ENTER: input='{}'", input);
-    let (input, var) = terminated(
-        identifier,
-        tuple((multispace0, char('='), multispace0))
-    )(input)?;
+    let (input, var) = terminated(identifier, tuple((multispace0, char('='), multispace0)))(input)?;
     println!("[path_variable] EXIT: var='{}', input='{}'", var, input);
     Ok((input, var.to_string()))
 }
@@ -232,12 +295,18 @@ pub fn path_variable(input: &str) -> IResult<&str, String> {
 pub fn quantified_path_pattern(input: &str) -> IResult<&str, PatternElement> {
     println!("[quantified_path_pattern] >>> ENTER: input='{}'", input);
     let (input, _) = char('(')(input)?;
-    println!("[quantified_path_pattern] After opening parenthesis: input='{}'", input);
-    
+    println!(
+        "[quantified_path_pattern] After opening parenthesis: input='{}'",
+        input
+    );
+
     // Parse optional path variable using the new parser
     let (input, path_var) = opt(path_variable)(input)?;
-    println!("[quantified_path_pattern] After path variable: {:?}, input='{}'", path_var, input);
-    
+    println!(
+        "[quantified_path_pattern] After path variable: {:?}, input='{}'",
+        path_var, input
+    );
+
     // Find the matching closing parenthesis for the QPP
     let mut depth = 1;
     let mut idx = 0;
@@ -253,56 +322,93 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, PatternElement> {
         }
     }
     if depth != 0 {
-        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Char)));
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Char,
+        )));
     }
     let inner_pattern_str = &input[..idx];
-    let after_paren = &input[idx+1..];
-    println!("[quantified_path_pattern] Extracted inner pattern substring: '{}'", inner_pattern_str);
-    println!("[quantified_path_pattern] After closing parenthesis: '{}'", after_paren);
-    
+    let after_paren = &input[idx + 1..];
+    println!(
+        "[quantified_path_pattern] Extracted inner pattern substring: '{}'",
+        inner_pattern_str
+    );
+    println!(
+        "[quantified_path_pattern] After closing parenthesis: '{}'",
+        after_paren
+    );
+
     // Parse the inner pattern using the existing pattern_element_sequence function
     let (remaining_inner, mut inner_pattern) = pattern_element_sequence(inner_pattern_str, false)?;
-    println!("[quantified_path_pattern] Parsed inner pattern: {:?}", inner_pattern);
-    println!("[quantified_path_pattern] Remaining after inner pattern: '{}'", remaining_inner);
-    
+    println!(
+        "[quantified_path_pattern] Parsed inner pattern: {:?}",
+        inner_pattern
+    );
+    println!(
+        "[quantified_path_pattern] Remaining after inner pattern: '{}'",
+        remaining_inner
+    );
+
     // Strip quantifiers from relationships inside the QPP
     for element in &mut inner_pattern {
         if let PatternElement::Relationship(rel) = element {
             match rel {
-                RelationshipPattern::Regular(details) | RelationshipPattern::OptionalRelationship(details) => {
+                RelationshipPattern::Regular(details)
+                | RelationshipPattern::OptionalRelationship(details) => {
                     details.quantifier = None;
                 }
             }
         }
     }
-    
+
     // Parse optional WHERE clause using the where_clause parser, from remaining_inner
     let (where_input, where_clause) = if let Ok((rest, clause)) = where_clause(remaining_inner) {
-        println!("[quantified_path_pattern] Successfully parsed WHERE clause: {:?}", clause);
+        println!(
+            "[quantified_path_pattern] Successfully parsed WHERE clause: {:?}",
+            clause
+        );
         (rest, Some(clause))
     } else {
         (remaining_inner, None)
     };
-    println!("[quantified_path_pattern] After WHERE clause parsing: where_input='{}'", where_input);
-    
+    println!(
+        "[quantified_path_pattern] After WHERE clause parsing: where_input='{}'",
+        where_input
+    );
+
     // Now, where_input should be empty, and after_paren is the input after the closing parenthesis
     let mut input = after_paren;
     // Skip any whitespace between ) and {
     let (rest, _) = multispace0(input)?;
     input = rest;
     let (input, _) = char('{')(input)?;
-    println!("[quantified_path_pattern] After opening brace: input='{}'", input);
+    println!(
+        "[quantified_path_pattern] After opening brace: input='{}'",
+        input
+    );
     let (input, min) = digit1(input)?;
-    println!("[quantified_path_pattern] Parsed min: {}, input='{}'", min, input);
+    println!(
+        "[quantified_path_pattern] Parsed min: {}, input='{}'",
+        min, input
+    );
     let (input, _) = alt((tag(".."), tag(",")))(input)?;
-    println!("[quantified_path_pattern] After separator: input='{}'", input);
+    println!(
+        "[quantified_path_pattern] After separator: input='{}'",
+        input
+    );
     let (input, max) = digit1(input)?;
-    println!("[quantified_path_pattern] Parsed max: {}, input='{}'", max, input);
+    println!(
+        "[quantified_path_pattern] Parsed max: {}, input='{}'",
+        max, input
+    );
     let (input, _) = char('}')(input)?;
-    println!("[quantified_path_pattern] After closing brace: input='{}'", input);
+    println!(
+        "[quantified_path_pattern] After closing brace: input='{}'",
+        input
+    );
     let min = min.parse::<u32>().unwrap();
     let max = max.parse::<u32>().unwrap();
-    
+
     // Create the quantified pattern
     let quantified_pattern = QuantifiedPathPattern {
         pattern: inner_pattern,
@@ -311,8 +417,14 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, PatternElement> {
         where_clause,
         path_variable: path_var,
     };
-    println!("[quantified_path_pattern] <<< EXIT: {:?}", quantified_pattern);
-    Ok((input, PatternElement::QuantifiedPathPattern(quantified_pattern)))
+    println!(
+        "[quantified_path_pattern] <<< EXIT: {:?}",
+        quantified_pattern
+    );
+    Ok((
+        input,
+        PatternElement::QuantifiedPathPattern(quantified_pattern),
+    ))
 }
 
 #[cfg(test)]
@@ -444,7 +556,7 @@ mod tests {
             assert_eq!(qpp.min, Some(1));
             assert_eq!(qpp.max, Some(3));
             assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
-            // Verify that the relationship inside QPP doesn't have a quantifier
+                                              // Verify that the relationship inside QPP doesn't have a quantifier
             if let PatternElement::Relationship(rel) = &qpp.pattern[1] {
                 assert_eq!(rel.rel_type(), Some("KNOWS"));
                 assert!(rel.quantifier().is_none());
@@ -466,7 +578,7 @@ mod tests {
             assert_eq!(qpp.min, Some(1));
             assert_eq!(qpp.max, Some(3));
             assert_eq!(qpp.pattern.len(), 5); // Node, Relationship, Node, Relationship, Node
-            // Verify that relationships inside QPP don't have quantifiers
+                                              // Verify that relationships inside QPP don't have quantifiers
             if let PatternElement::Relationship(rel) = &qpp.pattern[1] {
                 assert_eq!(rel.rel_type(), Some("KNOWS"));
                 assert!(rel.quantifier().is_none());
@@ -547,7 +659,12 @@ mod tests {
             assert!(qpp.where_clause.is_some());
             if let Some(where_clause) = &qpp.where_clause {
                 assert_eq!(where_clause.conditions.len(), 1);
-                if let WhereCondition::Comparison { left, operator, right } = &where_clause.conditions[0] {
+                if let WhereCondition::Comparison {
+                    left,
+                    operator,
+                    right,
+                } = &where_clause.conditions[0]
+                {
                     assert_eq!(left, "a.name");
                     assert_eq!(operator, "=");
                     assert_eq!(right, "'Alice'");
@@ -582,7 +699,7 @@ mod tests {
             assert_eq!(qpp.min, Some(1));
             assert_eq!(qpp.max, Some(3));
             assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
-            // Verify that the relationship inside QPP has the correct direction
+                                              // Verify that the relationship inside QPP has the correct direction
             if let PatternElement::Relationship(rel) = &qpp.pattern[1] {
                 assert_eq!(rel.rel_type(), Some("KNOWS"));
                 assert_eq!(rel.direction(), Direction::Right);
@@ -605,7 +722,7 @@ mod tests {
             assert_eq!(qpp.min, Some(1));
             assert_eq!(qpp.max, Some(3));
             assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
-            // Verify that the relationship inside QPP has the correct direction
+                                              // Verify that the relationship inside QPP has the correct direction
             if let PatternElement::Relationship(rel) = &qpp.pattern[1] {
                 assert_eq!(rel.rel_type(), Some("KNOWS"));
                 assert_eq!(rel.direction(), Direction::Undirected);
