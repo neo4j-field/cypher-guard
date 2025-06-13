@@ -8,7 +8,7 @@ name = "cypher_guard"
 crate-type = ["cdylib"]
 
 [dependencies]
-cypher-guard = { path = "../cypher_guard" }
+cypher-guard = { path = "../cypher_guard", features = ["python-bindings"] }
 pyo3 = { workspace = true, features = ["extension-module"] }
 
 [build-dependencies]

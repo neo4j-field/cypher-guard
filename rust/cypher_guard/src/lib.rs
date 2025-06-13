@@ -1,6 +1,3 @@
-#[cfg(feature = "python-bindings")]
-use pyo3::prelude::*;
-
 mod errors;
 pub mod parser {
     pub mod ast;
@@ -12,7 +9,10 @@ pub mod parser {
 mod schema;
 
 use errors::CypherGuardError;
-pub use schema::{DbSchema, DbSchemaProperty, PropertyType};
+pub use schema::{
+    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
+    DbSchemaRelationshipPattern, PropertyType,
+};
 
 use parser::ast::*;
 use parser::clauses::*;
@@ -544,20 +544,126 @@ fn validate_where_clause(
                     if let Some(var_info) = ctx.var_types.get(var) {
                         match var_info {
                             VarInfo::Node { label } => {
-                                println!("DEBUG: Checking node property: {}.{}", label, prop);
-                                if !schema.has_node_property(label, prop) {
-                                    println!("DEBUG: Invalid node property");
-                                    return Ok(false);
+                                if let Some(prop_info) = schema.get_node_property(label, prop) {
+                                    // Check if the right-hand side literal matches the property type
+                                    let is_quoted = right.starts_with('\'')
+                                        && right.ends_with('\'')
+                                        && right.len() >= 2;
+                                    let unquoted = if is_quoted {
+                                        &right[1..right.len() - 1]
+                                    } else {
+                                        right.as_str()
+                                    };
+                                    match prop_info.neo4j_type {
+                                        PropertyType::STRING => {
+                                            if !is_quoted {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is STRING but got non-string literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::INTEGER => {
+                                            if is_quoted || unquoted.parse::<i64>().is_err() {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is INTEGER but got string or non-integer literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::FLOAT => {
+                                            if is_quoted || unquoted.parse::<f64>().is_err() {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
+                                                    prop
+                                            ));
+                                            }
+                                        }
+                                        PropertyType::BOOLEAN => {
+                                            if is_quoted
+                                                || !(unquoted == "true" || unquoted == "false")
+                                            {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::DATE_TIME => {
+                                            // Accept both quoted and unquoted for now, but could be stricter
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
+                                        }
+                                        PropertyType::POINT => {
+                                            // Not supported in WHERE for now
+                                        } // PropertyType::ENUM(_) => {
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
+                                        }
+                                    }
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
-                                println!(
-                                    "DEBUG: Checking relationship property: {}.{}",
-                                    rel_type, prop
-                                );
-                                if !schema.has_relationship_property(rel_type, prop) {
-                                    println!("DEBUG: Invalid relationship property");
-                                    return Ok(false);
+                                if let Some(prop_info) =
+                                    schema.get_relationship_property(rel_type, prop)
+                                {
+                                    let is_quoted = right.starts_with('\'')
+                                        && right.ends_with('\'')
+                                        && right.len() >= 2;
+                                    let unquoted = if is_quoted {
+                                        &right[1..right.len() - 1]
+                                    } else {
+                                        right.as_str()
+                                    };
+                                    match prop_info.neo4j_type {
+                                        PropertyType::STRING => {
+                                            if !is_quoted {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is STRING but got non-string literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::INTEGER => {
+                                            if is_quoted || unquoted.parse::<i64>().is_err() {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is INTEGER but got string or non-integer literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::FLOAT => {
+                                            if is_quoted || unquoted.parse::<f64>().is_err() {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
+                                                    prop
+                                            ));
+                                            }
+                                        }
+                                        PropertyType::BOOLEAN => {
+                                            if is_quoted
+                                                || !(unquoted == "true" || unquoted == "false")
+                                            {
+                                                ctx.errors.push(format!(
+                                                    "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
+                                                    prop
+                                                ));
+                                            }
+                                        }
+                                        PropertyType::DATE_TIME => {
+                                            // Accept both quoted and unquoted for now, but could be stricter
+                                            // TODO: Add stricter DATE_TIME literal validation if needed
+                                        }
+                                        PropertyType::POINT => {
+                                            // Not supported in WHERE for now
+                                        } // PropertyType::ENUM(_) => {
+                                        //     // Not supported in this check for now
+                                        // }
+                                        PropertyType::LIST => {
+                                            // Not supported in WHERE for now
+                                        }
+                                    }
                                 }
                             }
                             VarInfo::Path => {

@@ -26,7 +26,7 @@ def schema_json():
     },
     "rel_props": {
         "KNOWS": [
-            {"name": "since", "neo4j_type": {"type": "DATETIME"}}
+            {"name": "since", "neo4j_type": {"type": "DATE_TIME"}}
         ],
         "ACTED_IN": [
             {"name": "role", "neo4j_type": {"type": "STRING"}}
@@ -45,8 +45,8 @@ def schema_json():
         {"start": "Station", "end": "Station", "rel_type": "LINK"}
     ],
     "metadata": {
-        "indexes": [],
-        "constraints": []
+        "index": [],
+        "constraint": []
     }
 }
 '''

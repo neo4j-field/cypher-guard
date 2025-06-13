@@ -11,7 +11,7 @@ serde_json.workspace = true
 
 [features]
 default = []
-python-bindings = ["pyo3"]
+python-bindings = ["dep:pyo3"]
 
 [dependencies.pyo3]
 workspace = true
