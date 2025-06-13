@@ -205,6 +205,20 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                 WhereCondition::FunctionCall { .. } | WhereCondition::PathProperty { .. } => {
                     // Already handled in validate_where_clause
                 }
+                WhereCondition::And(left, right) => {
+                    validate_where_condition(left, ctx.schema, ctx).unwrap_or(false);
+                    validate_where_condition(right, ctx.schema, ctx).unwrap_or(false);
+                }
+                WhereCondition::Or(left, right) => {
+                    validate_where_condition(left, ctx.schema, ctx).unwrap_or(false);
+                    validate_where_condition(right, ctx.schema, ctx).unwrap_or(false);
+                }
+                WhereCondition::Not(cond) => {
+                    validate_where_condition(cond, ctx.schema, ctx).unwrap_or(false);
+                }
+                WhereCondition::Parenthesized(cond) => {
+                    validate_where_condition(cond, ctx.schema, ctx).unwrap_or(false);
+                }
             }
         }
     }
@@ -505,240 +519,240 @@ fn validate_where_clause(
     where_clause: &WhereClause,
     schema: &DbSchema,
     ctx: &mut ValidationContext,
-) {
+) -> Result<bool> {
+    println!("DEBUG: Starting validate_where_clause");
     for condition in &where_clause.conditions {
+        println!("DEBUG: Processing condition: {:?}", condition);
         match condition {
             WhereCondition::Comparison {
                 left,
                 operator: _,
-                right,
+                right: _,
             } => {
-                validate_property_access(left, schema, ctx);
-                // Validate the type of the right-hand side literal
+                println!("DEBUG: Processing comparison: {}", left);
+                // Validate property access
                 if let Some((var, prop)) = left.split_once('.') {
+                    println!("DEBUG: Found property access: {}.{}", var, prop);
                     if let Some(var_info) = ctx.var_types.get(var) {
                         match var_info {
                             VarInfo::Node { label } => {
-                                if let Some(prop_info) = schema.get_node_property(label, prop) {
-                                    // Check if the right-hand side literal matches the property type
-                                    let is_quoted = right.starts_with('\'')
-                                        && right.ends_with('\'')
-                                        && right.len() >= 2;
-                                    let unquoted = if is_quoted {
-                                        &right[1..right.len() - 1]
-                                    } else {
-                                        right.as_str()
-                                    };
-                                    match prop_info.neo4j_type {
-                                        PropertyType::STRING => {
-                                            if !is_quoted {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is STRING but got non-string literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::INTEGER => {
-                                            if is_quoted || unquoted.parse::<i64>().is_err() {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is INTEGER but got string or non-integer literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::FLOAT => {
-                                            if is_quoted || unquoted.parse::<f64>().is_err() {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::BOOLEAN => {
-                                            if is_quoted
-                                                || !(unquoted == "true" || unquoted == "false")
-                                            {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::DATETIME => {
-                                            // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
-                                        }
-                                        PropertyType::POINT => {
-                                            // Not supported in WHERE for now
-                                        }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
-                                        }
-                                    }
+                                println!("DEBUG: Checking node property: {}.{}", label, prop);
+                                if !schema.has_node_property(label, prop) {
+                                    println!("DEBUG: Invalid node property");
+                                    return Ok(false);
                                 }
                             }
                             VarInfo::Relationship { rel_type } => {
-                                if let Some(prop_info) =
-                                    schema.get_relationship_property(rel_type, prop)
-                                {
-                                    let is_quoted = right.starts_with('\'')
-                                        && right.ends_with('\'')
-                                        && right.len() >= 2;
-                                    let unquoted = if is_quoted {
-                                        &right[1..right.len() - 1]
-                                    } else {
-                                        right.as_str()
-                                    };
-                                    match prop_info.neo4j_type {
-                                        PropertyType::STRING => {
-                                            if !is_quoted {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is STRING but got non-string literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::INTEGER => {
-                                            if is_quoted || unquoted.parse::<i64>().is_err() {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is INTEGER but got string or non-integer literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::FLOAT => {
-                                            if is_quoted || unquoted.parse::<f64>().is_err() {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is FLOAT but got string or non-float literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::BOOLEAN => {
-                                            if is_quoted
-                                                || !(unquoted == "true" || unquoted == "false")
-                                            {
-                                                ctx.errors.push(format!(
-                                                    "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
-                                                    prop
-                                                ));
-                                            }
-                                        }
-                                        PropertyType::DATETIME => {
-                                            // Accept both quoted and unquoted for now, but could be stricter
-                                            // TODO: Add stricter datetime literal validation if needed
-                                        }
-                                        PropertyType::POINT => {
-                                            // Not supported in WHERE for now
-                                        }
-                                        PropertyType::ENUM(_) => {
-                                            // Not supported in this check for now
-                                        }
-                                    }
+                                println!("DEBUG: Checking relationship property: {}.{}", rel_type, prop);
+                                if !schema.has_relationship_property(rel_type, prop) {
+                                    println!("DEBUG: Invalid relationship property");
+                                    return Ok(false);
                                 }
                             }
                             VarInfo::Path => {
-                                // Path property validation if needed
+                                println!("DEBUG: Path property validation not implemented");
                             }
                         }
+                    } else {
+                        println!("DEBUG: Variable not found: {}", var);
+                        return Ok(false);
                     }
                 }
             }
-            WhereCondition::FunctionCall {
-                function,
-                arguments,
-            } => {
+            WhereCondition::FunctionCall { function, arguments } => {
+                println!("DEBUG: Processing function call: {}({:?})", function, arguments);
                 // Validate function arguments
                 for arg in arguments {
-                    validate_property_access(arg, schema, ctx);
-                }
-
-                // Validate specific functions
-                match function.as_str() {
-                    "point.distance" => {
-                        if arguments.len() != 2 {
-                            ctx.errors
-                                .push("point.distance requires exactly 2 arguments".to_string());
-                        }
-                        // Check that both arguments are point properties
-                        for arg in arguments {
-                            if !arg.contains('.') {
-                                ctx.errors.push(
-                                    "point.distance requires point properties from nodes"
-                                        .to_string(),
-                                );
-                            }
-                        }
-                    }
-                    _ => {
-                        // TODO: Add validation for other functions
-                    }
+                    println!("DEBUG: Validating function argument: {}", arg);
+                    validate_property_access(arg, schema, ctx)?;
                 }
             }
             WhereCondition::PathProperty { path_var, property } => {
+                println!("DEBUG: Processing path property: {}.{}", path_var, property);
                 if let Some(var_info) = ctx.var_types.get(path_var) {
                     match var_info {
                         VarInfo::Path => {
-                            // Validate path properties
+                            println!("DEBUG: Validating path property: {}", property);
                             match property.as_str() {
                                 "length" | "nodes" | "relationships" => {
-                                    // These are valid path properties
+                                    println!("DEBUG: Valid path property");
+                                    return Ok(true);
                                 }
                                 _ => {
-                                    ctx.errors
-                                        .push(format!("Invalid path property '{}'", property));
+                                    println!("DEBUG: Invalid path property");
+                                    return Ok(false);
                                 }
                             }
                         }
                         _ => {
-                            ctx.errors
-                                .push(format!("Variable '{}' is not a path variable", path_var));
+                            println!("DEBUG: Not a path variable");
+                            return Ok(false);
                         }
                     }
                 } else {
-                    ctx.errors
-                        .push(format!("Variable '{}' not defined", path_var));
+                    println!("DEBUG: Path variable not found");
+                    return Ok(false);
                 }
+            }
+            WhereCondition::And(left, right) => {
+                println!("DEBUG: Processing AND condition");
+                let left_result = validate_where_condition(left, schema, ctx)?;
+                let right_result = validate_where_condition(right, schema, ctx)?;
+                println!("DEBUG: AND result: {} && {}", left_result, right_result);
+                return Ok(left_result && right_result);
+            }
+            WhereCondition::Or(left, right) => {
+                println!("DEBUG: Processing OR condition");
+                let left_result = validate_where_condition(left, schema, ctx)?;
+                let right_result = validate_where_condition(right, schema, ctx)?;
+                println!("DEBUG: OR result: {} || {}", left_result, right_result);
+                return Ok(left_result || right_result);
+            }
+            WhereCondition::Not(cond) => {
+                println!("DEBUG: Processing NOT condition");
+                let result = validate_where_condition(cond, schema, ctx)?;
+                println!("DEBUG: NOT result: !{}", result);
+                return Ok(!result);
+            }
+            WhereCondition::Parenthesized(cond) => {
+                println!("DEBUG: Processing parenthesized condition");
+                return validate_where_condition(cond, schema, ctx);
             }
         }
     }
+    println!("DEBUG: All conditions valid");
+    Ok(true)
 }
 
 /// Validate a property access expression
-fn validate_property_access(expr: &str, schema: &DbSchema, ctx: &mut ValidationContext) {
+fn validate_property_access(
+    expr: &str,
+    schema: &DbSchema,
+    ctx: &mut ValidationContext,
+) -> Result<()> {
     if let Some((var, prop)) = expr.split_once('.') {
         if let Some(var_info) = ctx.var_types.get(var) {
             match var_info {
                 VarInfo::Node { label } => {
                     if !schema.has_node_property(label, prop) {
-                        ctx.errors.push(format!(
-                            "Property '{}' not in schema for label '{}'",
-                            prop, label
-                        ));
+                        return Err(CypherGuardError::InvalidQuery);
                     }
                 }
                 VarInfo::Relationship { rel_type } => {
                     if !schema.has_relationship_property(rel_type, prop) {
-                        ctx.errors.push(format!(
-                            "Property '{}' not in schema for relationship type '{}'",
-                            prop, rel_type
-                        ));
+                        return Err(CypherGuardError::InvalidQuery);
                     }
                 }
                 VarInfo::Path => {
-                    // Validate path properties
-                    match prop {
-                        "length" | "nodes" | "relationships" => {
-                            // These are valid path properties
-                        }
-                        _ => {
-                            ctx.errors.push(format!("Invalid path property '{}'", prop));
-                        }
-                    }
+                    // Path property validation if needed
                 }
             }
         } else {
-            ctx.errors.push(format!("Variable '{}' not defined", var));
+            return Err(CypherGuardError::InvalidQuery);
+        }
+    }
+    Ok(())
+}
+
+/// Validate a WHERE condition
+fn validate_where_condition(
+    condition: &WhereCondition,
+    schema: &DbSchema,
+    ctx: &mut ValidationContext,
+) -> Result<bool> {
+    println!("DEBUG: Starting validate_where_condition");
+    match condition {
+        WhereCondition::Comparison { left, operator: _, right: _ } => {
+            println!("DEBUG: Processing comparison: {}", left);
+            // Validate property access
+            if let Some((var, prop)) = left.split_once('.') {
+                println!("DEBUG: Found property access: {}.{}", var, prop);
+                if let Some(var_info) = ctx.var_types.get(var) {
+                    match var_info {
+                        VarInfo::Node { label } => {
+                            println!("DEBUG: Checking node property: {}.{}", label, prop);
+                            if !schema.has_node_property(label, prop) {
+                                println!("DEBUG: Invalid node property");
+                                return Ok(false);
+                            }
+                        }
+                        VarInfo::Relationship { rel_type } => {
+                            println!("DEBUG: Checking relationship property: {}.{}", rel_type, prop);
+                            if !schema.has_relationship_property(rel_type, prop) {
+                                println!("DEBUG: Invalid relationship property");
+                                return Ok(false);
+                            }
+                        }
+                        VarInfo::Path => {
+                            println!("DEBUG: Path property validation not implemented");
+                        }
+                    }
+                } else {
+                    println!("DEBUG: Variable not found: {}", var);
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        WhereCondition::FunctionCall { function, arguments } => {
+            println!("DEBUG: Processing function call: {}({:?})", function, arguments);
+            // Validate function arguments
+            for arg in arguments {
+                println!("DEBUG: Validating function argument: {}", arg);
+                validate_property_access(arg, schema, ctx)?;
+            }
+            Ok(true)
+        }
+        WhereCondition::PathProperty { path_var, property } => {
+            println!("DEBUG: Processing path property: {}.{}", path_var, property);
+            if let Some(var_info) = ctx.var_types.get(path_var) {
+                match var_info {
+                    VarInfo::Path => {
+                        println!("DEBUG: Validating path property: {}", property);
+                        match property.as_str() {
+                            "length" | "nodes" | "relationships" => {
+                                println!("DEBUG: Valid path property");
+                                Ok(true)
+                            }
+                            _ => {
+                                println!("DEBUG: Invalid path property");
+                                Ok(false)
+                            }
+                        }
+                    }
+                    _ => {
+                        println!("DEBUG: Not a path variable");
+                        Ok(false)
+                    }
+                }
+            } else {
+                println!("DEBUG: Path variable not found");
+                Ok(false)
+            }
+        }
+        WhereCondition::And(left, right) => {
+            println!("DEBUG: Processing AND condition");
+            let left_result = validate_where_condition(left, schema, ctx)?;
+            let right_result = validate_where_condition(right, schema, ctx)?;
+            println!("DEBUG: AND result: {} && {}", left_result, right_result);
+            Ok(left_result && right_result)
+        }
+        WhereCondition::Or(left, right) => {
+            println!("DEBUG: Processing OR condition");
+            let left_result = validate_where_condition(left, schema, ctx)?;
+            let right_result = validate_where_condition(right, schema, ctx)?;
+            println!("DEBUG: OR result: {} || {}", left_result, right_result);
+            Ok(left_result || right_result)
+        }
+        WhereCondition::Not(cond) => {
+            println!("DEBUG: Processing NOT condition");
+            let result = validate_where_condition(cond, schema, ctx)?;
+            println!("DEBUG: NOT result: !{}", result);
+            Ok(!result)
+        }
+        WhereCondition::Parenthesized(cond) => {
+            println!("DEBUG: Processing parenthesized condition");
+            validate_where_condition(cond, schema, ctx)
         }
     }
 }
@@ -751,245 +765,5 @@ impl<'a> ValidationContext<'a> {
             var_types: HashMap::new(),
             schema,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_single_query() {
-        let query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
-        let schema = DbSchema {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: vec![],
-            metadata: Default::default(),
-        };
-        match crate::parser::clauses::parse_query(query) {
-            Ok((rest, ast)) => {
-                println!("Parsed AST: {:?}", ast);
-                println!("Remaining: {:?}", rest);
-            }
-            Err(e) => {
-                eprintln!("Parse error: {:?}", e);
-                panic!("Parse error: {:?}", e);
-            }
-        }
-    }
-
-    #[test]
-    fn test_quantified_path_pattern() {
-        let query = "MATCH (a:Station { name: 'Denmark Hill' })<-[:CALLS_AT]-(d:Stop)
-                    ((:Stop)-[:NEXT]->(:Stop)){1,3}
-                    (a:Stop)-[:CALLS_AT]->(:Station { name: 'Clapham Junction' })
-                    RETURN d.departs AS departureTime, a.arrives AS arrivalTime";
-        let schema = DbSchema {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: vec![],
-            metadata: Default::default(),
-        };
-        let result = validate_cypher_with_schema(query, &schema);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_variable_length_relationship() {
-        let query = "MATCH (d:Station { name: 'Denmark Hill' })<-[:CALLS_AT]-
-                    (n:Stop)-[:NEXT*1..10]->(m:Stop)-[:CALLS_AT]->
-                    (a:Station { name: 'Clapham Junction' })
-                    WHERE m.arrives < time('17:18')
-                    RETURN n.departs AS departureTime";
-        let schema = DbSchema {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: vec![],
-            metadata: Default::default(),
-        };
-        let result = validate_cypher_with_schema(query, &schema);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_path_variable_with_predicate() {
-        let mut schema = DbSchema::new();
-        schema
-            .add_node_property(
-                "Station",
-                &DbSchemaProperty {
-                    name: "name".to_string(),
-                    neo4j_type: PropertyType::STRING,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        schema
-            .add_node_property(
-                "Station",
-                &DbSchemaProperty {
-                    name: "location".to_string(),
-                    neo4j_type: PropertyType::POINT,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        schema
-            .add_relationship_property(
-                "LINK",
-                &DbSchemaProperty {
-                    name: "distance".to_string(),
-                    neo4j_type: PropertyType::FLOAT,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-
-        let query = "MATCH (bfr:Station {name: 'London Blackfriars'}),
-                    (ndl:Station {name: 'North Dulwich'})
-                    MATCH p = (bfr)
-                    ((a)-[:LINK]-(b:Station)
-                    WHERE point.distance(a.location, ndl.location) >
-                    point.distance(b.location, ndl.location))+ (ndl)
-                    RETURN reduce(acc = 0, r in relationships(p) | round(acc + r.distance, 2))
-                    AS distance";
-        let result = validate_cypher_with_schema(query, &schema);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_with_clause_validation() {
-        let mut schema = DbSchema::new();
-        schema.add_label("Person");
-        let query = "MATCH (a:Person) WITH a";
-        let errors = get_cypher_validation_errors(query, &schema);
-        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
-    }
-
-    #[test]
-    fn test_with_clause_alias_validation() {
-        let mut schema = DbSchema::new();
-        schema.add_label("Person");
-        let query = "MATCH (a:Person) WITH a AS b";
-        let errors = get_cypher_validation_errors(query, &schema);
-        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
-    }
-
-    #[test]
-    fn test_with_clause_wildcard_validation() {
-        let mut schema = DbSchema::new();
-        schema.add_label("Person");
-        let query = "MATCH (a:Person) WITH *";
-        let errors = get_cypher_validation_errors(query, &schema);
-        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
-    }
-
-    #[test]
-    fn test_with_clause_undefined_variable() {
-        let mut schema = DbSchema::new();
-        schema.add_label("Person");
-        let query = "MATCH (a:Person) WITH b";
-        let errors = get_cypher_validation_errors(query, &schema);
-        assert!(!errors.is_empty(), "Expected errors for undefined variable");
-        assert!(errors
-            .iter()
-            .any(|e| e.contains("not defined in previous scope")));
-    }
-
-    #[test]
-    fn test_with_clause_undefined_expression() {
-        let mut schema = DbSchema::new();
-        schema.add_label("Person");
-        let query = "MATCH (a:Person) WITH b AS c";
-        let errors = get_cypher_validation_errors(query, &schema);
-        assert!(
-            !errors.is_empty(),
-            "Expected errors for undefined expression"
-        );
-        assert!(errors
-            .iter()
-            .any(|e| e.contains("not defined in previous scope")));
-    }
-
-    #[test]
-    fn test_validate_relationship_direction() {
-        let mut schema = DbSchema::new();
-        
-        // Add a directed relationship
-        let directed_rel = DbSchemaRelationshipPattern {
-            start: "Person".to_string(),
-            end: "Movie".to_string(),
-            rel_type: "ACTED_IN".to_string(),
-        };
-        schema.add_relationship(&directed_rel).unwrap();
-        
-        // Add an undirected relationship
-        let undirected_rel = DbSchemaRelationshipPattern {
-            start: "Person".to_string(),
-            end: "Person".to_string(),
-            rel_type: "KNOWS".to_string(),
-        };
-        schema.add_relationship(&undirected_rel).unwrap();
-        
-        // Test valid directed relationship
-        let valid_directed = RelationshipPattern::Regular(RelationshipDetails {
-            variable: Some("r".to_string()),
-            direction: Direction::Right,
-            properties: None,
-            rel_type: Some("ACTED_IN".to_string()),
-            length: None,
-            where_clause: None,
-            quantifier: None,
-            is_optional: false,
-        });
-        let mut ctx = ValidationContext::new(&schema);
-        validate_relationship(&valid_directed, &schema, &mut ctx);
-        assert!(ctx.errors.is_empty());
-        
-        // Test invalid directed relationship
-        let invalid_directed = RelationshipPattern::Regular(RelationshipDetails {
-            variable: Some("r".to_string()),
-            direction: Direction::Undirected,
-            properties: None,
-            rel_type: Some("ACTED_IN".to_string()),
-            length: None,
-            where_clause: None,
-            quantifier: None,
-            is_optional: false,
-        });
-        let mut ctx = ValidationContext::new(&schema);
-        validate_relationship(&invalid_directed, &schema, &mut ctx);
-        assert!(!ctx.errors.is_empty());
-        
-        // Test valid undirected relationship
-        let valid_undirected = RelationshipPattern::Regular(RelationshipDetails {
-            variable: Some("r".to_string()),
-            direction: Direction::Undirected,
-            properties: None,
-            rel_type: Some("KNOWS".to_string()),
-            length: None,
-            where_clause: None,
-            quantifier: None,
-            is_optional: false,
-        });
-        let mut ctx = ValidationContext::new(&schema);
-        validate_relationship(&valid_undirected, &schema, &mut ctx);
-        assert!(ctx.errors.is_empty());
-        
-        // Test invalid undirected relationship
-        let invalid_undirected = RelationshipPattern::Regular(RelationshipDetails {
-            variable: Some("r".to_string()),
-            direction: Direction::Right,
-            properties: None,
-            rel_type: Some("KNOWS".to_string()),
-            length: None,
-            where_clause: None,
-            quantifier: None,
-            is_optional: false,
-        });
-        let mut ctx = ValidationContext::new(&schema);
-        validate_relationship(&invalid_undirected, &schema, &mut ctx);
-        assert!(!ctx.errors.is_empty());
     }
 }

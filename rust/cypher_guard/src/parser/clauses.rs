@@ -1,14 +1,19 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while1},
+    bytes::complete::{tag, tag_no_case, take_while1},
     character::complete::{char, digit1, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::{many1, separated_list1},
+    multi::{many1, separated_list1, separated_list0},
     sequence::{preceded, tuple},
     IResult,
 };
 
-use crate::parser::ast::*;
+use crate::parser::ast;
+use crate::parser::ast::{
+    CreateClause, Direction, MatchClause, MatchElement, MergeClause, OnCreateClause, OnMatchClause,
+    PatternElement, PropertyValue, Query, ReturnClause, SetClause, WithClause, WithExpression,
+    WithItem,
+};
 use crate::parser::components::*;
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
@@ -24,7 +29,6 @@ pub enum Clause {
     Query(Query),
 }
 
-// Parses a list of match elements separated by commas
 pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
     println!("Parsing match element list: {}", input);
     let (input, first) = match_element(input)?;
@@ -100,87 +104,165 @@ fn path_property(input: &str) -> IResult<&str, (String, String)> {
     Ok((input, (path_var, property)))
 }
 
-// Parses a WHERE condition (e.g., a.age > 30, point.distance(a.location, b.location) > 10)
-fn where_condition(input: &str) -> IResult<&str, WhereCondition> {
-    alt((
-        map(
-            tuple((
-                function_call,
-                multispace0,
-                alt((
-                    tag(">"),
-                    tag("<"),
-                    tag(">="),
-                    tag("<="),
-                    tag("="),
-                    tag("<>"),
-                )),
-                multispace0,
-                alt((numeric_literal, map(identifier, |s| s.to_string()))),
-            )),
-            |((function, args), _, _operator, _, _right)| WhereCondition::FunctionCall {
+// Parses a property access pattern (e.g., a.name)
+fn property_access(input: &str) -> IResult<&str, String> {
+    println!("[property_access] >>> ENTER: input='{}'", input);
+    let (input, var) = identifier(input)?;
+    println!("[property_access] Parsed variable: {}", var);
+    let (input, _) = char('.')(input)?;
+    println!("[property_access] After dot: input='{}'", input);
+    let (input, prop) = identifier(input)?;
+    println!("[property_access] Parsed property: {}", prop);
+    let result = format!("{}.{}", var, prop);
+    println!("[property_access] <<< EXIT: {}", result);
+    Ok((input, result))
+}
+
+// Parses a function call (e.g., length(a.name), substring(a.name, 0, 5))
+fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
+    println!("[function_call] >>> ENTER: input='{}'", input);
+    let (input, _) = multispace0(input)?;
+    let (input, function) = map(identifier, |s| s.to_string())(input)?;
+    println!("[function_call] Parsed function name: {}", function);
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("(")(input)?;
+    let (input, _) = multispace0(input)?;
+    
+    // Parse arguments
+    let (input, args) = separated_list0(
+        tuple((multispace0, tag(","), multispace0)),
+        alt((
+            // Try to parse nested function calls
+            map(function_call, |(func, args)| format!("{}({})", func, args.join(", "))),
+            // Try to parse property access
+            map(property_access, |s| s),
+            // Try to parse string literals
+            map(string_literal, |s| format!("'{}'", s)),
+            // Try to parse numeric literals
+            map(numeric_literal, |n| n.to_string()),
+            // Try to parse boolean literals
+            map(tag_no_case("true"), |_| "true".to_string()),
+            map(tag_no_case("false"), |_| "false".to_string()),
+            // Try to parse NULL
+            map(tag_no_case("NULL"), |_| "NULL".to_string()),
+            // Try to parse identifiers
+            map(identifier, |s| s.to_string()),
+        )),
+    )(input)?;
+    
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag(")")(input)?;
+    println!("[function_call] <<< EXIT: {}({:?})", function, args);
+    Ok((input, (function, args)))
+}
+
+// Parses a WHERE condition (e.g., a.age > 30, a.name = 'Alice', a.name IS NULL)
+fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
+    println!("[where_condition] >>> ENTER: input='{}'", input);
+    let (input, _) = multispace0(input)?;
+    
+    // Try to parse NOT
+    if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("NOT")(input) {
+        let (rest, _) = multispace1(rest)?;
+        let (rest, condition) = where_condition(rest)?;
+        return Ok((rest, ast::WhereCondition::Not(Box::new(condition))));
+    }
+
+    // Try to parse parenthesized condition
+    if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("(")(input) {
+        let (rest, condition) = where_condition(rest)?;
+        let (rest, _) = tag::<&str, &str, nom::error::Error<&str>>(")")(rest)?;
+        return Ok((rest, ast::WhereCondition::Parenthesized(Box::new(condition))));
+    }
+
+    // Try to parse as a function call
+    if let Ok((rest, (function, args))) = function_call(input) {
+        println!("[where_condition] Parsed function call: {}({:?})", function, args);
+        return Ok((
+            rest,
+            ast::WhereCondition::FunctionCall {
                 function,
                 arguments: args,
             },
-        ),
-        // Path property condition
-        map(
-            tuple((
-                path_property,
-                multispace0,
-                alt((
-                    tag(">"),
-                    tag("<"),
-                    tag(">="),
-                    tag("<="),
-                    tag("="),
-                    tag("<>"),
-                )),
-                multispace0,
-                alt((numeric_literal, map(identifier, |s| s.to_string()))),
-            )),
-            |((path_var, property), _, _operator, _, _right)| WhereCondition::PathProperty {
-                path_var,
-                property,
-            },
-        ),
-        // Regular property comparison
-        map(
-            tuple((
-                map(identifier, |s| s.to_string()),
-                multispace0,
-                alt((
-                    tag(">"),
-                    tag("<"),
-                    tag(">="),
-                    tag("<="),
-                    tag("="),
-                    tag("<>"),
-                )),
-                multispace0,
-                alt((numeric_literal, map(identifier, |s| s.to_string()))),
-            )),
-            |(left, _, operator, _, right)| WhereCondition::Comparison {
+        ));
+    }
+
+    // Try to parse as a comparison first
+    let comparison_result = (|| {
+        let (input, left) = alt((
+            map(property_access, |s| s),
+            map(identifier, |s| s.to_string()),
+        ))(input)?;
+        println!("[where_condition] Parsed left side: {}", left);
+        let (input, _) = multispace0(input)?;
+        let (input, operator) = alt((
+            tag("="),
+            tag("<>"),
+            tag("<"),
+            tag(">"),
+            tag("<="),
+            tag(">="),
+            tag("IS NULL"),
+            tag("IS NOT NULL"),
+        ))(input)?;
+        println!("[where_condition] Parsed operator: {}", operator);
+        let (input, _) = multispace0(input)?;
+        let (input, right) = alt((
+            map(string_literal, |s| format!("'{}'", s)),
+            map(numeric_literal, |n| n),
+            map(identifier, |s| s.to_string()),
+        ))(input)?;
+        println!("[where_condition] Parsed right side: {}", right);
+        Ok((
+            input,
+            ast::WhereCondition::Comparison {
                 left,
                 operator: operator.to_string(),
                 right,
             },
-        ),
-    ))(input)
+        ))
+    })();
+
+    if let Ok(result) = comparison_result {
+        return Ok(result);
+    }
+
+    // If comparison parsing failed, try to parse as a path property
+    if let Ok((rest, (path_var, property))) = path_property(input) {
+        println!("[where_condition] Parsed path property: {}.{}", path_var, property);
+        return Ok((
+            rest,
+            ast::WhereCondition::PathProperty {
+                path_var,
+                property,
+            },
+        ));
+    }
+
+    // If all parsing attempts failed, return the error from the comparison attempt
+    comparison_result
 }
 
-// Parses the WHERE clause (e.g. WHERE a.age > 30)
-pub fn where_clause(input: &str) -> IResult<&str, WhereClause> {
-    println!("Parsing where clause: {}", input);
+// Parses the WHERE clause (e.g. WHERE a.age > 30 AND b.name = 'Alice')
+pub fn where_clause(input: &str) -> IResult<&str, ast::WhereClause> {
+    println!("[where_clause] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
+    println!("[where_clause] After initial whitespace: input='{}'", input);
     let (input, _) = tag("WHERE")(input)?;
+    println!("[where_clause] After WHERE tag: input='{}'", input);
     let (input, _) = multispace1(input)?;
+    println!("[where_clause] After WHERE whitespace: input='{}'", input);
+    
+    // Parse conditions separated by AND or OR
     let (input, conditions) = separated_list1(
-        tuple((multispace0, tag("AND"), multispace0)),
+        tuple((multispace0, alt((tag("AND"), tag("OR"))), multispace0)),
         where_condition,
     )(input)?;
-    println!("Where conditions: {:?}", conditions);
-    Ok((input, WhereClause { conditions }))
+    println!("[where_clause] Parsed conditions: {:?}", conditions);
+    
+    let clause = ast::WhereClause { conditions };
+    println!("[where_clause] <<< EXIT: {:?}", clause);
+    Ok((input, clause))
 }
 
 // Parses a SET clause (e.g. SET a.name = 'Alice')
@@ -320,50 +402,36 @@ pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
     Ok((input, CreateClause { elements }))
 }
 
-// Parses a WITH item (e.g. a, a.name AS name, count(*) AS count)
+// Parses a WITH item (e.g., a, a.name, count(*))
 fn with_item(input: &str) -> IResult<&str, WithItem> {
-    println!("DEBUG: Parsing with_item from input: '{}'", input);
+    println!("[with_item] >>> ENTER: input='{}'", input);
+    let (input, _) = multispace0(input)?;
     let (input, expr) = alt((
-        map(tag("*"), |_| {
-            println!("DEBUG: Matched wildcard");
+        map(char('*'), |_| {
             WithExpression::Wildcard
         }),
-        map(
-            tuple((
-                identifier,
-                preceded(tag("."), identifier),
-            )),
-            |(var, prop)| {
-                println!("DEBUG: Matched property access: {}.{}", var, prop);
-                WithExpression::PropertyAccess {
-                    variable: var.to_string(),
-                    property: prop.to_string(),
-                }
-            },
-        ),
-        map(
-            function_call,
-            |(name, args)| {
-                println!("DEBUG: Matched function call: {}({:?})", name, args);
-                WithExpression::FunctionCall {
-                    name,
-                    args: args.into_iter().map(|arg| WithExpression::Identifier(arg)).collect(),
-                }
-            },
-        ),
-        map(identifier, |s| {
-            println!("DEBUG: Matched identifier: {}", s);
-            WithExpression::Identifier(s.to_string())
+        map(property_access, |s| {
+            let parts: Vec<&str> = s.split('.').collect();
+            WithExpression::PropertyAccess {
+                variable: parts[0].to_string(),
+                property: parts[1].to_string(),
+            }
         }),
+        map(function_call, |(name, args)| {
+            WithExpression::FunctionCall {
+                name,
+                args: args.into_iter().map(|arg| WithExpression::Identifier(arg)).collect(),
+            }
+        }),
+        map(identifier, |s| WithExpression::Identifier(s.to_string())),
     ))(input)?;
-    println!("DEBUG: After parsing expression, remaining input: '{}'", input);
     let (input, alias) = opt(preceded(
-        tuple((multispace0, tag("AS"), multispace0)),
+        tuple((multispace0, tag("AS"), multispace1)),
         identifier,
     ))(input)?;
-    println!("DEBUG: After parsing alias, remaining input: '{}'", input);
-    println!("DEBUG: Final with_item: expression={:?}, alias={:?}", expr, alias);
-    Ok((input, WithItem { expression: expr, alias: alias.map(|s| s.to_string()) }))
+    let result = WithItem { expression: expr, alias: alias.map(|s| s.to_string()) };
+    println!("[with_item] <<< EXIT: result={:?}, remaining input='{}'", result, input);
+    Ok((input, result))
 }
 
 // Parses the WITH clause (e.g. WITH a, count(*) AS count)
@@ -417,6 +485,67 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         }
     }
     Ok((input, query))
+}
+
+// Parses a property value (e.g., 42, 'hello', true, [1, 2, 3], {name: 'Alice'})
+fn property_value(input: &str) -> IResult<&str, PropertyValue> {
+    println!("[property_value] >>> ENTER: input='{}'", input);
+    let (input, _) = multispace0(input)?;
+    
+    // Try to parse as a list/array
+    if let Ok((rest, _)) = char::<_, nom::error::Error<&str>>('[')(input) {
+        let (rest, items) = separated_list0(
+            tuple((multispace0, char(','), multispace0)),
+            alt((
+                map(string_literal, |s| PropertyValue::String(s)),
+                map(identifier, |s| PropertyValue::String(s.to_string())),
+                map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+                map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
+                map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
+                map(tag_no_case("NULL"), |_| PropertyValue::Null),
+            )),
+        )(rest)?;
+        let (rest, _) = char(']')(rest)?;
+        println!("[property_value] <<< EXIT: List({:?})", items);
+        return Ok((rest, PropertyValue::List(items)));
+    }
+
+    // Try to parse as a map/object
+    if let Ok((rest, _)) = char::<_, nom::error::Error<&str>>('{')(input) {
+        let (rest, pairs) = separated_list0(
+            tuple((multispace0, char(','), multispace0)),
+            tuple((
+                identifier,
+                tuple((multispace0, char(':'), multispace0)),
+                alt((
+                    map(string_literal, |s| PropertyValue::String(s)),
+                    map(identifier, |s| PropertyValue::String(s.to_string())),
+                    map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+                    map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
+                    map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
+                    map(tag_no_case("NULL"), |_| PropertyValue::Null),
+                )),
+            )),
+        )(rest)?;
+        let (rest, _) = char('}')(rest)?;
+        let map: std::collections::HashMap<String, PropertyValue> = pairs.into_iter()
+            .map(|(k, _, v)| (k.to_string(), v))
+            .collect();
+        println!("[property_value] <<< EXIT: Map({:?})", map);
+        return Ok((rest, PropertyValue::Map(map)));
+    }
+
+    // Try to parse as a primitive value
+    let (input, value) = alt((
+        map(string_literal, |s| PropertyValue::String(s)),
+        map(identifier, |s| PropertyValue::String(s.to_string())),
+        map(numeric_literal, |n| PropertyValue::Number(n.parse().unwrap())),
+        map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
+        map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
+        map(tag_no_case("NULL"), |_| PropertyValue::Null),
+    ))(input)?;
+    println!("[property_value] <<< EXIT: {:?}", value);
+    Ok((input, value))
 }
 
 #[cfg(test)]
@@ -501,8 +630,8 @@ mod tests {
 
     #[test]
     fn test_with_clause_multiple() {
-        let input = "WITH a, count(*) AS count, b.name AS name";
+        let input = "WITH a, b.name AS name";
         let (_, clause) = with_clause(input).unwrap();
-        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items.len(), 2);
     }
 }

@@ -43,6 +43,10 @@ pub enum WhereCondition {
         path_var: String,
         property: String,
     },
+    And(Box<WhereCondition>, Box<WhereCondition>),
+    Or(Box<WhereCondition>, Box<WhereCondition>),
+    Not(Box<WhereCondition>),
+    Parenthesized(Box<WhereCondition>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -169,6 +173,10 @@ pub struct Property {
 pub enum PropertyValue {
     String(String),
     Number(i64),
+    Boolean(bool),
+    Null,
+    List(Vec<PropertyValue>),
+    Map(std::collections::HashMap<String, PropertyValue>),
     FunctionCall { name: String, args: Vec<PropertyValue> },
 }
 
