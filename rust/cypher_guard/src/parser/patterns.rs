@@ -7,14 +7,11 @@ use nom::{
     IResult,
 };
 
-use crate::parser::ast::*;
+use crate::parser::ast::{Direction, NodePattern, PatternElement, RelationshipPattern, RelationshipDetails, MatchElement, QuantifiedPathPattern};
 use crate::parser::clauses::where_clause;
 use crate::parser::components::*;
 use crate::parser::components::{property_map, relationship_type};
 use crate::parser::utils::identifier;
-
-#[cfg(test)]
-use crate::parser::clauses::match_clause;
 
 pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
     println!("[node_pattern] ENTER: input='{}'", input);
@@ -430,6 +427,8 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, PatternElement> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PropertyValue;
+    use crate::WhereCondition;
 
     #[test]
     fn test_variable_length_relationship() {

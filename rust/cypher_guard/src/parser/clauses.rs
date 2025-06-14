@@ -573,7 +573,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{PatternElement, Direction};
+    use crate::parser::ast::{Direction, PatternElement};
 
     #[test]
     fn test_optional_match_clause() {
