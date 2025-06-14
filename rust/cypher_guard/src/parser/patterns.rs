@@ -7,7 +7,10 @@ use nom::{
     IResult,
 };
 
-use crate::parser::ast::{Direction, NodePattern, PatternElement, RelationshipPattern, RelationshipDetails, MatchElement, QuantifiedPathPattern};
+use crate::parser::ast::{
+    Direction, MatchElement, NodePattern, PatternElement, QuantifiedPathPattern,
+    RelationshipDetails, RelationshipPattern,
+};
 use crate::parser::clauses::where_clause;
 use crate::parser::components::*;
 use crate::parser::components::{property_map, relationship_type};

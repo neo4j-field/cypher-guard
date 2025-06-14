@@ -170,14 +170,19 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                     operator: _,
                     right,
                 } => {
-                    println!("[validate_query] Comparison arm: left='{}', right='{}'", left, right);
+                    println!(
+                        "[validate_query] Comparison arm: left='{}', right='{}'",
+                        left, right
+                    );
                     // Validate property access
                     if let Some((var, prop)) = left.split_once('.') {
                         println!("DEBUG: Found property access: {}.{}", var, prop);
                         if let Some(var_info) = ctx.var_types.get(var) {
                             match var_info {
                                 VarInfo::Node { label } => {
-                                    if let Some(prop_info) = ctx.schema.get_node_property(label, prop) {
+                                    if let Some(prop_info) =
+                                        ctx.schema.get_node_property(label, prop)
+                                    {
                                         // Check if the right-hand side literal matches the property type
                                         let is_quoted = right.starts_with('\'')
                                             && right.ends_with('\'')
@@ -649,7 +654,10 @@ fn validate_where_clause(
                 operator: _,
                 right,
             } => {
-                println!("[validate_where_clause] Comparison arm: left='{}', right='{}'", left, right);
+                println!(
+                    "[validate_where_clause] Comparison arm: left='{}', right='{}'",
+                    left, right
+                );
                 // Validate property access
                 if let Some((var, prop)) = left.split_once('.') {
                     println!("DEBUG: Found property access: {}.{}", var, prop);
@@ -903,7 +911,10 @@ fn validate_where_condition(
             operator: _,
             right,
         } => {
-            println!("[validate_where_condition] Comparison arm: left='{}', right='{}'", left, right);
+            println!(
+                "[validate_where_condition] Comparison arm: left='{}', right='{}'",
+                left, right
+            );
             // Validate property access
             if let Some((var, prop)) = left.split_once('.') {
                 println!("DEBUG: Found property access: {}.{}", var, prop);
@@ -913,7 +924,9 @@ fn validate_where_condition(
                             println!("DEBUG: Checking node property: {}.{}", label, prop);
                             if let Some(prop_info) = ctx.schema.get_node_property(label, prop) {
                                 // Check if the right-hand side literal matches the property type
-                                let is_quoted = right.starts_with('\'') && right.ends_with('\'') && right.len() >= 2;
+                                let is_quoted = right.starts_with('\'')
+                                    && right.ends_with('\'')
+                                    && right.len() >= 2;
                                 let unquoted = if is_quoted {
                                     &right[1..right.len() - 1]
                                 } else {
@@ -948,7 +961,8 @@ fn validate_where_condition(
                                         }
                                     }
                                     PropertyType::BOOLEAN => {
-                                        if is_quoted || !(unquoted == "true" || unquoted == "false") {
+                                        if is_quoted || !(unquoted == "true" || unquoted == "false")
+                                        {
                                             ctx.errors.push(format!(
                                                 "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
                                                 prop
@@ -972,10 +986,17 @@ fn validate_where_condition(
                             }
                         }
                         VarInfo::Relationship { rel_type } => {
-                            println!("DEBUG: Checking relationship property: {}.{}", rel_type, prop);
-                            if let Some(prop_info) = ctx.schema.get_relationship_property(rel_type, prop) {
+                            println!(
+                                "DEBUG: Checking relationship property: {}.{}",
+                                rel_type, prop
+                            );
+                            if let Some(prop_info) =
+                                ctx.schema.get_relationship_property(rel_type, prop)
+                            {
                                 // Check if the right-hand side literal matches the property type
-                                let is_quoted = right.starts_with('\'') && right.ends_with('\'') && right.len() >= 2;
+                                let is_quoted = right.starts_with('\'')
+                                    && right.ends_with('\'')
+                                    && right.len() >= 2;
                                 let unquoted = if is_quoted {
                                     &right[1..right.len() - 1]
                                 } else {
@@ -1010,7 +1031,8 @@ fn validate_where_condition(
                                         }
                                     }
                                     PropertyType::BOOLEAN => {
-                                        if is_quoted || !(unquoted == "true" || unquoted == "false") {
+                                        if is_quoted || !(unquoted == "true" || unquoted == "false")
+                                        {
                                             ctx.errors.push(format!(
                                                 "Type mismatch: property '{}' is BOOLEAN but got string or non-boolean literal",
                                                 prop
