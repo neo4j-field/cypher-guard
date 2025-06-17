@@ -8,7 +8,7 @@ pub mod parser {
 }
 mod schema;
 
-use errors::CypherGuardError;
+use errors::{CypherGuardError, CypherGuardValidationError};
 pub use schema::{
     DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
     DbSchemaRelationshipPattern, PropertyType,
@@ -46,7 +46,7 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
     println!("Schema: {:?}", schema);
     let ast = parse_query(query).map_err(|e| {
         println!("Parser error: {:?}", e);
-        CypherGuardError::InvalidQuery
+        CypherGuardError::InvalidQuery(format!("Failed to parse query: {:?}", e))
     })?;
     println!("AST: {:?}", ast);
     let mut ctx = ValidationContext {
@@ -59,7 +59,7 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
     if ctx.errors.is_empty() {
         Ok(true)
     } else {
-        Err(CypherGuardError::InvalidQuery)
+        Err(CypherGuardError::InvalidQuery(ctx.errors.join(", ")))
     }
 }
 
@@ -879,12 +879,16 @@ fn validate_property_access(
             match var_info {
                 VarInfo::Node { label } => {
                     if !schema.has_node_property(label, prop) {
-                        return Err(CypherGuardError::InvalidQuery);
+                        return Err(CypherGuardError::Validation(
+                            CypherGuardValidationError::invalid_property_name(prop),
+                        ));
                     }
                 }
                 VarInfo::Relationship { rel_type } => {
                     if !schema.has_relationship_property(rel_type, prop) {
-                        return Err(CypherGuardError::InvalidQuery);
+                        return Err(CypherGuardError::Validation(
+                            CypherGuardValidationError::invalid_property_name(prop),
+                        ));
                     }
                 }
                 VarInfo::Path => {
@@ -892,7 +896,9 @@ fn validate_property_access(
                 }
             }
         } else {
-            return Err(CypherGuardError::InvalidQuery);
+            return Err(CypherGuardError::Validation(
+                CypherGuardValidationError::undefined_variable(var),
+            ));
         }
     }
     Ok(())

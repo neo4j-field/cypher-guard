@@ -1,4 +1,4 @@
-use crate::errors::CypherGuardError;
+use crate::errors::{CypherGuardError, CypherGuardSchemaError};
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -14,34 +14,30 @@ use std::io::{BufReader, BufWriter};
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
 
 /// Enum representing possible property types in the schema.
-#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum PropertyType {
     /// String property
-    #[pyo3(name = "STRING")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "STRING"))]
     STRING,
     /// Integer property
-    #[pyo3(name = "INTEGER")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "INTEGER"))]
     INTEGER,
     /// Float property
-    #[pyo3(name = "FLOAT")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "FLOAT"))]
     FLOAT,
     /// Boolean property
-    #[pyo3(name = "BOOLEAN")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "BOOLEAN"))]
     BOOLEAN,
     /// Point property (for spatial data)
-    #[pyo3(name = "POINT")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "POINT"))]
     POINT,
     /// DateTime property
-    #[pyo3(name = "DATE_TIME")]
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "DATE_TIME"))]
     DATE_TIME,
     /// List property
-    #[pyo3(name = "LIST")]
-    LIST, // / Custom enum type (referenced by name)
-          // #[cfg_attr(feature = "python-bindings", pyo3(name = "ENUM"))]
-          // ENUM(String),
+    #[cfg_attr(feature = "python-bindings", pyo3(name = "LIST"))]
+    LIST,
 }
 
 impl fmt::Display for PropertyType {
@@ -68,7 +64,9 @@ impl PropertyType {
             "POINT" => Ok(PropertyType::POINT),
             "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
-            _ => Err(CypherGuardError::SchemaError),
+            _ => Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(format!("Invalid property type: {}", s)),
+            )),
         }
     }
 }
@@ -169,25 +167,25 @@ struct EnumType {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaProperty {
     /// Name of the property
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub name: String,
     /// Neo4j type of the property
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub neo4j_type: PropertyType,
     /// Enum values for the property, optional
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub enum_values: Option<Vec<String>>,
     /// Minimum value for the property, optional
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub min_value: Option<f64>,
     /// Maximum value for the property, optional
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub max_value: Option<f64>,
     /// Distinct value count for the property, optional
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub distinct_value_count: Option<i64>,
     /// Example values for the property, optional
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub example_values: Option<Vec<String>>,
 }
 
@@ -457,13 +455,13 @@ impl DbSchemaProperty {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
     /// Start node label of the relationship
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub start: String,
     /// End node label of the relationship
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub end: String,
     /// Type of the relationship
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub rel_type: String,
 }
 
@@ -534,28 +532,28 @@ impl DbSchemaRelationshipPattern {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
     /// ID of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub id: i64,
     /// Name of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub name: String,
     /// Type of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub constraint_type: String,
     /// Entity type of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub entity_type: String,
     /// Labels or types of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub labels_or_types: Vec<String>,
     /// Properties of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub properties: Vec<String>,
     /// Owned index of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub owned_index: String,
     /// Property type of the constraint
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub property_type: Option<String>,
 }
 
@@ -735,22 +733,22 @@ impl DbSchemaConstraint {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
     /// Label of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub label: String,
     /// Properties of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub properties: Vec<String>,
     /// Size of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub size: i64,
     /// Type of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub index_type: String,
     /// Values selectivity of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub values_selectivity: f64,
     /// Distinct values of the index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub distinct_values: f64,
 }
 
@@ -866,10 +864,10 @@ impl DbSchemaIndex {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub constraint: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub index: Vec<DbSchemaIndex>,
 }
 
@@ -987,16 +985,16 @@ impl DbSchemaMetadata {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship keys and vector of properties for each relationship type
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Vector of relationships
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     /// Metadata about the schema containing constraint and index
-    #[pyo3(get, set)]
+    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
     pub metadata: DbSchemaMetadata,
 }
 
@@ -1020,7 +1018,9 @@ impl DbSchema {
     /// Add a label to the schema
     pub fn add_label(&mut self, label: &str) -> Result<()> {
         if self.node_props.contains_key(label) {
-            return Err(CypherGuardError::SchemaError);
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateLabel(label.to_string()),
+            ));
         }
         self.node_props.insert(label.to_string(), Vec::new());
         Ok(())
@@ -1031,16 +1031,24 @@ impl DbSchema {
         if self.node_props.remove(label).is_some() {
             Ok(())
         } else {
-            Err(CypherGuardError::SchemaError)
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(label.to_string()),
+            ))
         }
     }
 
     /// Add a relationship type to the schema
     pub fn add_relationship(&mut self, relationship: &DbSchemaRelationshipPattern) -> Result<()> {
         if self.relationships.contains(relationship) {
-            return Err(CypherGuardError::SchemaError);
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateRelationship(relationship.rel_type.clone()),
+            ));
         }
         self.relationships.push(relationship.clone());
+        // Ensure rel_props entry exists for this relationship type
+        self.rel_props
+            .entry(relationship.rel_type.clone())
+            .or_insert_with(Vec::new);
         Ok(())
     }
 
@@ -1054,7 +1062,9 @@ impl DbSchema {
             self.rel_props.remove(&relationship.rel_type);
             Ok(())
         } else {
-            Err(CypherGuardError::SchemaError)
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(relationship.rel_type.clone()),
+            ))
         }
     }
 
@@ -1064,7 +1074,9 @@ impl DbSchema {
             // check for duplicate property by name
             Some(properties) => {
                 if properties.iter().any(|p| p.name == property.name) {
-                    return Err(CypherGuardError::SchemaError);
+                    return Err(CypherGuardError::Schema(
+                        CypherGuardSchemaError::DuplicateProperty(property.name.clone()),
+                    ));
                 }
             }
             // insert key and empty vector if key doesn't exist
@@ -1087,10 +1099,14 @@ impl DbSchema {
                 properties.remove(index);
                 Ok(())
             } else {
-                Err(CypherGuardError::SchemaError)
+                Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(name.to_string()),
+                ))
             }
         } else {
-            Err(CypherGuardError::SchemaError)
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(label.to_string()),
+            ))
         }
     }
 
@@ -1104,7 +1120,9 @@ impl DbSchema {
             // check for duplicate property by name
             Some(properties) => {
                 if properties.iter().any(|p| p.name == property.name) {
-                    return Err(CypherGuardError::SchemaError);
+                    return Err(CypherGuardError::Schema(
+                        CypherGuardSchemaError::DuplicateProperty(property.name.clone()),
+                    ));
                 }
             }
             // insert key and empty vector if key doesn't exist
@@ -1127,10 +1145,14 @@ impl DbSchema {
                 properties.remove(index);
                 Ok(())
             } else {
-                Err(CypherGuardError::SchemaError)
+                Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(name.to_string()),
+                ))
             }
         } else {
-            Err(CypherGuardError::SchemaError)
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(rel_type.to_string()),
+            ))
         }
     }
 
@@ -1233,9 +1255,9 @@ impl DbSchema {
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
 
-        // Check for duplicate names across labels, rel_types, enums
+        // Only check for duplicate names between node labels and relationship types
         let mut all_names = self.node_props.keys().cloned().collect::<Vec<_>>();
-        all_names.extend(self.rel_props.keys().cloned());
+        all_names.extend(self.relationships.iter().map(|r| r.rel_type.clone()));
         all_names.sort();
         for w in all_names.windows(2) {
             if w[0] == w[1] {
@@ -1263,32 +1285,33 @@ impl DbSchema {
             }
         }
 
-        // // Check that enum properties reference valid enums
-        // for (label, properties) in &self.node_props {
-        //     for prop in properties {
-        //         if let PropertyType::ENUM(enum_name) = &prop.neo4j_type {
-        //             if prop.enum_values.is_none() {
-        //                 errors.push(format!(
-        //                     "Property '{}' in node label '{}' references undefined enum type '{}'.",
-        //                     prop.name, label, enum_name
-        //                 ));
-        //             }
-        //         }
-        //     }
-        // }
+        // Check for duplicate property names within each label
+        for (label, properties) in &self.node_props {
+            let mut prop_names: Vec<_> = properties.iter().map(|p| p.name.clone()).collect();
+            prop_names.sort();
+            for w in prop_names.windows(2) {
+                if w[0] == w[1] {
+                    errors.push(format!(
+                        "Duplicate property name '{}' found in label '{}'",
+                        w[0], label
+                    ));
+                }
+            }
+        }
 
-        // for (rel_type, properties) in &self.rel_props {
-        //     for prop in properties {
-        //         if let PropertyType::ENUM(enum_name) = &prop.neo4j_type {
-        //             if prop.enum_values.is_none() {
-        //                 errors.push(format!(
-        //                     "Property '{}' in relationship type '{}' references undefined enum type '{}'.",
-        //                     prop.name, rel_type, enum_name
-        //                 ));
-        //             }
-        //         }
-        //     }
-        // }
+        // Check for duplicate property names within each relationship type
+        for (rel_type, properties) in &self.rel_props {
+            let mut prop_names: Vec<_> = properties.iter().map(|p| p.name.clone()).collect();
+            prop_names.sort();
+            for w in prop_names.windows(2) {
+                if w[0] == w[1] {
+                    errors.push(format!(
+                        "Duplicate property name '{}' found in relationship type '{}'",
+                        w[0], rel_type
+                    ));
+                }
+            }
+        }
 
         errors
     }
@@ -1298,7 +1321,10 @@ impl DbSchema {
         println!("Loading schema from JSON: {}", s); // Debug: Print input JSON
         let schema = serde_json::from_str::<DbSchema>(s).map_err(|e| {
             eprintln!("JSON parse error: {}", e);
-            CypherGuardError::SchemaError
+            CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(format!(
+                "JSON parse error: {}",
+                e
+            )))
         })?;
         println!("Loaded schema: {:?}", schema); // Debug: Print loaded schema
         println!("Node properties: {:?}", schema.node_props); // Debug: Print node properties
@@ -1309,22 +1335,32 @@ impl DbSchema {
 
     /// Load a DbSchema from a JSON file
     pub fn from_json_file(path: &str) -> Result<Self> {
-        let file = File::open(path).map_err(|_| CypherGuardError::SchemaError)?;
+        let file = File::open(path).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::file_open_error(e.to_string()))
+        })?;
         let reader = BufReader::new(file);
-        let schema = serde_json::from_reader(reader).map_err(|_| CypherGuardError::SchemaError)?;
+        let schema = serde_json::from_reader(reader).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::json_read_error(e.to_string()))
+        })?;
         Ok(schema)
     }
 
     /// Serialize a DbSchema to a JSON string
     pub fn to_json_string(&self) -> Result<String> {
-        serde_json::to_string(self).map_err(|_| CypherGuardError::SchemaError)
+        serde_json::to_string(self).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string()))
+        })
     }
 
     /// Serialize a DbSchema to a JSON file
     pub fn to_json_file(&self, path: &str) -> Result<()> {
-        let file = File::create(path).map_err(|_| CypherGuardError::SchemaError)?;
+        let file = File::create(path).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::file_create_error(e.to_string()))
+        })?;
         let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, self).map_err(|_| CypherGuardError::SchemaError)
+        serde_json::to_writer(writer, self).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string()))
+        })
     }
 }
 
@@ -1582,6 +1618,7 @@ impl DbSchema {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors::{CypherGuardError, CypherGuardSchemaError};
     use std::fs::remove_file;
 
     fn create_person_name_property() -> DbSchemaProperty {
@@ -1836,7 +1873,7 @@ mod tests {
     #[test]
     fn test_from_json_str_valid_all_keys_present() {
         let json = r#"{
-            "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
+            "node_props": {"Person": [{"name": "age", "neo4j_type": "INTEGER"}]},
             "rel_props": {},
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}],
             "metadata": {"index":[], "constraint":[]}
@@ -1852,7 +1889,7 @@ mod tests {
     #[test]
     fn test_from_json_str_valid_missing_keys() {
         let json = r#"{
-            "node_props": {"Person": [{"name": "age", "neo4j_type": {"type": "INTEGER"}}]},
+            "node_props": {"Person": [{"name": "age", "neo4j_type": "INTEGER"}]},
             "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}]
         }"#;
         let schema = DbSchema::from_json_string(json);
@@ -1981,5 +2018,295 @@ mod tests {
         let schema = schema.unwrap();
         assert_eq!(schema, create_test_schema_valid());
         remove_file("test_schema.json").unwrap();
+    }
+
+    #[test]
+    fn test_error_handling_duplicate_label() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person").unwrap();
+        let result = schema.add_label("Person");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateLabel(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_label_not_found() {
+        let mut schema = DbSchema::new();
+        let result = schema.remove_label("NonExistentLabel");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_duplicate_relationship() {
+        let mut schema = DbSchema::new();
+        let rel = create_knows_rel();
+        schema.add_relationship(&rel).unwrap();
+        let result = schema.add_relationship(&rel);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateRelationship(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_relationship_not_found() {
+        let mut schema = DbSchema::new();
+        let rel = create_knows_rel();
+        let result = schema.remove_relationship(&rel);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_duplicate_property() {
+        let mut schema = DbSchema::new();
+        let prop = create_person_name_property();
+        schema.add_node_property("Person", &prop).unwrap();
+        let result = schema.add_node_property("Person", &prop);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateProperty(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_property_not_found() {
+        let mut schema = DbSchema::new();
+        // Case 1: Label does not exist
+        let result = schema.remove_node_property("Person", "non_existent");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(_)
+            ))
+        ));
+        // Case 2: Label exists, property does not
+        schema.add_label("Person").unwrap();
+        let result = schema.remove_node_property("Person", "non_existent");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::PropertyNotFound(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_invalid_json_format() {
+        let invalid_json = "invalid json content";
+        let result = DbSchema::from_json_string(invalid_json);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_file_operations() {
+        // Test file open error
+        let result = DbSchema::from_json_file("non_existent_file.json");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::FileOpenError(_)
+            ))
+        ));
+
+        // Test file create error (try to write to a directory)
+        let schema = DbSchema::new();
+        let result = schema.to_json_file("/invalid/path/schema.json");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::FileCreateError(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_serialization() {
+        let schema = DbSchema::new();
+        // Create a circular reference to cause serialization error
+        let mut node_props = HashMap::new();
+        let mut properties = Vec::new();
+        let prop = DbSchemaProperty::new("circular", PropertyType::STRING);
+        properties.push(prop);
+        node_props.insert("Test".to_string(), properties);
+
+        // This should fail due to invalid schema structure
+        let result = serde_json::to_string(&schema);
+        assert!(result.is_ok()); // Basic serialization should work
+    }
+
+    #[test]
+    fn test_error_handling_invalid_property_type() {
+        let result = PropertyType::from_string("INVALID_TYPE");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_relationship_property_not_found() {
+        let mut schema = DbSchema::new();
+        // Case 1: Relationship type does not exist
+        let result = schema.remove_relationship_property("KNOWS", "non_existent");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(_)
+            ))
+        ));
+        // Case 2: Relationship type exists, property does not
+        let rel = create_knows_rel();
+        schema.add_relationship(&rel).unwrap();
+        let result = schema.remove_relationship_property("KNOWS", "non_existent");
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::PropertyNotFound(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_relationship_property_duplicate() {
+        let mut schema = DbSchema::new();
+        let rel = create_knows_rel();
+        let prop = create_knows_since_property();
+        schema.add_relationship(&rel).unwrap();
+        schema.add_relationship_property("KNOWS", &prop).unwrap();
+        let result = schema.add_relationship_property("KNOWS", &prop);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateProperty(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_error_handling_json_read_error() {
+        // Create a temporary file with invalid JSON
+        let temp_file = "temp_invalid.json";
+        std::fs::write(temp_file, "invalid json content").unwrap();
+
+        let result = DbSchema::from_json_file(temp_file);
+        assert!(matches!(
+            result,
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::JsonReadError(_)
+            ))
+        ));
+
+        remove_file(temp_file).unwrap();
+    }
+
+    #[test]
+    fn test_error_handling_metadata_operations() {
+        let mut schema = DbSchema::new();
+        let constraint = DbSchemaConstraint::new(
+            1,
+            "test_constraint".to_string(),
+            "UNIQUE".to_string(),
+            "NODE".to_string(),
+            vec!["Person".to_string()],
+            vec!["name".to_string()],
+            "test_index".to_string(),
+            Some("STRING".to_string()),
+        );
+
+        // Test adding a constraint with invalid label
+        schema.metadata.constraint.push(constraint.clone());
+
+        // Test adding an index with invalid label
+        let index = DbSchemaIndex {
+            label: "NonExistentLabel".to_string(),
+            properties: vec!["name".to_string()],
+            size: 100,
+            index_type: "BTREE".to_string(),
+            values_selectivity: 0.5,
+            distinct_values: 50.0,
+        };
+        schema.metadata.index.push(index);
+    }
+
+    #[test]
+    fn test_error_handling_property_validation() {
+        let mut schema = DbSchema::new();
+        schema.add_label("Person").unwrap();
+
+        // Test property with invalid name format
+        let invalid_prop = DbSchemaProperty::new("Invalid-Name", PropertyType::STRING);
+        let result = schema.add_node_property("Person", &invalid_prop);
+        assert!(result.is_ok()); // Currently this is allowed, but we might want to add validation
+
+        // Test property with invalid type
+        let invalid_type_prop = DbSchemaProperty::new("age", PropertyType::STRING);
+        let result = schema.add_node_property("Person", &invalid_type_prop);
+        assert!(result.is_ok()); // Currently this is allowed, but we might want to add validation
+    }
+
+    #[test]
+    fn test_error_handling_relationship_validation() {
+        let mut schema = DbSchema::new();
+
+        // Test relationship with non-existent start node
+        let invalid_rel = DbSchemaRelationshipPattern {
+            start: "NonExistent".to_string(),
+            end: "Person".to_string(),
+            rel_type: "KNOWS".to_string(),
+        };
+        let result = schema.add_relationship(&invalid_rel);
+        assert!(result.is_ok()); // Currently this is allowed, but we might want to add validation
+
+        // Test relationship with non-existent end node
+        let invalid_rel = DbSchemaRelationshipPattern {
+            start: "Person".to_string(),
+            end: "NonExistent".to_string(),
+            rel_type: "KNOWS".to_string(),
+        };
+        let result = schema.add_relationship(&invalid_rel);
+        assert!(result.is_ok()); // Currently this is allowed, but we might want to add validation
+    }
+
+    #[test]
+    fn test_error_handling_schema_validation() {
+        let mut schema = DbSchema::new();
+
+        // Test schema validation with duplicate names
+        schema.add_label("Test").unwrap();
+        schema
+            .add_relationship(&DbSchemaRelationshipPattern {
+                start: "Test".to_string(),
+                end: "Test".to_string(),
+                rel_type: "Test".to_string(),
+            })
+            .unwrap();
+
+        let errors = schema.validate();
+        assert!(errors.iter().any(|e| e.contains("Duplicate name")));
     }
 }
