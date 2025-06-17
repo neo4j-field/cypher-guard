@@ -20,6 +20,15 @@ nom = "7"
 napi = { version = "2.14.1", features = ["napi4"] }
 napi-derive = "2.14.1"
 
+[workspace.dev-dependencies]
+cargo-tarpaulin = "0.18.0"
+
 [profile.release]
 debug = 2
 lto = "thin"
+
+[profile.test.package.proptest]
+opt-level = 3
+
+[profile.test.package.rand_chacha]
+opt-level = 3
