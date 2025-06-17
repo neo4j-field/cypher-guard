@@ -64,7 +64,9 @@ impl PropertyType {
             "POINT" => Ok(PropertyType::POINT),
             "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
-            _ => Err(CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(format!("Invalid property type: {}", s)))),
+            _ => Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(format!("Invalid property type: {}", s)),
+            )),
         }
     }
 }
@@ -1016,7 +1018,9 @@ impl DbSchema {
     /// Add a label to the schema
     pub fn add_label(&mut self, label: &str) -> Result<()> {
         if self.node_props.contains_key(label) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateLabel(label.to_string())));
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateLabel(label.to_string()),
+            ));
         }
         self.node_props.insert(label.to_string(), Vec::new());
         Ok(())
@@ -1027,18 +1031,24 @@ impl DbSchema {
         if self.node_props.remove(label).is_some() {
             Ok(())
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(label.to_string())))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(label.to_string()),
+            ))
         }
     }
 
     /// Add a relationship type to the schema
     pub fn add_relationship(&mut self, relationship: &DbSchemaRelationshipPattern) -> Result<()> {
         if self.relationships.contains(relationship) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateRelationship(relationship.rel_type.clone())));
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateRelationship(relationship.rel_type.clone()),
+            ));
         }
         self.relationships.push(relationship.clone());
         // Ensure rel_props entry exists for this relationship type
-        self.rel_props.entry(relationship.rel_type.clone()).or_insert_with(Vec::new);
+        self.rel_props
+            .entry(relationship.rel_type.clone())
+            .or_insert_with(Vec::new);
         Ok(())
     }
 
@@ -1052,7 +1062,9 @@ impl DbSchema {
             self.rel_props.remove(&relationship.rel_type);
             Ok(())
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::RelationshipNotFound(relationship.rel_type.clone())))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(relationship.rel_type.clone()),
+            ))
         }
     }
 
@@ -1062,7 +1074,9 @@ impl DbSchema {
             // check for duplicate property by name
             Some(properties) => {
                 if properties.iter().any(|p| p.name == property.name) {
-                    return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(property.name.clone())));
+                    return Err(CypherGuardError::Schema(
+                        CypherGuardSchemaError::DuplicateProperty(property.name.clone()),
+                    ));
                 }
             }
             // insert key and empty vector if key doesn't exist
@@ -1085,10 +1099,14 @@ impl DbSchema {
                 properties.remove(index);
                 Ok(())
             } else {
-                Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(name.to_string())))
+                Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(name.to_string()),
+                ))
             }
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(label.to_string())))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(label.to_string()),
+            ))
         }
     }
 
@@ -1102,7 +1120,9 @@ impl DbSchema {
             // check for duplicate property by name
             Some(properties) => {
                 if properties.iter().any(|p| p.name == property.name) {
-                    return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(property.name.clone())));
+                    return Err(CypherGuardError::Schema(
+                        CypherGuardSchemaError::DuplicateProperty(property.name.clone()),
+                    ));
                 }
             }
             // insert key and empty vector if key doesn't exist
@@ -1125,10 +1145,14 @@ impl DbSchema {
                 properties.remove(index);
                 Ok(())
             } else {
-                Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(name.to_string())))
+                Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(name.to_string()),
+                ))
             }
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::RelationshipNotFound(rel_type.to_string())))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(rel_type.to_string()),
+            ))
         }
     }
 
@@ -1297,7 +1321,10 @@ impl DbSchema {
         println!("Loading schema from JSON: {}", s); // Debug: Print input JSON
         let schema = serde_json::from_str::<DbSchema>(s).map_err(|e| {
             eprintln!("JSON parse error: {}", e);
-            CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(format!("JSON parse error: {}", e)))
+            CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(format!(
+                "JSON parse error: {}",
+                e
+            )))
         })?;
         println!("Loaded schema: {:?}", schema); // Debug: Print loaded schema
         println!("Node properties: {:?}", schema.node_props); // Debug: Print node properties
@@ -1308,22 +1335,32 @@ impl DbSchema {
 
     /// Load a DbSchema from a JSON file
     pub fn from_json_file(path: &str) -> Result<Self> {
-        let file = File::open(path).map_err(|e| CypherGuardError::Schema(CypherGuardSchemaError::file_open_error(e.to_string())))?;
+        let file = File::open(path).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::file_open_error(e.to_string()))
+        })?;
         let reader = BufReader::new(file);
-        let schema = serde_json::from_reader(reader).map_err(|e| CypherGuardError::Schema(CypherGuardSchemaError::json_read_error(e.to_string())))?;
+        let schema = serde_json::from_reader(reader).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::json_read_error(e.to_string()))
+        })?;
         Ok(schema)
     }
 
     /// Serialize a DbSchema to a JSON string
     pub fn to_json_string(&self) -> Result<String> {
-        serde_json::to_string(self).map_err(|e| CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string())))
+        serde_json::to_string(self).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string()))
+        })
     }
 
     /// Serialize a DbSchema to a JSON file
     pub fn to_json_file(&self, path: &str) -> Result<()> {
-        let file = File::create(path).map_err(|e| CypherGuardError::Schema(CypherGuardSchemaError::file_create_error(e.to_string())))?;
+        let file = File::create(path).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::file_create_error(e.to_string()))
+        })?;
         let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, self).map_err(|e| CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string())))
+        serde_json::to_writer(writer, self).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::serialization_error(e.to_string()))
+        })
     }
 }
 
@@ -1990,7 +2027,9 @@ mod tests {
         let result = schema.add_label("Person");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateLabel(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateLabel(_)
+            ))
         ));
     }
 
@@ -2000,7 +2039,9 @@ mod tests {
         let result = schema.remove_label("NonExistentLabel");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(_)
+            ))
         ));
     }
 
@@ -2012,7 +2053,9 @@ mod tests {
         let result = schema.add_relationship(&rel);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateRelationship(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateRelationship(_)
+            ))
         ));
     }
 
@@ -2023,7 +2066,9 @@ mod tests {
         let result = schema.remove_relationship(&rel);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::RelationshipNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(_)
+            ))
         ));
     }
 
@@ -2035,7 +2080,9 @@ mod tests {
         let result = schema.add_node_property("Person", &prop);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateProperty(_)
+            ))
         ));
     }
 
@@ -2046,14 +2093,18 @@ mod tests {
         let result = schema.remove_node_property("Person", "non_existent");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(_)
+            ))
         ));
         // Case 2: Label exists, property does not
         schema.add_label("Person").unwrap();
         let result = schema.remove_node_property("Person", "non_existent");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::PropertyNotFound(_)
+            ))
         ));
     }
 
@@ -2063,7 +2114,9 @@ mod tests {
         let result = DbSchema::from_json_string(invalid_json);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(_)
+            ))
         ));
     }
 
@@ -2073,7 +2126,9 @@ mod tests {
         let result = DbSchema::from_json_file("non_existent_file.json");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::FileOpenError(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::FileOpenError(_)
+            ))
         ));
 
         // Test file create error (try to write to a directory)
@@ -2081,7 +2136,9 @@ mod tests {
         let result = schema.to_json_file("/invalid/path/schema.json");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::FileCreateError(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::FileCreateError(_)
+            ))
         ));
     }
 
@@ -2094,7 +2151,7 @@ mod tests {
         let prop = DbSchemaProperty::new("circular", PropertyType::STRING);
         properties.push(prop);
         node_props.insert("Test".to_string(), properties);
-        
+
         // This should fail due to invalid schema structure
         let result = serde_json::to_string(&schema);
         assert!(result.is_ok()); // Basic serialization should work
@@ -2105,7 +2162,9 @@ mod tests {
         let result = PropertyType::from_string("INVALID_TYPE");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::InvalidFormat(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidFormat(_)
+            ))
         ));
     }
 
@@ -2116,7 +2175,9 @@ mod tests {
         let result = schema.remove_relationship_property("KNOWS", "non_existent");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::RelationshipNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::RelationshipNotFound(_)
+            ))
         ));
         // Case 2: Relationship type exists, property does not
         let rel = create_knows_rel();
@@ -2124,7 +2185,9 @@ mod tests {
         let result = schema.remove_relationship_property("KNOWS", "non_existent");
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::PropertyNotFound(_)
+            ))
         ));
     }
 
@@ -2138,7 +2201,9 @@ mod tests {
         let result = schema.add_relationship_property("KNOWS", &prop);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateProperty(_)
+            ))
         ));
     }
 
@@ -2147,13 +2212,15 @@ mod tests {
         // Create a temporary file with invalid JSON
         let temp_file = "temp_invalid.json";
         std::fs::write(temp_file, "invalid json content").unwrap();
-        
+
         let result = DbSchema::from_json_file(temp_file);
         assert!(matches!(
             result,
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::JsonReadError(_)))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::JsonReadError(_)
+            ))
         ));
-        
+
         remove_file(temp_file).unwrap();
     }
 
@@ -2205,7 +2272,7 @@ mod tests {
     #[test]
     fn test_error_handling_relationship_validation() {
         let mut schema = DbSchema::new();
-        
+
         // Test relationship with non-existent start node
         let invalid_rel = DbSchemaRelationshipPattern {
             start: "NonExistent".to_string(),
@@ -2228,15 +2295,17 @@ mod tests {
     #[test]
     fn test_error_handling_schema_validation() {
         let mut schema = DbSchema::new();
-        
+
         // Test schema validation with duplicate names
         schema.add_label("Test").unwrap();
-        schema.add_relationship(&DbSchemaRelationshipPattern {
-            start: "Test".to_string(),
-            end: "Test".to_string(),
-            rel_type: "Test".to_string(),
-        }).unwrap();
-        
+        schema
+            .add_relationship(&DbSchemaRelationshipPattern {
+                start: "Test".to_string(),
+                end: "Test".to_string(),
+                rel_type: "Test".to_string(),
+            })
+            .unwrap();
+
         let errors = schema.validate();
         assert!(errors.iter().any(|e| e.contains("Duplicate name")));
     }

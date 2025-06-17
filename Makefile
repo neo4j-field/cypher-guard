@@ -1,20 +1,20 @@
 # Makefile for cypher-guard Python bindings
 
-.PHONY: all build install clean build-python test-python build-js test-js
+.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust
 
 all: build
 
-install-maturin:
-	pip install maturin
+poetry-install:
+	poetry install
 
-build: install-maturin
-	maturin develop
+build: poetry-install
+	poetry run maturin develop
 
-build-python:
-	cd rust/python_bindings && maturin develop
+build-python: poetry-install
+	cd rust/python_bindings && poetry run maturin develop
 
-test-python:
-	pytest rust/python_bindings/tests/ -vv
+test-python: poetry-install
+	poetry run pytest rust/python_bindings/tests/ -vv
 
 build-js:
 	cd rust/js_bindings && npm install && npm run build

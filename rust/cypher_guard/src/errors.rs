@@ -1,14 +1,13 @@
-use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CypherGuardError {
     #[error("Validation error: {0}")]
     Validation(#[from] CypherGuardValidationError),
-    
+
     #[error("Parsing error: {0}")]
     Parsing(#[from] CypherGuardParsingError),
-    
+
     #[error("Schema error: {0}")]
     Schema(#[from] CypherGuardSchemaError),
 
@@ -74,16 +73,16 @@ impl CypherGuardError {
 pub enum CypherGuardValidationError {
     #[error("Invalid property name: {0}")]
     InvalidPropertyName(String),
-    
+
     #[error("Undefined variable: {0}")]
     UndefinedVariable(String),
-    
+
     #[error("Type mismatch: expected {expected}, got {actual}")]
     TypeMismatch { expected: String, actual: String },
-    
+
     #[error("Invalid relationship: {0}")]
     InvalidRelationship(String),
-    
+
     #[error("Invalid label: {0}")]
     InvalidLabel(String),
 }
@@ -157,13 +156,13 @@ impl CypherGuardValidationError {
 pub enum CypherGuardParsingError {
     #[error("Nom parsing error: {0}")]
     Nom(#[from] nom::error::Error<String>),
-    
+
     #[error("Expected {expected}, found {found}")]
     ExpectedToken { expected: String, found: String },
-    
+
     #[error("Unexpected end of input")]
     UnexpectedEnd,
-    
+
     #[error("Invalid syntax: {0}")]
     InvalidSyntax(String),
 }
@@ -211,13 +210,13 @@ impl CypherGuardParsingError {
 pub enum CypherGuardSchemaError {
     #[error("Invalid schema format: {0}")]
     InvalidFormat(String),
-    
+
     #[error("Missing required field: {0}")]
     MissingField(String),
-    
+
     #[error("Invalid property type: {0}")]
     InvalidPropertyType(String),
-    
+
     #[error("Duplicate definition: {0}")]
     DuplicateDefinition(String),
 
@@ -253,6 +252,36 @@ pub enum CypherGuardSchemaError {
 
     #[error("IO error: {0}")]
     IoError(String),
+
+    #[error("Label not found: {0}")]
+    LabelNotFound(String),
+
+    #[error("Duplicate label: {0}")]
+    DuplicateLabel(String),
+
+    #[error("Relationship not found: {0}")]
+    RelationshipNotFound(String),
+
+    #[error("Duplicate relationship: {0}")]
+    DuplicateRelationship(String),
+
+    #[error("Property not found: {0}")]
+    PropertyNotFound(String),
+
+    #[error("Duplicate property: {0}")]
+    DuplicateProperty(String),
+
+    #[error("File open error: {0}")]
+    FileOpenError(String),
+
+    #[error("File create error: {0}")]
+    FileCreateError(String),
+
+    #[error("JSON read error: {0}")]
+    JsonReadError(String),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 
 impl CypherGuardSchemaError {
@@ -316,6 +345,46 @@ impl CypherGuardSchemaError {
         Self::IoError(msg.into())
     }
 
+    pub fn label_not_found(label: impl Into<String>) -> Self {
+        Self::LabelNotFound(label.into())
+    }
+
+    pub fn duplicate_label(label: impl Into<String>) -> Self {
+        Self::DuplicateLabel(label.into())
+    }
+
+    pub fn relationship_not_found(rel_type: impl Into<String>) -> Self {
+        Self::RelationshipNotFound(rel_type.into())
+    }
+
+    pub fn duplicate_relationship(rel_type: impl Into<String>) -> Self {
+        Self::DuplicateRelationship(rel_type.into())
+    }
+
+    pub fn property_not_found(name: impl Into<String>) -> Self {
+        Self::PropertyNotFound(name.into())
+    }
+
+    pub fn duplicate_property(name: impl Into<String>) -> Self {
+        Self::DuplicateProperty(name.into())
+    }
+
+    pub fn file_open_error(msg: impl Into<String>) -> Self {
+        Self::FileOpenError(msg.into())
+    }
+
+    pub fn file_create_error(msg: impl Into<String>) -> Self {
+        Self::FileCreateError(msg.into())
+    }
+
+    pub fn json_read_error(msg: impl Into<String>) -> Self {
+        Self::JsonReadError(msg.into())
+    }
+
+    pub fn serialization_error(msg: impl Into<String>) -> Self {
+        Self::SerializationError(msg.into())
+    }
+
     /// Returns the format error message if this is an InvalidFormat error
     pub fn format_error(&self) -> Option<&str> {
         match self {
@@ -351,7 +420,7 @@ impl CypherGuardSchemaError {
     /// Returns the property name if this is an InvalidPropertyName error
     pub fn property_name(&self) -> Option<&str> {
         match self {
-            Self::InvalidPropertyName(name) => Some(name),
+            Self::InvalidPropertyName(name) | Self::PropertyNotFound(name) => Some(name),
             _ => None,
         }
     }
@@ -435,6 +504,70 @@ impl CypherGuardSchemaError {
             _ => None,
         }
     }
+
+    /// Returns the label name if this is a LabelNotFound error
+    pub fn label_name(&self) -> Option<&str> {
+        match self {
+            Self::LabelNotFound(label) => Some(label),
+            _ => None,
+        }
+    }
+
+    /// Returns the duplicate label name if this is a DuplicateLabel error
+    pub fn duplicate_label_name(&self) -> Option<&str> {
+        match self {
+            Self::DuplicateLabel(label) => Some(label),
+            _ => None,
+        }
+    }
+
+    /// Returns the relationship type if this is a RelationshipNotFound error
+    pub fn relationship_type(&self) -> Option<&str> {
+        match self {
+            Self::RelationshipNotFound(rel_type) => Some(rel_type),
+            _ => None,
+        }
+    }
+
+    /// Returns the duplicate relationship type if this is a DuplicateRelationship error
+    pub fn duplicate_relationship_type(&self) -> Option<&str> {
+        match self {
+            Self::DuplicateRelationship(rel_type) => Some(rel_type),
+            _ => None,
+        }
+    }
+
+    /// Returns the file open error message if this is a FileOpenError
+    pub fn file_open_error_msg(&self) -> Option<&str> {
+        match self {
+            Self::FileOpenError(msg) => Some(msg),
+            _ => None,
+        }
+    }
+
+    /// Returns the file create error message if this is a FileCreateError
+    pub fn file_create_error_msg(&self) -> Option<&str> {
+        match self {
+            Self::FileCreateError(msg) => Some(msg),
+            _ => None,
+        }
+    }
+
+    /// Returns the JSON read error message if this is a JsonReadError
+    pub fn json_read_error_msg(&self) -> Option<&str> {
+        match self {
+            Self::JsonReadError(msg) => Some(msg),
+            _ => None,
+        }
+    }
+
+    /// Returns the serialization error message if this is a SerializationError
+    pub fn serialization_error_msg(&self) -> Option<&str> {
+        match self {
+            Self::SerializationError(msg) => Some(msg),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -452,8 +585,14 @@ mod tests {
         assert_eq!(var_error.variable_name(), Some("x"));
 
         let type_error = CypherGuardValidationError::type_mismatch("String", "Integer");
-        assert_eq!(type_error.to_string(), "Type mismatch: expected String, got Integer");
-        assert_eq!(type_error.type_mismatch_details(), Some(("String", "Integer")));
+        assert_eq!(
+            type_error.to_string(),
+            "Type mismatch: expected String, got Integer"
+        );
+        assert_eq!(
+            type_error.type_mismatch_details(),
+            Some(("String", "Integer"))
+        );
 
         let rel_error = CypherGuardValidationError::invalid_relationship("KNOWS");
         assert_eq!(rel_error.to_string(), "Invalid relationship: KNOWS");
@@ -468,10 +607,16 @@ mod tests {
     fn test_parsing_error_messages() {
         let token_error = CypherGuardParsingError::expected_token("MATCH", "WITH");
         assert_eq!(token_error.to_string(), "Expected MATCH, found WITH");
-        assert_eq!(token_error.expected_token_details(), Some(("MATCH", "WITH")));
+        assert_eq!(
+            token_error.expected_token_details(),
+            Some(("MATCH", "WITH"))
+        );
 
         let syntax_error = CypherGuardParsingError::invalid_syntax("Invalid clause order");
-        assert_eq!(syntax_error.to_string(), "Invalid syntax: Invalid clause order");
+        assert_eq!(
+            syntax_error.to_string(),
+            "Invalid syntax: Invalid clause order"
+        );
         assert_eq!(syntax_error.syntax_error(), Some("Invalid clause order"));
 
         let unexpected_end = CypherGuardParsingError::UnexpectedEnd;
@@ -482,7 +627,10 @@ mod tests {
     #[test]
     fn test_schema_error_messages() {
         let format_error = CypherGuardSchemaError::invalid_format("Invalid JSON");
-        assert_eq!(format_error.to_string(), "Invalid schema format: Invalid JSON");
+        assert_eq!(
+            format_error.to_string(),
+            "Invalid schema format: Invalid JSON"
+        );
         assert_eq!(format_error.format_error(), Some("Invalid JSON"));
 
         let field_error = CypherGuardSchemaError::missing_field("name");
@@ -506,7 +654,10 @@ mod tests {
         assert_eq!(rel_error.relationship_pattern(), Some("KNOWS"));
 
         let constraint_error = CypherGuardSchemaError::invalid_constraint("unique_name");
-        assert_eq!(constraint_error.to_string(), "Invalid constraint: unique_name");
+        assert_eq!(
+            constraint_error.to_string(),
+            "Invalid constraint: unique_name"
+        );
         assert_eq!(constraint_error.constraint(), Some("unique_name"));
 
         let index_error = CypherGuardSchemaError::invalid_index("name_index");
@@ -514,7 +665,10 @@ mod tests {
         assert_eq!(index_error.index(), Some("name_index"));
 
         let metadata_error = CypherGuardSchemaError::invalid_metadata("Invalid metadata");
-        assert_eq!(metadata_error.to_string(), "Invalid metadata: Invalid metadata");
+        assert_eq!(
+            metadata_error.to_string(),
+            "Invalid metadata: Invalid metadata"
+        );
         assert_eq!(metadata_error.metadata(), Some("Invalid metadata"));
 
         let enum_error = CypherGuardSchemaError::invalid_enum_values("Invalid enum");
@@ -522,7 +676,10 @@ mod tests {
         assert_eq!(enum_error.enum_values(), Some("Invalid enum"));
 
         let range_error = CypherGuardSchemaError::invalid_value_range(10.0, 5.0);
-        assert_eq!(range_error.to_string(), "Invalid value range: min 10 is greater than max 5");
+        assert_eq!(
+            range_error.to_string(),
+            "Invalid value range: min 10 is greater than max 5"
+        );
         assert_eq!(range_error.value_range(), Some((10.0, 5.0)));
 
         let count_error = CypherGuardSchemaError::invalid_distinct_value_count(-1);
@@ -530,7 +687,10 @@ mod tests {
         assert_eq!(count_error.distinct_value_count(), Some(-1));
 
         let example_error = CypherGuardSchemaError::invalid_example_values("Invalid examples");
-        assert_eq!(example_error.to_string(), "Invalid example values: Invalid examples");
+        assert_eq!(
+            example_error.to_string(),
+            "Invalid example values: Invalid examples"
+        );
         assert_eq!(example_error.example_values(), Some("Invalid examples"));
 
         let json_error = CypherGuardSchemaError::invalid_json("Invalid JSON");
@@ -549,7 +709,9 @@ mod tests {
         let cypher_error: CypherGuardError = validation_error.into();
         assert!(cypher_error.is_validation());
         assert!(cypher_error.as_validation().is_some());
-        assert!(cypher_error.to_string().contains("Invalid property name: test"));
+        assert!(cypher_error
+            .to_string()
+            .contains("Invalid property name: test"));
 
         // Test conversion from ParsingError to CypherGuardError
         let parsing_error = CypherGuardParsingError::invalid_syntax("test");
@@ -563,6 +725,8 @@ mod tests {
         let cypher_error: CypherGuardError = schema_error.into();
         assert!(cypher_error.is_schema());
         assert!(cypher_error.as_schema().is_some());
-        assert!(cypher_error.to_string().contains("Missing required field: test"));
+        assert!(cypher_error
+            .to_string()
+            .contains("Missing required field: test"));
     }
 }
