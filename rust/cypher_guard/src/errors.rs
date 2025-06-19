@@ -157,17 +157,33 @@ pub enum CypherGuardParsingError {
     #[error("Nom parsing error: {0}")]
     Nom(#[from] nom::error::Error<String>),
 
-    #[error("Expected {expected}, found {found}")]
-    ExpectedToken { expected: String, found: String },
-
     #[error("Unexpected end of input")]
     UnexpectedEnd,
 
+    #[error("Expected {expected}, found {found}")]
+    ExpectedToken { expected: String, found: String },
+
     #[error("Invalid syntax: {0}")]
     InvalidSyntax(String),
+
+    #[error("Missing required clause: {clause}")]
+    MissingRequiredClause { clause: String },
+
+    #[error("Invalid clause order: {context} - {details}")]
+    InvalidClauseOrder { context: String, details: String },
+
+    #[error("Invalid pattern: {context} - {details}")]
+    InvalidPattern { context: String, details: String },
+
+    #[error("Invalid WHERE condition: {context} - {details}")]
+    InvalidWhereCondition { context: String, details: String },
+
+    #[error("Invalid expression: {context} - {details}")]
+    InvalidExpression { context: String, details: String },
 }
 
 impl CypherGuardParsingError {
+    // Basic parsing errors (most fundamental)
     pub fn expected_token(expected: impl Into<String>, found: impl Into<String>) -> Self {
         Self::ExpectedToken {
             expected: expected.into(),
@@ -179,9 +195,51 @@ impl CypherGuardParsingError {
         Self::InvalidSyntax(msg.into())
     }
 
+    // Query structure errors
+    pub fn missing_required_clause(clause: impl Into<String>) -> Self {
+        Self::MissingRequiredClause {
+            clause: clause.into(),
+        }
+    }
+
+    pub fn invalid_clause_order(context: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::InvalidClauseOrder {
+            context: context.into(),
+            details: details.into(),
+        }
+    }
+
+    // Pattern and expression errors (most specific)
+    pub fn invalid_pattern(context: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::InvalidPattern {
+            context: context.into(),
+            details: details.into(),
+        }
+    }
+
+    pub fn invalid_where_condition(context: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::InvalidWhereCondition {
+            context: context.into(),
+            details: details.into(),
+        }
+    }
+
+    pub fn invalid_expression(context: impl Into<String>, details: impl Into<String>) -> Self {
+        Self::InvalidExpression {
+            context: context.into(),
+            details: details.into(),
+        }
+    }
+
+    // Query methods (organized by error type)
     /// Returns true if this is a nom parsing error
     pub fn is_nom_error(&self) -> bool {
         matches!(self, Self::Nom(_))
+    }
+
+    /// Returns true if this is an UnexpectedEnd error
+    pub fn is_unexpected_end(&self) -> bool {
+        matches!(self, Self::UnexpectedEnd)
     }
 
     /// Returns the expected and found tokens if this is an ExpectedToken error
@@ -192,16 +250,69 @@ impl CypherGuardParsingError {
         }
     }
 
-    /// Returns true if this is an UnexpectedEnd error
-    pub fn is_unexpected_end(&self) -> bool {
-        matches!(self, Self::UnexpectedEnd)
-    }
-
     /// Returns the syntax error message if this is an InvalidSyntax error
     pub fn syntax_error(&self) -> Option<&str> {
         match self {
             Self::InvalidSyntax(msg) => Some(msg),
             _ => None,
+        }
+    }
+
+    // Query structure query methods
+    /// Returns the missing clause if this is a MissingRequiredClause error
+    pub fn missing_clause(&self) -> Option<&str> {
+        match self {
+            Self::MissingRequiredClause { clause } => Some(clause),
+            _ => None,
+        }
+    }
+
+    /// Returns the clause order error message if this is an InvalidClauseOrder error
+    pub fn clause_order_error(&self) -> Option<String> {
+        match self {
+            Self::InvalidClauseOrder { context, details } => Some(format!("{} - {}", context, details)),
+            _ => None,
+        }
+    }
+
+    // Pattern and expression query methods
+    /// Returns the pattern error if this is an InvalidPattern error
+    pub fn pattern_error(&self) -> Option<String> {
+        match self {
+            Self::InvalidPattern { context, details } => Some(format!("{} - {}", context, details)),
+            _ => None,
+        }
+    }
+
+    /// Returns the WHERE condition error if this is an InvalidWhereCondition error
+    pub fn where_condition_error(&self) -> Option<String> {
+        match self {
+            Self::InvalidWhereCondition { context, details } => Some(format!("{} - {}", context, details)),
+            _ => None,
+        }
+    }
+
+    /// Returns the expression error if this is an InvalidExpression error
+    pub fn expression_error(&self) -> Option<String> {
+        match self {
+            Self::InvalidExpression { context, details } => Some(format!("{} - {}", context, details)),
+            _ => None,
+        }
+    }
+}
+
+/// Helper function to convert nom errors to CypherGuardParsingError with context
+pub fn convert_nom_error(nom_err: nom::Err<nom::error::Error<&str>>, _context: &str, _input: &str) -> CypherGuardParsingError {
+    match nom_err {
+        nom::Err::Error(e) | nom::Err::Failure(e) => {
+            // Convert the input to String to match our error type
+            let input_str = e.input.to_string();
+            let code = e.code;
+            CypherGuardParsingError::Nom(nom::error::Error::new(input_str, code))
+        },
+        nom::Err::Incomplete(_) => {
+            // Incomplete input means unexpected end
+            CypherGuardParsingError::UnexpectedEnd
         }
     }
 }
@@ -622,6 +733,27 @@ mod tests {
         let unexpected_end = CypherGuardParsingError::UnexpectedEnd;
         assert_eq!(unexpected_end.to_string(), "Unexpected end of input");
         assert!(unexpected_end.is_unexpected_end());
+
+        // Test new error variants
+        let clause_order = CypherGuardParsingError::invalid_clause_order("query structure", "RETURN must come after MATCH");
+        assert_eq!(clause_order.to_string(), "Invalid clause order: query structure - RETURN must come after MATCH");
+        assert_eq!(clause_order.clause_order_error(), Some("query structure - RETURN must come after MATCH".to_string()));
+
+        let missing_clause = CypherGuardParsingError::missing_required_clause("RETURN");
+        assert_eq!(missing_clause.to_string(), "Missing required clause: RETURN");
+        assert_eq!(missing_clause.missing_clause(), Some("RETURN"));
+
+        let invalid_where = CypherGuardParsingError::invalid_where_condition("parsing comparison", "a.age >");
+        assert_eq!(invalid_where.to_string(), "Invalid WHERE condition: parsing comparison - a.age >");
+        assert_eq!(invalid_where.where_condition_error(), Some("parsing comparison - a.age >".to_string()));
+
+        let invalid_pattern = CypherGuardParsingError::invalid_pattern("relationship pattern", "invalid direction <-");
+        assert_eq!(invalid_pattern.to_string(), "Invalid pattern: relationship pattern - invalid direction <-");
+        assert_eq!(invalid_pattern.pattern_error(), Some("relationship pattern - invalid direction <-".to_string()));
+
+        let invalid_expression = CypherGuardParsingError::invalid_expression("function call", "count(");
+        assert_eq!(invalid_expression.to_string(), "Invalid expression: function call - count(");
+        assert_eq!(invalid_expression.expression_error(), Some("function call - count(".to_string()));
     }
 
     #[test]
@@ -728,5 +860,85 @@ mod tests {
         assert!(cypher_error
             .to_string()
             .contains("Missing required field: test"));
+    }
+
+    #[test]
+    fn test_nom_error_conversion() {
+        // Test conversion of different nom error types
+        let nom_error = nom::error::Error::new("test", nom::error::ErrorKind::Char);
+        let nom_err = nom::Err::Error(nom_error);
+        
+        let converted = convert_nom_error(nom_err, "parsing identifier", "test");
+        assert!(converted.is_nom_error());
+        
+        // Test UnexpectedEnd conversion
+        let incomplete_err: nom::Err<nom::error::Error<&str>> = nom::Err::Incomplete(nom::Needed::Size(std::num::NonZeroUsize::new(1).unwrap()));
+        let converted = convert_nom_error(incomplete_err, "parsing query", "MATCH");
+        assert!(converted.is_unexpected_end());
+        
+        // Test failure conversion
+        let failure_error = nom::error::Error::new("test", nom::error::ErrorKind::Tag);
+        let failure_err = nom::Err::Failure(failure_error);
+        let converted = convert_nom_error(failure_err, "parsing clause", "test");
+        assert!(converted.is_nom_error());
+    }
+
+    #[test]
+    fn test_nom_error_variant() {
+        // Test the Nom variant specifically
+        let nom_error = nom::error::Error::new("test".to_string(), nom::error::ErrorKind::Char);
+        let cypher_error = CypherGuardParsingError::Nom(nom_error);
+        assert!(cypher_error.is_nom_error());
+        assert!(cypher_error.to_string().contains("Nom parsing error"));
+    }
+
+    #[test]
+    fn test_parsing_error_hierarchy() {
+        // Test that high-level errors provide better context than low-level ones
+        let high_level = CypherGuardParsingError::invalid_clause_order(
+            "query structure", 
+            "RETURN must come after MATCH"
+        );
+        let low_level = CypherGuardParsingError::expected_token("(", ")");
+        
+        // High-level errors should have more descriptive messages
+        assert!(high_level.to_string().contains("Invalid clause order"));
+        assert!(low_level.to_string().contains("Expected ("));
+        
+        // Test that we can extract context from high-level errors
+        assert!(high_level.clause_order_error().is_some());
+        assert!(low_level.expected_token_details().is_some());
+    }
+
+    #[test]
+    fn test_error_position_tracking() {
+        // Test that error conversion preserves the original nom error
+        let nom_error = nom::error::Error::new("xyz", nom::error::ErrorKind::Digit);
+        let nom_err: nom::Err<nom::error::Error<&str>> = nom::Err::Error(nom_error);
+        
+        let converted = convert_nom_error(nom_err, "parsing number", "abc123xyz");
+        assert!(converted.is_nom_error());
+        
+        // The original error information should be preserved
+        if let CypherGuardParsingError::Nom(error) = converted {
+            assert_eq!(error.input, "xyz");
+            assert_eq!(error.code, nom::error::ErrorKind::Digit);
+        } else {
+            panic!("Expected Nom error");
+        }
+    }
+
+    #[test]
+    fn test_context_specific_errors() {
+        // Test that the context parameter is available for future use
+        // but doesn't affect the current simple conversion
+        let alt_error = nom::error::Error::new("test", nom::error::ErrorKind::Alt);
+        let alt_err: nom::Err<nom::error::Error<&str>> = nom::Err::Error(alt_error);
+        
+        let converted = convert_nom_error(alt_err, "parsing WHERE condition", "test");
+        assert!(converted.is_nom_error());
+        
+        // The context could be used in the future for more sophisticated error handling
+        // but for now we just preserve the original nom error
     }
 }
