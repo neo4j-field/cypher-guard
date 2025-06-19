@@ -227,7 +227,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                                                     ));
                                                 }
                                             }
-                                            PropertyType::DATE_TIME => {
+                                            PropertyType::DateTime => {
                                                 // Accept both quoted and unquoted for now, but could be stricter
                                                 // TODO: Add stricter DATE_TIME literal validation if needed
                                             }
@@ -289,7 +289,7 @@ fn validate_query(query: &Query, ctx: &mut ValidationContext) {
                                                     ));
                                                 }
                                             }
-                                            PropertyType::DATE_TIME => {
+                                            PropertyType::DateTime => {
                                                 // Accept both quoted and unquoted for now, but could be stricter
                                                 // TODO: Add stricter DATE_TIME literal validation if needed
                                             }
@@ -709,7 +709,7 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATE_TIME => {
+                                        PropertyType::DateTime => {
                                             // Accept both quoted and unquoted for now, but could be stricter
                                             // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
@@ -771,7 +771,7 @@ fn validate_where_clause(
                                                 ));
                                             }
                                         }
-                                        PropertyType::DATE_TIME => {
+                                        PropertyType::DateTime => {
                                             // Accept both quoted and unquoted for now, but could be stricter
                                             // TODO: Add stricter DATE_TIME literal validation if needed
                                         }
@@ -976,7 +976,7 @@ fn validate_where_condition(
                                             return Ok(false);
                                         }
                                     }
-                                    PropertyType::DATE_TIME => {
+                                    PropertyType::DateTime => {
                                         // Accept both quoted and unquoted for now
                                     }
                                     PropertyType::POINT => {
@@ -1046,7 +1046,7 @@ fn validate_where_condition(
                                             return Ok(false);
                                         }
                                     }
-                                    PropertyType::DATE_TIME => {
+                                    PropertyType::DateTime => {
                                         // Accept both quoted and unquoted for now
                                     }
                                     PropertyType::POINT => {

@@ -1,9 +1,26 @@
 # Makefile for cypher-guard Python bindings
 
-.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust
+.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all
 
 all: build
 
+# Rust targets (matches CI)
+test-rust: fmt clippy build
+	cargo test --verbose
+
+fmt:
+	cargo fmt --all -- --check
+
+clippy:
+	cd rust/cypher_guard && cargo clippy -- -D warnings
+
+clippy-all:
+	cargo clippy -- -D warnings
+
+build-rust:
+	cargo build --verbose
+
+# Python targets
 poetry-install:
 	poetry install
 
@@ -16,11 +33,15 @@ build-python: poetry-install
 test-python: poetry-install
 	poetry run pytest rust/python_bindings/tests/ -vv
 
+# JavaScript targets
 build-js:
 	cd rust/js_bindings && npm install && npm run build
 
 test-js:
 	cd rust/js_bindings && npm test
+
+# Utility targets
+install: build
 
 clean:
 	rm -rf target/

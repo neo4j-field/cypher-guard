@@ -34,7 +34,7 @@ pub enum PropertyType {
     POINT,
     /// DateTime property
     #[cfg_attr(feature = "python-bindings", pyo3(name = "DATE_TIME"))]
-    DATE_TIME,
+    DateTime,
     /// List property
     #[cfg_attr(feature = "python-bindings", pyo3(name = "LIST"))]
     LIST,
@@ -48,7 +48,7 @@ impl fmt::Display for PropertyType {
             PropertyType::FLOAT => write!(f, "FLOAT"),
             PropertyType::BOOLEAN => write!(f, "BOOLEAN"),
             PropertyType::POINT => write!(f, "POINT"),
-            PropertyType::DATE_TIME => write!(f, "DATE_TIME"),
+            PropertyType::DateTime => write!(f, "DATE_TIME"),
             PropertyType::LIST => write!(f, "LIST"),
         }
     }
@@ -62,7 +62,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "DATE_TIME" => Ok(PropertyType::DateTime),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(CypherGuardError::Schema(
                 CypherGuardSchemaError::InvalidFormat(format!("Invalid property type: {}", s)),
@@ -81,7 +81,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "DATE_TIME" => Ok(PropertyType::DateTime),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Invalid property type: {}",
@@ -117,7 +117,7 @@ impl PropertyType {
 
     #[classmethod]
     fn datetime(_cls: &Bound<'_, PyType>) -> Self {
-        PropertyType::DATE_TIME
+        PropertyType::DateTime
     }
 
     #[classmethod]
@@ -135,7 +135,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT"  => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
+            "DATE_TIME" => Ok(PropertyType::DateTime),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(
                 format!("Invalid property type: '{}'. Valid types: STRING, INTEGER, FLOAT, BOOLEAN, POINT, DATE_TIME, LIST", s)
@@ -1048,7 +1048,7 @@ impl DbSchema {
         // Ensure rel_props entry exists for this relationship type
         self.rel_props
             .entry(relationship.rel_type.clone())
-            .or_insert_with(Vec::new);
+            .or_default();
         Ok(())
     }
 
@@ -1634,7 +1634,7 @@ mod tests {
     }
 
     fn create_knows_since_property() -> DbSchemaProperty {
-        DbSchemaProperty::new("since", PropertyType::DATE_TIME)
+        DbSchemaProperty::new("since", PropertyType::DateTime)
     }
 
     // fn create_favorite_color_property() -> DbSchemaProperty {
@@ -1694,7 +1694,7 @@ mod tests {
             PropertyType::INTEGER,
             PropertyType::FLOAT,
             PropertyType::BOOLEAN,
-            PropertyType::DATE_TIME,
+            PropertyType::DateTime,
             // PropertyType::ENUM("ColorEnum".to_string()),
         ];
         for t in types {
