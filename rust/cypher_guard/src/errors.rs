@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum CypherGuardError {
     #[error("Validation error: {0}")]
     Validation(#[from] CypherGuardValidationError),
@@ -153,6 +154,7 @@ impl CypherGuardValidationError {
 }
 
 #[derive(Debug, Error)]
+#[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum CypherGuardParsingError {
     #[error("Nom parsing error: {0}")]
     Nom(#[from] nom::error::Error<String>),
@@ -308,6 +310,7 @@ impl CypherGuardParsingError {
 }
 
 /// Helper function to convert nom errors to CypherGuardParsingError with context
+#[allow(dead_code)]
 pub fn convert_nom_error(
     nom_err: nom::Err<nom::error::Error<&str>>,
     _context: &str,

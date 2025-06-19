@@ -1,6 +1,8 @@
 use ::cypher_guard::{
-    get_cypher_validation_errors, validate_cypher_with_schema, DbSchema, DbSchemaConstraint,
-    DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType,
+    get_cypher_validation_errors, validate_cypher_with_schema, CypherGuardError,
+    CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError, DbSchema,
+    DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
+    DbSchemaRelationshipPattern, PropertyType,
 };
 use pyo3::prelude::*;
 use std::io::Write;
@@ -41,6 +43,10 @@ pub fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<
 
 #[pymodule]
 fn cypher_guard(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<CypherGuardError>()?;
+    m.add_class::<CypherGuardParsingError>()?;
+    m.add_class::<CypherGuardSchemaError>()?;
+    m.add_class::<CypherGuardValidationError>()?;
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<PropertyType>()?;
