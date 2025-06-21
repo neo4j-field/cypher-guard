@@ -18,7 +18,6 @@ pub use schema::{
 };
 
 use parser::ast::*;
-use parser::clauses::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
