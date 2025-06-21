@@ -45,7 +45,6 @@ impl CypherGuardError {
     }
 }
 
-
 #[derive(Debug, Error)]
 pub enum CypherGuardValidationError {
     #[error("Invalid property name: {0}")]

@@ -8,8 +8,10 @@ pub mod parser {
 }
 mod schema;
 
-use errors::{convert_nom_error};
-pub use errors::{CypherGuardError, CypherGuardValidationError, CypherGuardParsingError, CypherGuardSchemaError};
+use errors::convert_nom_error;
+pub use errors::{
+    CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
+};
 pub use schema::{
     DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
     DbSchemaRelationshipPattern, PropertyType,
@@ -1160,7 +1162,7 @@ mod tests {
         let query = "MATCH (a)-[:KNOWS]->(b) RETURN a, b";
         let result = parse_query(query);
         assert!(result.is_ok());
-        
+
         let ast = result.unwrap();
         assert!(ast.match_clause.is_some());
         assert!(ast.return_clause.is_some());
@@ -1171,7 +1173,7 @@ mod tests {
         let query = "INVALID QUERY";
         let result = parse_query(query);
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
         // Should be a CypherGuardParsingError, not a generic nom error
         assert!(matches!(error, CypherGuardParsingError::Nom(_)));
@@ -1183,7 +1185,7 @@ mod tests {
         let query = "INVALID QUERY";
         let result = validate_cypher_with_schema(query, &schema);
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
         // Should be a Parsing error containing our custom error
         assert!(matches!(error, CypherGuardError::Parsing(_)));

@@ -18,25 +18,18 @@ pub type Result<T> = std::result::Result<T, CypherGuardError>;
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum PropertyType {
     /// String property
-    
     STRING,
     /// Integer property
-    
     INTEGER,
     /// Float property
-    
     FLOAT,
     /// Boolean property
-    
     BOOLEAN,
     /// Point property (for spatial data)
-    
     POINT,
     /// DateTime property
-    
     DateTime,
     /// List property
-    
     LIST,
 }
 
@@ -167,25 +160,18 @@ struct EnumType {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaProperty {
     /// Name of the property
-    
     pub name: String,
     /// Neo4j type of the property
-    
     pub neo4j_type: PropertyType,
     /// Enum values for the property, optional
-    
     pub enum_values: Option<Vec<String>>,
     /// Minimum value for the property, optional
-    
     pub min_value: Option<f64>,
     /// Maximum value for the property, optional
-    
     pub max_value: Option<f64>,
     /// Distinct value count for the property, optional
-    
     pub distinct_value_count: Option<i64>,
     /// Example values for the property, optional
-    
     pub example_values: Option<Vec<String>>,
 }
 
@@ -455,13 +441,10 @@ impl DbSchemaProperty {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
     /// Start node label of the relationship
-    
     pub start: String,
     /// End node label of the relationship
-    
     pub end: String,
     /// Type of the relationship
-    
     pub rel_type: String,
 }
 
@@ -532,28 +515,20 @@ impl DbSchemaRelationshipPattern {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
     /// ID of the constraint
-    
     pub id: i64,
     /// Name of the constraint
-    
     pub name: String,
     /// Type of the constraint
-    
     pub constraint_type: String,
     /// Entity type of the constraint
-    
     pub entity_type: String,
     /// Labels or types of the constraint
-    
     pub labels_or_types: Vec<String>,
     /// Properties of the constraint
-    
     pub properties: Vec<String>,
     /// Owned index of the constraint
-    
     pub owned_index: String,
     /// Property type of the constraint
-    
     pub property_type: Option<String>,
 }
 
@@ -733,22 +708,16 @@ impl DbSchemaConstraint {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
     /// Label of the index
-    
     pub label: String,
     /// Properties of the index
-    
     pub properties: Vec<String>,
     /// Size of the index
-    
     pub size: i64,
     /// Type of the index
-    
     pub index_type: String,
     /// Values selectivity of the index
-    
     pub values_selectivity: f64,
     /// Distinct values of the index
-    
     pub distinct_values: f64,
 }
 
@@ -864,10 +833,8 @@ impl DbSchemaIndex {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
-    
     pub constraint: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
-    
     pub index: Vec<DbSchemaIndex>,
 }
 
@@ -985,16 +952,12 @@ impl DbSchemaMetadata {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
-    
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship keys and vector of properties for each relationship type
-    
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Vector of relationships
-    
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     /// Metadata about the schema containing constraint and index
-    
     pub metadata: DbSchemaMetadata,
 }
 
