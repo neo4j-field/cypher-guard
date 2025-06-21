@@ -18,25 +18,25 @@ pub type Result<T> = std::result::Result<T, CypherGuardError>;
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum PropertyType {
     /// String property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "STRING"))]
+    
     STRING,
     /// Integer property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "INTEGER"))]
+    
     INTEGER,
     /// Float property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "FLOAT"))]
+    
     FLOAT,
     /// Boolean property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "BOOLEAN"))]
+    
     BOOLEAN,
     /// Point property (for spatial data)
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "POINT"))]
+    
     POINT,
     /// DateTime property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "DATE_TIME"))]
+    
     DateTime,
     /// List property
-    #[cfg_attr(feature = "python-bindings", pyo3(name = "LIST"))]
+    
     LIST,
 }
 
@@ -167,25 +167,25 @@ struct EnumType {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaProperty {
     /// Name of the property
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub name: String,
     /// Neo4j type of the property
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub neo4j_type: PropertyType,
     /// Enum values for the property, optional
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub enum_values: Option<Vec<String>>,
     /// Minimum value for the property, optional
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub min_value: Option<f64>,
     /// Maximum value for the property, optional
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub max_value: Option<f64>,
     /// Distinct value count for the property, optional
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub distinct_value_count: Option<i64>,
     /// Example values for the property, optional
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub example_values: Option<Vec<String>>,
 }
 
@@ -455,13 +455,13 @@ impl DbSchemaProperty {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
     /// Start node label of the relationship
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub start: String,
     /// End node label of the relationship
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub end: String,
     /// Type of the relationship
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub rel_type: String,
 }
 
@@ -532,28 +532,28 @@ impl DbSchemaRelationshipPattern {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
     /// ID of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub id: i64,
     /// Name of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub name: String,
     /// Type of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub constraint_type: String,
     /// Entity type of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub entity_type: String,
     /// Labels or types of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub labels_or_types: Vec<String>,
     /// Properties of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub properties: Vec<String>,
     /// Owned index of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub owned_index: String,
     /// Property type of the constraint
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub property_type: Option<String>,
 }
 
@@ -733,22 +733,22 @@ impl DbSchemaConstraint {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
     /// Label of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub label: String,
     /// Properties of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub properties: Vec<String>,
     /// Size of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub size: i64,
     /// Type of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub index_type: String,
     /// Values selectivity of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub values_selectivity: f64,
     /// Distinct values of the index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub distinct_values: f64,
 }
 
@@ -864,10 +864,10 @@ impl DbSchemaIndex {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
     /// Constraints in the schema
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub constraint: Vec<DbSchemaConstraint>,
     /// Indexes in the schema
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub index: Vec<DbSchemaIndex>,
 }
 
@@ -985,16 +985,16 @@ impl DbSchemaMetadata {
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     /// Node keys and vector of properties for each node label
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship keys and vector of properties for each relationship type
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Vector of relationships
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     /// Metadata about the schema containing constraint and index
-    #[cfg_attr(feature = "python-bindings", pyo3(get, set))]
+    
     pub metadata: DbSchemaMetadata,
 }
 
