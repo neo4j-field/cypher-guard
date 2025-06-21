@@ -2,7 +2,7 @@
 
 .PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all
 
-all: build
+all: build-python
 
 # Rust targets (matches CI)
 test-rust: fmt clippy build
@@ -22,16 +22,15 @@ build-rust:
 
 # Python targets
 poetry-install:
-	poetry install
+	cd rust/python_bindings && poetry install
 
-build: poetry-install
-	poetry run maturin develop
+build: build-python
 
 build-python: poetry-install
 	cd rust/python_bindings && poetry run maturin develop
 
 test-python: poetry-install
-	poetry run pytest rust/python_bindings/tests/ -vv
+	cd rust/python_bindings && poetry run pytest tests/ -vv
 
 # JavaScript targets
 build-js:

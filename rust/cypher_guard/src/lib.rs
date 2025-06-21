@@ -8,14 +8,16 @@ pub mod parser {
 }
 mod schema;
 
-use errors::{CypherGuardError, CypherGuardValidationError};
+use errors::convert_nom_error;
+pub use errors::{
+    CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
+};
 pub use schema::{
     DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
     DbSchemaRelationshipPattern, PropertyType,
 };
 
 use parser::ast::*;
-use parser::clauses::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 pub type Result<T> = std::result::Result<T, CypherGuardError>;
@@ -40,13 +42,21 @@ pub fn validate_cypher(_query: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Parse a Cypher query with custom error handling
+pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsingError> {
+    match parser::clauses::parse_query(query) {
+        Ok((_, ast)) => Ok(ast),
+        Err(e) => Err(convert_nom_error(e, "query", query)),
+    }
+}
+
 /// Validate full query with schema: returns true if valid, or error on parse failure
 pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
     println!("Validating query: {}", query);
     println!("Schema: {:?}", schema);
     let ast = parse_query(query).map_err(|e| {
         println!("Parser error: {:?}", e);
-        CypherGuardError::InvalidQuery(format!("Failed to parse query: {:?}", e))
+        CypherGuardError::Parsing(e)
     })?;
     println!("AST: {:?}", ast);
     let mut ctx = ValidationContext {
@@ -55,7 +65,7 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
         var_types: HashMap::new(),
         schema,
     };
-    validate_query(&ast.1, &mut ctx);
+    validate_query(&ast, &mut ctx);
     if ctx.errors.is_empty() {
         Ok(true)
     } else {
@@ -66,7 +76,7 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
 /// Main validation routine: parse and traverse the AST
 pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
     match parse_query(query) {
-        Ok((_, ast)) => {
+        Ok(ast) => {
             println!("AST: {:?}", ast); // Debug: Print the AST
             let mut ctx = ValidationContext {
                 errors: Vec::new(),
@@ -797,19 +807,8 @@ fn validate_where_clause(
                     }
                 }
             }
-            WhereCondition::FunctionCall {
-                function,
-                arguments,
-            } => {
-                println!(
-                    "DEBUG: Processing function call: {}({:?})",
-                    function, arguments
-                );
-                // Validate function arguments
-                for arg in arguments {
-                    println!("DEBUG: Validating function argument: {}", arg);
-                    validate_property_access(arg, ctx.schema, ctx)?;
-                }
+            WhereCondition::FunctionCall { .. } => {
+                // Already handled in validate_where_condition
             }
             WhereCondition::PathProperty { path_var, property } => {
                 println!("DEBUG: Processing path property: {}.{}", path_var, property);
@@ -1150,5 +1149,44 @@ impl<'a> ValidationContext<'a> {
             var_types: HashMap::new(),
             schema,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_query_success() {
+        let query = "MATCH (a)-[:KNOWS]->(b) RETURN a, b";
+        let result = parse_query(query);
+        assert!(result.is_ok());
+
+        let ast = result.unwrap();
+        assert!(ast.match_clause.is_some());
+        assert!(ast.return_clause.is_some());
+    }
+
+    #[test]
+    fn test_parse_query_failure() {
+        let query = "INVALID QUERY";
+        let result = parse_query(query);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        // Should be a CypherGuardParsingError, not a generic nom error
+        assert!(matches!(error, CypherGuardParsingError::Nom(_)));
+    }
+
+    #[test]
+    fn test_validate_cypher_with_schema_uses_custom_errors() {
+        let schema = DbSchema::new();
+        let query = "INVALID QUERY";
+        let result = validate_cypher_with_schema(query, &schema);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        // Should be a Parsing error containing our custom error
+        assert!(matches!(error, CypherGuardError::Parsing(_)));
     }
 }

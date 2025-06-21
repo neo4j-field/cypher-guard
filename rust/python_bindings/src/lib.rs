@@ -1,52 +1,140 @@
 use ::cypher_guard::{
-    get_cypher_validation_errors, validate_cypher_with_schema, CypherGuardError,
+    get_cypher_validation_errors, parse_query, validate_cypher_with_schema, CypherGuardError,
     CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError, DbSchema,
     DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
     DbSchemaRelationshipPattern, PropertyType,
 };
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use std::io::Write;
 
+// === Custom Python Exception Classes ===
+#[pyclass(extends=PyException)]
+pub struct PyCypherGuardError {
+    #[pyo3(get)]
+    pub message: String,
+}
+#[pymethods]
+impl PyCypherGuardError {
+    #[new]
+    fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+#[pyclass(extends=PyException)]
+pub struct PyCypherGuardParsingError {
+    #[pyo3(get)]
+    pub message: String,
+}
+#[pymethods]
+impl PyCypherGuardParsingError {
+    #[new]
+    fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+#[pyclass(extends=PyException)]
+pub struct PyCypherGuardValidationError {
+    #[pyo3(get)]
+    pub message: String,
+}
+#[pymethods]
+impl PyCypherGuardValidationError {
+    #[new]
+    fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+#[pyclass(extends=PyException)]
+pub struct PyCypherGuardSchemaError {
+    #[pyo3(get)]
+    pub message: String,
+}
+#[pymethods]
+impl PyCypherGuardSchemaError {
+    #[new]
+    fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+// === Error Conversion Helpers ===
+fn convert_cypher_error(py: Python, err: CypherGuardError) -> PyErr {
+    match err {
+        CypherGuardError::Parsing(e) => convert_parsing_error(py, e),
+        CypherGuardError::Validation(e) => convert_validation_error(py, e),
+        CypherGuardError::Schema(e) => convert_schema_error(py, e),
+        CypherGuardError::InvalidQuery(msg) => {
+            PyErr::from_type(py.get_type::<PyCypherGuardError>(), (msg,))
+        }
+    }
+}
+
+fn convert_parsing_error(py: Python, err: CypherGuardParsingError) -> PyErr {
+    PyErr::from_type(
+        py.get_type::<PyCypherGuardParsingError>(),
+        (err.to_string(),),
+    )
+}
+fn convert_validation_error(py: Python, err: CypherGuardValidationError) -> PyErr {
+    PyErr::from_type(
+        py.get_type::<PyCypherGuardValidationError>(),
+        (err.to_string(),),
+    )
+}
+fn convert_schema_error(py: Python, err: CypherGuardSchemaError) -> PyErr {
+    PyErr::from_type(
+        py.get_type::<PyCypherGuardSchemaError>(),
+        (err.to_string(),),
+    )
+}
+
+// === Python API Functions ===
 #[pyfunction]
-pub fn validate_cypher_py(query: &str, schema_json: &str) -> PyResult<bool> {
-    println!("[PYBIND] Validating query: {}", query);
-    println!("[PYBIND] Schema JSON: {}", schema_json);
-    std::io::stdout().flush().unwrap();
-    let schema = DbSchema::from_json_string(schema_json).map_err(|e| {
-        println!("[PYBIND] Schema error: {:?}", e);
-        std::io::stdout().flush().unwrap();
-        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid schema")
-    })?;
-    println!("[PYBIND] Schema loaded successfully");
-    std::io::stdout().flush().unwrap();
-    validate_cypher_with_schema(query, &schema).map_err(|e| {
-        println!("[PYBIND] Validation error: {:?}", e);
-        std::io::stdout().flush().unwrap();
-        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid query")
-    })
+pub fn validate_cypher_py(py: Python, query: &str, schema_json: &str) -> PyResult<bool> {
+    let schema =
+        DbSchema::from_json_string(schema_json).map_err(|e| convert_cypher_error(py, e))?;
+    validate_cypher_with_schema(query, &schema).map_err(|e| convert_cypher_error(py, e))
 }
 
 #[pyfunction]
-pub fn get_validation_errors_py(query: &str, schema_json: &str) -> PyResult<Vec<String>> {
-    println!("[PYBIND] Getting validation errors for query: {}", query);
-    println!("[PYBIND] Schema JSON: {}", schema_json);
-    std::io::stdout().flush().unwrap();
-    let schema = DbSchema::from_json_string(schema_json).map_err(|e| {
-        println!("[PYBIND] Schema error: {:?}", e);
-        std::io::stdout().flush().unwrap();
-        PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid schema")
-    })?;
-    println!("[PYBIND] Schema loaded successfully");
-    std::io::stdout().flush().unwrap();
+pub fn get_validation_errors_py(
+    py: Python,
+    query: &str,
+    schema_json: &str,
+) -> PyResult<Vec<String>> {
+    let schema =
+        DbSchema::from_json_string(schema_json).map_err(|e| convert_cypher_error(py, e))?;
     Ok(get_cypher_validation_errors(query, &schema))
 }
 
+#[pyfunction]
+pub fn parse_query_py(py: Python, query: &str) -> PyResult<PyObject> {
+    match parse_query(query) {
+        Ok(_ast) => Ok(PyDict::new(py).into()),
+        Err(e) => Err(convert_parsing_error(py, e)),
+    }
+}
+
 #[pymodule]
-fn cypher_guard(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<CypherGuardError>()?;
-    m.add_class::<CypherGuardParsingError>()?;
-    m.add_class::<CypherGuardSchemaError>()?;
-    m.add_class::<CypherGuardValidationError>()?;
+fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("CypherGuardError", py.get_type::<PyCypherGuardError>())?;
+    m.add(
+        "CypherGuardParsingError",
+        py.get_type::<PyCypherGuardParsingError>(),
+    )?;
+    m.add(
+        "CypherGuardValidationError",
+        py.get_type::<PyCypherGuardValidationError>(),
+    )?;
+    m.add(
+        "CypherGuardSchemaError",
+        py.get_type::<PyCypherGuardSchemaError>(),
+    )?;
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<PropertyType>()?;
@@ -56,5 +144,6 @@ fn cypher_guard(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchemaMetadata>()?;
     m.add_function(wrap_pyfunction!(validate_cypher_py, m)?)?;
     m.add_function(wrap_pyfunction!(get_validation_errors_py, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_query_py, m)?)?;
     Ok(())
 }

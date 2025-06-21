@@ -1,7 +1,6 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-#[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum CypherGuardError {
     #[error("Validation error: {0}")]
     Validation(#[from] CypherGuardValidationError),
@@ -35,30 +34,6 @@ impl CypherGuardError {
     /// Returns true if this is an invalid query error
     pub fn is_invalid_query(&self) -> bool {
         matches!(self, Self::InvalidQuery(_))
-    }
-
-    /// Returns the inner validation error if this is a validation error
-    pub fn as_validation(&self) -> Option<&CypherGuardValidationError> {
-        match self {
-            Self::Validation(e) => Some(e),
-            _ => None,
-        }
-    }
-
-    /// Returns the inner parsing error if this is a parsing error
-    pub fn as_parsing(&self) -> Option<&CypherGuardParsingError> {
-        match self {
-            Self::Parsing(e) => Some(e),
-            _ => None,
-        }
-    }
-
-    /// Returns the inner schema error if this is a schema error
-    pub fn as_schema(&self) -> Option<&CypherGuardSchemaError> {
-        match self {
-            Self::Schema(e) => Some(e),
-            _ => None,
-        }
     }
 
     /// Returns the invalid query message if this is an InvalidQuery error
@@ -154,7 +129,6 @@ impl CypherGuardValidationError {
 }
 
 #[derive(Debug, Error)]
-#[cfg_attr(feature = "python-bindings", pyclass)]
 pub enum CypherGuardParsingError {
     #[error("Nom parsing error: {0}")]
     Nom(#[from] nom::error::Error<String>),
@@ -236,7 +210,7 @@ impl CypherGuardParsingError {
     // Query methods (organized by error type)
     /// Returns true if this is a nom parsing error
     pub fn is_nom_error(&self) -> bool {
-        matches!(self, Self::Nom(_))
+        matches!(self, Self::Nom { .. })
     }
 
     /// Returns true if this is an UnexpectedEnd error
@@ -888,7 +862,6 @@ mod tests {
         let validation_error = CypherGuardValidationError::invalid_property_name("test");
         let cypher_error: CypherGuardError = validation_error.into();
         assert!(cypher_error.is_validation());
-        assert!(cypher_error.as_validation().is_some());
         assert!(cypher_error
             .to_string()
             .contains("Invalid property name: test"));
@@ -897,14 +870,12 @@ mod tests {
         let parsing_error = CypherGuardParsingError::invalid_syntax("test");
         let cypher_error: CypherGuardError = parsing_error.into();
         assert!(cypher_error.is_parsing());
-        assert!(cypher_error.as_parsing().is_some());
         assert!(cypher_error.to_string().contains("Invalid syntax: test"));
 
         // Test conversion from SchemaError to CypherGuardError
         let schema_error = CypherGuardSchemaError::missing_field("test");
         let cypher_error: CypherGuardError = schema_error.into();
         assert!(cypher_error.is_schema());
-        assert!(cypher_error.as_schema().is_some());
         assert!(cypher_error
             .to_string()
             .contains("Missing required field: test"));
