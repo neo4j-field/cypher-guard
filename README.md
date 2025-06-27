@@ -1,189 +1,217 @@
 # cypher-guard
 
-Cypher Guard is a Rust library and CLI tool for validating Cypher queries against a user-defined schema. It supports both Rust and Python integration via PyO3 and maturin.
+![Cypher Guard Banner](assets/cypher-guard-banner.png)
 
-## Features
-- Validate Cypher query syntax
-- Validate node labels, relationship types, and properties against a schema
-- JSON-based schema loading
-- Python bindings via PyO3
-- **Schema-aware validation**: Ensures all labels, relationship types, and properties in a query exist in the provided schema
-- **Makefile** for easy Python extension build
+## Introduction
 
-## Installation
+Cypher Guard is an open-source Rust library and CLI tool for parsing and validating [Cypher](https://neo4j.com/developer/cypher/) queries against a user-defined schema. It provides robust, schema-aware validation for graph queries, with bindings for Python and TypeScript/JavaScript. The Python and TypeScript/JS bindings expose a simple API in those languages, but leverage the full performance and safety of Rust under the hood. Cypher Guard is designed for use in developer tools, CI pipelines, and anywhere you need to ensure Cypher query correctness.
+
+---
+
+## Quickstart
 
 ### Rust
-Clone the repository and build with Cargo:
+
 ```sh
 cargo build --release
 ```
 
 ### Python
-Build and install the Python module using maturin or the provided Makefile:
+
 ```sh
-# Option 1: Use maturin directly
+# Install with maturin (recommended)
 pip install maturin
 cd rust/python_bindings
 maturin develop
 
-# Option 2: Use the Makefile (installs maturin if needed)
+# Or use the Makefile (installs maturin if needed)
 make
 ```
+
+### TypeScript/JavaScript
+
+```sh
+cd rust/js_bindings
+npm install
+npm run build
+```
+
+---
 
 ## Usage
 
 ### CLI
-You can use the CLI to validate Cypher queries:
+
 ```sh
 echo "MATCH (n:Person) RETURN n" | cargo run --bin cypher-guard
 ```
 
-### Library
-Add `cypher-guard` as a dependency in your Rust project:
-```toml
-[dependencies]
-cypher-guard = { path = "./cypher-guard" }
+### Rust Library
+
+```rust
+use cypher_guard::validate_cypher_with_schema;
+let schema = ...; // Load your schema
+let query = "MATCH (n:Person) RETURN n";
+let result = validate_cypher_with_schema(query, &schema);
 ```
 
-### Python
-After installing with maturin or `make`, import and use in Python:
+### Python API
+
 ```python
 from cypher_guard import validate_cypher_py, get_validation_errors_py
 
-# Example schema JSON
-schema_json = '''
-{
-    "node_props": {
-        "Person": [
-            {"name": "name", "neo4j_type": {"type": "STRING"}},
-            {"name": "age", "neo4j_type": {"type": "INTEGER"}}
-        ],
-        "Movie": [
-            {"name": "title", "neo4j_type": {"type": "STRING"}},
-            {"name": "year", "neo4j_type": {"type": "INTEGER"}}
-        ]
-    },
-    "rel_props": {
-        "KNOWS": [
-            {"name": "since", "neo4j_type": {"type": "STRING"}}
-        ],
-        "ACTED_IN": [
-            {"name": "role", "neo4j_type": {"type": "STRING"}}
-        ]
-    },
-    "relationships": [
-        {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
-        {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"}
-    ],
-    "metadata": {
-        "index": [],
-        "constraint": []
-    }
-}
-'''
+schema_json = '{...}'  # Your schema as JSON
+query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since"
 
-# Example query
-query = 'MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since'
-
-# Validate query
 is_valid = validate_cypher_py(query, schema_json)
-print("Is valid:", is_valid)
-
-# Get validation errors
 errors = get_validation_errors_py(query, schema_json)
-print("Errors:", errors)
 ```
+
+### TypeScript/JavaScript API
+
+```typescript
+import { validateCypherJs, getValidationErrorsJs } from "cypher-guard";
+
+const schemaJson = '{...}';
+const query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
+
+const isValid = validateCypherJs(query, schemaJson);
+const errors = getValidationErrorsJs(query, schemaJson);
+```
+
+---
+
+## Makefile Commands
+
+The Makefile provides convenient shortcuts for building, testing, and linting across Rust, Python, and JavaScript/TypeScript bindings.
+
+| Command         | Description                                                                 |
+|-----------------|-----------------------------------------------------------------------------|
+| `make` or `make build`         | Build and install the Python extension using Poetry and Maturin.      |
+| `make poetry-install`          | Install Python dependencies for the bindings using Poetry.            |
+| `make build-python`            | Build and install the Python extension (runs `poetry run maturin develop`). |
+| `make test-python`             | Run the Python test suite with pytest.                                |
+| `make build-js`                | Install and build the JS/TS bindings (`npm install && npm run build`).|
+| `make test-js`                 | Run the JS/TS test suite (`npm test`).                                |
+| `make build-rust`              | Build the Rust library (`cargo build`).                               |
+| `make test-rust`               | Run Rust tests, formatting, and clippy lints.                        |
+| `make fmt`                     | Check Rust code formatting (`cargo fmt --all -- --check`).            |
+| `make clippy`                  | Run clippy linter on the main Rust crate.                             |
+| `make clippy-all`              | Run clippy linter on all Rust crates.                                 |
+| `make clean`                   | Remove build artifacts, Python caches, and node modules.              |
+| `make install`                 | Alias for `make build`.                                               |
+
+**Note:** Most commands are cross-platform and will set up all dependencies for you.
+
+---
+
+## How It Works: Parsing & Validation Flow
+
+Cypher Guard separates query validation into two phases:
+
+1. **Parsing**: Uses the [`nom`](https://docs.rs/nom) parser combinator library to convert Cypher into an Abstract Syntax Tree (AST). If parsing fails, you get a syntax error.
+2. **Validation**: Traverses the AST and checks all labels, relationship types, and properties against your schema. Returns semantic errors if anything is missing or mismatched.
+
+### File/Module Structure
+
+- `parser/clauses.rs`: Top-level Cypher clauses (MATCH, RETURN, etc.)
+- `parser/patterns.rs`: Node, relationship, and path pattern parsing
+- `parser/ast.rs`: AST node definitions
+- `schema.rs`: Schema structure and validation logic
+- `errors.rs`: Error types and reporting
+- `python_bindings/`, `js_bindings/`: Language bindings
+
+---
+
+## Features
+
+- Full Cypher clause support: MATCH, OPTIONAL MATCH, RETURN, WITH, WHERE, CREATE, MERGE, SET
+- Node/relationship patterns, QPPs, path variables, quantifiers, function calls, property types
+- Schema-aware validation: labels, types, properties, direction, type checking, variable scoping
+- Rust, Python, and TypeScript/JS bindings
+- 190+ tests across all languages
+
+---
+
+## Supported Cypher Parsing Features
+
+### Clauses
+- `MATCH`, `OPTIONAL MATCH`
+- `RETURN`
+- `WITH` (aliases, property access, function calls, wildcards)
+- `WHERE` (complex conditions, logical operators, parentheses)
+- `CREATE`
+- `MERGE` (with `ON CREATE` and `ON MATCH`)
+- `SET`
+
+### Node Patterns
+- Basic nodes: `(n)`
+- Labeled nodes: `(n:Person)`
+- Nodes with properties: `(n:Person {name: 'Alice', age: 30})`
+- Nodes with variables: `(person:Person)`
+
+### Relationship Patterns
+- Basic: `(a)-[r]->(b)`
+- Typed: `(a)-[r:KNOWS]->(b)`
+- With properties: `(a)-[r:KNOWS {since: '2020'}]->(b)`
+- Variable length: `(a)-[r:KNOWS*1..5]->(b)`
+- Optional: `(a)-[r:KNOWS?]->(b)`
+- Undirected: `(a)-[r:KNOWS]-(b)`
+- Multiple types: `(a)-[r:KNOWS|FRIENDS]->(b)`
+
+### Quantified Path Patterns (QPP)
+- Basic: `((a)-[r:KNOWS]->(b)){1,5}`
+- With WHERE: `((a)-[r:KNOWS]->(b) WHERE r.since > '2020'){1,5}`
+- With path variables: `p = ((a)-[r:KNOWS]->(b)){1,5}`
+
+### WHERE Conditions
+- Property comparisons: `n.name = 'Alice'`, `n.age > 30`
+- Boolean: `n.active = true`, `n.name IS NULL`
+- Function calls: `length(n.name) > 5`
+- Path properties: `p.length > 2`
+- Logical: `AND`, `OR`, `NOT`
+- Parenthesized: `(n.age > 30 AND n.active = true)`
+
+### Property Values
+- Strings: `'Alice'`
+- Numbers: `30`, `3.14`
+- Booleans: `true`, `false`
+- NULL: `NULL`
+- Lists: `[1, 2, 3]`
+- Maps: `{name: 'Alice', age: 30}`
+- Function calls: `timestamp()`
+
+### Function Calls
+- Basic: `length(n.name)`
+- Nested: `substring(n.name, 0, 5)`
+- Multiple arguments: `coalesce(n.name, 'Unknown')`
+
+### Quantifiers
+- Zero or more: `*`
+- One or more: `+`
+- Exact: `{5}`
+- Range: `{1,5}`
+- Optional: `?`
+
+### Path Variables
+- Assignment: `p = (a)-[r:KNOWS]->(b)`
+- Path properties: `p.length`, `p.nodes`, `p.relationships`
+
+---
+
+## Test Coverage
+- **Rust**: 190+ tests covering parsing, validation, error handling, and edge cases
+- **Python**: Unit tests for valid/invalid queries, QPPs, schema validation, and error reporting (`rust/python_bindings/tests/unit/`)
+- **TypeScript/JS**: Tests for JS/TS bindings (`rust/js_bindings/test.ts`)
+
+---
 
 ## Contributing
-Contributions are welcome! Please open issues or submit pull requests for improvements or bug fixes.
+
+This project is open source and welcomes contributions! Please open issues or submit pull requests for improvements or bug fixes.
+
+---
 
 ## License
+
 MIT
-
-## Implementation Details
-
-### Two-Phase Validation: Parse → Validate
-
-Cypher Guard separates query validation into two distinct phases:
-
-#### 1. Parsing Phase
-
-- Uses the [`nom`](https://docs.rs/nom) parser combinator library to convert a raw Cypher string into a structured **Abstract Syntax Tree (AST)**.
-- If the input is **not valid Cypher syntax**, parsing fails early and returns a `nom::Err`.
-- On success, a fully-formed `Query` struct is constructed, consisting of nested structs/enums like:
-  - `MatchClause`
-  - `PatternElement`
-  - `NodePattern`, `RelationshipPattern`, etc.
-
-#### 2. Validation Phase
-
-- Once the AST is built, Cypher Guard traverses the tree in **preorder DFS**.
-- Each node is validated against a user-provided schema (`DbSchema`) to ensure:
-  - All labels are defined in the schema
-  - All relationship types exist
-  - All properties are known and correctly typed
-- Validation returns a list of **semantic errors**, if any are found.
-
-This phase separation provides a clear distinction between **syntactic validity** (can it be parsed?) and **semantic validity** (does it make sense in your graph?).
-
----
-
-### Error Tree
-
-The *error tree* in Cypher Guard is a conceptual model that captures validation issues **in relation to AST structure**.
-
-- Parsing errors bubble up immediately and stop execution.
-- Validation errors are collected as you traverse the AST.
-- Each AST node may emit one or more errors (e.g., unknown label, invalid property).
-- The collected errors **preserve context** and can be traced back to specific query parts (e.g., `MatchClause -> Pattern[0] -> Node`).
-
-This approach supports precise, explainable diagnostics — ideal for debugging tools, UIs, and LLM feedback loops.
-
----
-
-### Submodules and Structure
-
-Cypher Guard is composed of several focused submodules:
-
-#### `parser`
-- The core parsing logic, built using `nom`.
-- Split into:
-  - `clauses.rs`: Parses top-level clauses like `MATCH`, `RETURN`
-  - `patterns.rs`: Parses internal path structures like nodes, relationships, quantified paths
-  - `ast.rs`: Defines all AST node types (`Query`, `MatchClause`, `PatternElement`, etc.)
-- The root function `parser::query()` returns a `Query` struct or a parse error.
-
-#### `schema`
-- Defines the `DbSchema` struct and logic for:
-  - Validating whether a label, relationship, or property exists
-  - Performing type checks for properties (e.g., String, Integer, Enum)
-- Used during the validation phase.
-
-#### `errors`
-- Defines the `CypherGuardError` enum used throughout the library.
-- Encapsulates:
-  - Parsing failures (`InvalidQuery`)
-  - Schema validation errors (missing labels, properties)
-- Returned by top-level functions like `validate_cypher_with_schema`.
-
----
-
-### Summary of Flow
-```
-[Cypher Query String]
-        ↓
-parser.rs → query()
-        ↓
-parser/clauses.rs → match_clause(), return_clause()
-        ↓
-parser/patterns.rs → node_pattern(), relationship_pattern(), pattern_element_sequence()
-        ↓
-parser/ast.rs → builds up structs like Query, MatchClause, PatternElement, etc.
-        ↓
-lib.rs → get_cypher_validation_errors()
-        ↓
-schema.rs → checks labels, rel types, and properties against DbSchema
-        ↓
-errors.rs → returns a CypherGuardError or Vec<String> with issues```
-
-

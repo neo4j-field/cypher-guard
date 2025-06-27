@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, multispace0},
     combinator::{map, opt},
-    multi::{separated_list1, separated_list0},
+    multi::separated_list0,
     sequence::tuple,
     IResult,
 };
@@ -27,7 +27,7 @@ pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 pub fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
     let (input, function) = map(identifier, |s| s.to_string())(input)?;
     let (input, _) = char('(')(input)?;
-    let (input, args) = nom::multi::separated_list0(
+    let (input, args) = separated_list0(
         tuple((multispace0, char(','), multispace0)),
         alt((
             map(char('*'), |_| "*".to_string()),
@@ -298,7 +298,9 @@ mod tests {
         let result = property_value("timestamp()");
         assert!(result.is_ok());
         let (_, value) = result.unwrap();
-        assert!(matches!(value, PropertyValue::FunctionCall { name, args } if name == "timestamp" && args.is_empty()));
+        assert!(
+            matches!(value, PropertyValue::FunctionCall { name, args } if name == "timestamp" && args.is_empty())
+        );
     }
 
     #[test]
@@ -409,10 +411,10 @@ mod tests {
         assert!(result.is_ok());
         let (_, props) = result.unwrap();
         assert_eq!(props.len(), 2);
-        
+
         let name_prop = props.iter().find(|p| p.key == "name").unwrap();
         assert!(matches!(&name_prop.value, PropertyValue::String(s) if s == "Alice"));
-        
+
         let age_prop = props.iter().find(|p| p.key == "age").unwrap();
         assert!(matches!(&age_prop.value, PropertyValue::Number(n) if n == &30));
     }
