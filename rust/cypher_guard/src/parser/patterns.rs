@@ -669,7 +669,7 @@ mod tests {
                 {
                     assert_eq!(left, "a.name");
                     assert_eq!(operator, "=");
-                    assert_eq!(right, "'Alice'");
+                    assert_eq!(right, "Alice");
                 } else {
                     panic!("Expected comparison condition");
                 }

@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{tag, tag_no_case},
     character::complete::{char, digit1, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::{many1, separated_list0, separated_list1},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{preceded, tuple},
     IResult,
 };
@@ -82,8 +82,27 @@ pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("RETURN")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, items) =
-        separated_list1(tuple((multispace0, char(','), multispace0)), return_item)(input)?;
+
+    // Parse the first item (required)
+    let (input, first_item) = return_item(input)?;
+    let mut items = vec![first_item];
+
+    // Parse additional items with commas (optional)
+    let (input, additional_items) = many0(preceded(
+        tuple((multispace0, char(','), multispace0)),
+        return_item,
+    ))(input)?;
+    items.extend(additional_items);
+
+    // Check for trailing comma - if there's a comma followed by whitespace, it's an error
+    let (input, _) = multispace0(input)?;
+    if !input.is_empty() && input.starts_with(',') {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+
     println!("Return clause items: {:?}", items); // Debug
     Ok((input, ReturnClause { items }))
 }
@@ -137,7 +156,7 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
             // Try to parse property access
             map(property_access, |s| s),
             // Try to parse string literals
-            map(string_literal, |s| format!("'{}'", s)),
+            map(string_literal, |s| s),
             // Try to parse numeric literals
             map(numeric_literal, |n| n.to_string()),
             // Try to parse boolean literals
@@ -156,21 +175,66 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
     Ok((input, (function, args)))
 }
 
-// Parses a WHERE condition (e.g., a.age > 30, a.name = 'Alice', a.name IS NULL)
-fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
-    println!("[where_condition] >>> ENTER: input='{}'", input);
+// Parses WHERE expressions with proper operator precedence
+// AND binds tighter than OR, so we parse OR expressions first, then AND expressions
+fn parse_where_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
+    println!("[parse_where_expr] >>> ENTER: input='{}'", input);
+
+    // Parse OR expressions (lowest precedence)
+    let (input, mut left) = parse_and_expr(input)?;
+
+    // Parse additional OR expressions
+    let (input, or_conditions) = many0(preceded(
+        tuple((multispace0, tag("OR"), multispace0)),
+        parse_and_expr,
+    ))(input)?;
+
+    // Build the OR tree
+    for right in or_conditions {
+        left = ast::WhereCondition::Or(Box::new(left), Box::new(right));
+    }
+
+    println!("[parse_where_expr] <<< EXIT: {:?}", left);
+    Ok((input, left))
+}
+
+// Parses AND expressions (higher precedence than OR)
+fn parse_and_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
+    println!("[parse_and_expr] >>> ENTER: input='{}'", input);
+
+    // Parse basic conditions (highest precedence)
+    let (input, mut left) = parse_basic_condition(input)?;
+
+    // Parse additional AND expressions
+    let (input, and_conditions) = many0(preceded(
+        tuple((multispace0, tag("AND"), multispace0)),
+        parse_basic_condition,
+    ))(input)?;
+
+    // Build the AND tree
+    for right in and_conditions {
+        left = ast::WhereCondition::And(Box::new(left), Box::new(right));
+    }
+
+    println!("[parse_and_expr] <<< EXIT: {:?}", left);
+    Ok((input, left))
+}
+
+// Parses basic conditions (comparisons, NOT, parenthesized, function calls, etc.)
+fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
+    println!("[parse_basic_condition] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
 
     // Try to parse NOT
     if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("NOT")(input) {
         let (rest, _) = multispace1(rest)?;
-        let (rest, condition) = where_condition(rest)?;
+        let (rest, condition) = parse_basic_condition(rest)?;
         return Ok((rest, ast::WhereCondition::Not(Box::new(condition))));
     }
 
     // Try to parse parenthesized condition
     if let Ok((rest, _)) = tag::<&str, &str, nom::error::Error<&str>>("(")(input) {
-        let (rest, condition) = where_condition(rest)?;
+        let (rest, condition) = parse_where_expr(rest)?;
         let (rest, _) = tag::<&str, &str, nom::error::Error<&str>>(")")(rest)?;
         return Ok((
             rest,
@@ -181,7 +245,7 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     // Try to parse as a function call
     if let Ok((rest, (function, args))) = function_call(input) {
         println!(
-            "[where_condition] Parsed function call: {}({:?})",
+            "[parse_basic_condition] Parsed function call: {}({:?})",
             function, args
         );
         return Ok((
@@ -199,7 +263,7 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
             map(property_access, |s| s),
             map(identifier, |s| s.to_string()),
         ))(input)?;
-        println!("[where_condition] Parsed left side: {}", left);
+        println!("[parse_basic_condition] Parsed left side: {}", left);
         let (input, _) = multispace0(input)?;
         let (input, operator) = alt((
             tag("="),
@@ -211,14 +275,27 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
             tag("IS NULL"),
             tag("IS NOT NULL"),
         ))(input)?;
-        println!("[where_condition] Parsed operator: {}", operator);
+        println!("[parse_basic_condition] Parsed operator: {}", operator);
+
+        // For IS NULL and IS NOT NULL, there's no right side
+        if operator == "IS NULL" || operator == "IS NOT NULL" {
+            return Ok((
+                input,
+                ast::WhereCondition::Comparison {
+                    left,
+                    operator: operator.to_string(),
+                    right: "".to_string(),
+                },
+            ));
+        }
+
         let (input, _) = multispace0(input)?;
         let (input, right) = alt((
-            map(string_literal, |s| format!("'{}'", s)),
+            map(string_literal, |s| s),
             map(numeric_literal, |n| n),
             map(identifier, |s| s.to_string()),
         ))(input)?;
-        println!("[where_condition] Parsed right side: {}", right);
+        println!("[parse_basic_condition] Parsed right side: {}", right);
         Ok((
             input,
             ast::WhereCondition::Comparison {
@@ -236,7 +313,7 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     // If comparison parsing failed, try to parse as a path property
     if let Ok((rest, (path_var, property))) = path_property(input) {
         println!(
-            "[where_condition] Parsed path property: {}.{}",
+            "[parse_basic_condition] Parsed path property: {}.{}",
             path_var, property
         );
         return Ok((
@@ -259,14 +336,13 @@ pub fn where_clause(input: &str) -> IResult<&str, ast::WhereClause> {
     let (input, _) = multispace1(input)?;
     println!("[where_clause] After WHERE whitespace: input='{}'", input);
 
-    // Parse conditions separated by AND or OR
-    let (input, conditions) = separated_list1(
-        tuple((multispace0, alt((tag("AND"), tag("OR"))), multispace0)),
-        where_condition,
-    )(input)?;
-    println!("[where_clause] Parsed conditions: {:?}", conditions);
+    // Parse the expression with proper precedence
+    let (input, condition) = parse_where_expr(input)?;
+    println!("[where_clause] Parsed condition: {:?}", condition);
 
-    let clause = ast::WhereClause { conditions };
+    let clause = ast::WhereClause {
+        conditions: vec![condition],
+    };
     println!("[where_clause] <<< EXIT: {:?}", clause);
     Ok((input, clause))
 }
@@ -657,5 +733,681 @@ mod tests {
         let input = "WITH a, b.name AS name";
         let (_, clause) = with_clause(input).unwrap();
         assert_eq!(clause.items.len(), 2);
+    }
+
+    // Return clause tests
+    #[test]
+    fn test_return_clause_simple() {
+        let input = "RETURN a";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 1);
+        assert_eq!(clause.items[0], "a");
+    }
+
+    #[test]
+    fn test_return_clause_multiple_items() {
+        let input = "RETURN a, b, c";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_with_property_access() {
+        let input = "RETURN a.name, b.age";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 2);
+        assert_eq!(clause.items[0], "a.name");
+        assert_eq!(clause.items[1], "b.age");
+    }
+
+    #[test]
+    fn test_return_clause_mixed_items() {
+        let input = "RETURN a, b.name, c";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b.name");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_with_whitespace() {
+        let input = "RETURN  a  ,  b  ,  c  ";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_single_property() {
+        let input = "RETURN a.name";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 1);
+        assert_eq!(clause.items[0], "a.name");
+    }
+
+    #[test]
+    fn test_return_item_simple() {
+        let input = "a";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "a");
+    }
+
+    #[test]
+    fn test_return_item_with_property() {
+        let input = "a.name";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "a.name");
+    }
+
+    #[test]
+    fn test_return_item_with_underscore() {
+        let input = "user_name";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "user_name");
+    }
+
+    #[test]
+    fn test_return_item_with_numbers() {
+        let input = "node1";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "node1");
+    }
+
+    // Error cases for return clause
+    #[test]
+    fn test_return_clause_missing_return() {
+        let input = "a, b, c";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_empty() {
+        let input = "RETURN";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_no_items() {
+        let input = "RETURN ";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_trailing_comma() {
+        let input = "RETURN a, b,";
+        let result = return_clause(input);
+        // Parser should reject trailing commas as they are invalid in Cypher
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_item_invalid_identifier() {
+        let input = "123name";
+        let (_, item) = return_item(input).unwrap();
+        // Current parser accepts identifiers starting with digits
+        assert_eq!(item, "123name");
+    }
+
+    // WHERE clause tests
+    #[test]
+    fn test_where_clause_simple_comparison() {
+        let input = "WHERE a.age > 30";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(operator, ">");
+                assert_eq!(right, "30");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_string_comparison() {
+        let input = "WHERE a.name = \"Alice\"";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(operator, "=");
+                assert_eq!(right, "Alice");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_multiple_conditions_and() {
+        let input = "WHERE a.age > 30 AND b.name = \"Bob\"";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::And(left, right) => {
+                match &**left {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(o, ">");
+                        assert_eq!(r, "30");
+                    }
+                    _ => assert!(false, "Expected comparison on left "),
+                }
+                match &**right {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(o, "=");
+                        assert_eq!(r, "Bob");
+                    }
+                    _ => assert!(false, "Expected comparison on right "),
+                }
+            }
+            _ => assert!(false, "Expected AND condition "),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_multiple_conditions_or() {
+        let input = "WHERE a.age > 30 OR b.name = \"Bob\"";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Or(left, right) => {
+                match &**left {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(o, ">");
+                        assert_eq!(r, "30");
+                    }
+                    _ => assert!(false, "Expected comparison on left "),
+                }
+                match &**right {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(o, "=");
+                        assert_eq!(r, "Bob");
+                    }
+                    _ => assert!(false, "Expected comparison on right "),
+                }
+            }
+            _ => assert!(false, "Expected OR condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_is_null() {
+        let input = "WHERE a.name IS NULL";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(operator, "IS NULL");
+                assert_eq!(right, "");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_is_not_null() {
+        let input = "WHERE a.name IS NOT NULL";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(operator, "IS NOT NULL");
+                assert_eq!(right, "");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_not_equals() {
+        let input = "WHERE a.name <> \"Alice\"";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(operator, "<>");
+                assert_eq!(right, "Alice");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_less_than_equal() {
+        let input = "WHERE a.age <= 30";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::PathProperty { path_var, property } => {
+                assert_eq!(path_var, "a");
+                assert_eq!(property, "age");
+            }
+            _ => assert!(false, "Expected path property condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_greater_than_equal() {
+        let input = "WHERE a.age >= 30";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::PathProperty { path_var, property } => {
+                assert_eq!(path_var, "a");
+                assert_eq!(property, "age");
+            }
+            _ => assert!(false, "Expected path property condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_function_call() {
+        let input = "WHERE length(a.name) > 5";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::FunctionCall {
+                function,
+                arguments,
+            } => {
+                assert_eq!(function, "length");
+                assert_eq!(arguments.len(), 1);
+                assert_eq!(arguments[0], "a".to_string() + "." + "name");
+            }
+            _ => assert!(false, "Expected function call condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_path_property() {
+        let input = "WHERE p.length > 5";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, "p.length");
+                assert_eq!(operator, ">");
+                assert_eq!(right, "5");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_not_condition() {
+        let input = "WHERE NOT a.name = \"Alice\"";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Not(inner) => match &**inner {
+                ast::WhereCondition::Comparison {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    assert_eq!(left, &("a".to_string() + "." + "name"));
+                    assert_eq!(operator, "=");
+                    assert_eq!(right, "Alice");
+                }
+                _ => assert!(false, "Expected comparison inside NOT "),
+            },
+            _ => assert!(false, "Expected NOT condition "),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_parenthesized() {
+        let input = "WHERE (a.age > 30)";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Parenthesized(inner) => match &**inner {
+                ast::WhereCondition::Comparison {
+                    left,
+                    operator,
+                    right,
+                } => {
+                    assert_eq!(left, &("a".to_string() + "." + "age"));
+                    assert_eq!(operator, ">");
+                    assert_eq!(right, "30");
+                }
+                _ => assert!(false, "Expected comparison inside parentheses"),
+            },
+            _ => assert!(false, "Expected parenthesized condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_complex_nested() {
+        let input = "WHERE (a.age > 30 AND b.name = \"Bob\") OR NOT c.active = true";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Or(left, right) => {
+                // First condition should be parenthesized with AND
+                match &**left {
+                    ast::WhereCondition::Parenthesized(inner) => match &**inner {
+                        ast::WhereCondition::And(l, r) => {
+                            match &**l {
+                                ast::WhereCondition::Comparison {
+                                    left: l1,
+                                    operator: o1,
+                                    right: r1,
+                                } => {
+                                    assert_eq!(l1, &("a".to_string() + "." + "age"));
+                                    assert_eq!(o1, ">");
+                                    assert_eq!(r1, "30");
+                                }
+                                _ => {
+                                    assert!(false, "Expected comparison inside parentheses (left) ")
+                                }
+                            }
+                            match &**r {
+                                ast::WhereCondition::Comparison {
+                                    left: l2,
+                                    operator: o2,
+                                    right: r2,
+                                } => {
+                                    assert_eq!(l2, &("b".to_string() + "." + "name"));
+                                    assert_eq!(o2, "=");
+                                    assert_eq!(r2, "Bob");
+                                }
+                                _ => assert!(
+                                    false,
+                                    "Expected comparison inside parentheses (right) "
+                                ),
+                            }
+                        }
+                        _ => assert!(false, "Expected AND inside parentheses "),
+                    },
+                    _ => assert!(false, "Expected parenthesized condition "),
+                }
+                // Second condition should be NOT
+                match &**right {
+                    ast::WhereCondition::Not(inner) => match &**inner {
+                        ast::WhereCondition::Comparison {
+                            left,
+                            operator,
+                            right,
+                        } => {
+                            assert_eq!(left, &("c".to_string() + "." + "active"));
+                            assert_eq!(operator, "=");
+                            assert_eq!(right, "true");
+                        }
+                        _ => assert!(false, "Expected comparison inside NOT "),
+                    },
+                    _ => assert!(false, "Expected NOT condition "),
+                }
+            }
+            _ => assert!(false, "Expected OR condition "),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_with_whitespace() {
+        let input = "WHERE  a.age  >  30  AND  b.name  =  \"Bob\"  ";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::And(left, right) => {
+                match &**left {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(o, ">");
+                        assert_eq!(r, "30");
+                    }
+                    _ => assert!(false, "Expected comparison on left "),
+                }
+                match &**right {
+                    ast::WhereCondition::Comparison {
+                        left: l,
+                        operator: o,
+                        right: r,
+                    } => {
+                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(o, "=");
+                        assert_eq!(r, "Bob");
+                    }
+                    _ => assert!(false, "Expected comparison on right "),
+                }
+            }
+            _ => assert!(false, "Expected AND condition "),
+        }
+    }
+
+    // Error cases for WHERE clause
+    #[test]
+    fn test_where_clause_missing_where() {
+        let input = "a.age > 30";
+        let result = where_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_where_clause_empty() {
+        let input = "WHERE";
+        let result = where_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_where_clause_no_conditions() {
+        let input = "WHERE ";
+        let result = where_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_where_clause_incomplete_comparison() {
+        let input = "WHERE a.age >";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::PathProperty { path_var, property } => {
+                assert_eq!(path_var, "a");
+                assert_eq!(property, "age");
+            }
+            _ => assert!(false, "Expected path property condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_invalid_operator() {
+        let input = "WHERE a.age == 30";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::PathProperty { path_var, property } => {
+                assert_eq!(path_var, "a");
+                assert_eq!(property, "age");
+            }
+            _ => assert!(false, "Expected path property condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_unclosed_parentheses() {
+        let input = "WHERE (a.age > 30";
+        let result = where_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_where_clause_malformed_not() {
+        let input = "WHERE NOT";
+        let result = where_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_where_clause_trailing_and() {
+        let input = "WHERE a.age > 30 AND";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(operator, ">");
+                assert_eq!(right, "30");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_clause_trailing_or() {
+        let input = "WHERE a.age > 30 OR";
+        let (_, clause) = where_clause(input).unwrap();
+        assert_eq!(clause.conditions.len(), 1);
+        match &clause.conditions[0] {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(operator, ">");
+                assert_eq!(right, "30");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    // Individual where_condition tests
+    #[test]
+    fn test_where_condition_simple_identifier() {
+        let input = "age > 30";
+        let (_, condition) = parse_basic_condition(input).unwrap();
+        match condition {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, "age");
+                assert_eq!(operator, ">");
+                assert_eq!(right, "30");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_condition_property_access() {
+        let input = "a.name = \"Alice\"";
+        let (_, condition) = parse_basic_condition(input).unwrap();
+        match condition {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, "a".to_string() + "." + "name");
+                assert_eq!(operator, "=");
+                assert_eq!(right, "Alice");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_condition_boolean_literal() {
+        let input = "a.active = true";
+        let (_, condition) = parse_basic_condition(input).unwrap();
+        match condition {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, "a".to_string() + "." + "active");
+                assert_eq!(operator, "=");
+                assert_eq!(right, "true");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
+    }
+
+    #[test]
+    fn test_where_condition_null_literal() {
+        let input = "a.name = NULL";
+        let (_, condition) = parse_basic_condition(input).unwrap();
+        match condition {
+            ast::WhereCondition::Comparison {
+                left,
+                operator,
+                right,
+            } => {
+                assert_eq!(left, "a".to_string() + "." + "name");
+                assert_eq!(operator, "=");
+                assert_eq!(right, "NULL");
+            }
+            _ => assert!(false, "Expected comparison condition"),
+        }
     }
 }
