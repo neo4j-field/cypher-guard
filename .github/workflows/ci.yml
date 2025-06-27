@@ -34,7 +34,7 @@ jobs:
       run: cargo fmt --all -- --check
     
     - name: Lint with clippy
-      run: cd rust/cypher_guard && cargo clippy -- -D warnings
+      run: cd rust/cypher_guard && cargo clippy -- -D warnings -A clippy::uninlined_format_args
     
     - name: Build
       run: cd rust/cypher_guard && cargo build --verbose
