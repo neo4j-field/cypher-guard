@@ -12,10 +12,10 @@ fmt:
 	cargo fmt --all -- --check
 
 clippy:
-	cd rust/cypher_guard && cargo clippy -- -D warnings
+	cd rust/cypher_guard && cargo clippy -- -D warnings -A clippy::uninlined_format_args
 
 clippy-all:
-	cargo clippy -- -D warnings
+	cargo clippy -- -D warnings -A clippy::uninlined_format_args
 
 build-rust:
 	cargo build --verbose
