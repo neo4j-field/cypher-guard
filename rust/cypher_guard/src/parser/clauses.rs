@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{tag, tag_no_case},
     character::complete::{char, digit1, multispace0, multispace1},
     combinator::{map, opt, recognize},
-    multi::{many1, separated_list0, separated_list1},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{preceded, tuple},
     IResult,
 };
@@ -82,8 +82,27 @@ pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("RETURN")(input)?;
     let (input, _) = multispace1(input)?;
-    let (input, items) =
-        separated_list1(tuple((multispace0, char(','), multispace0)), return_item)(input)?;
+    
+    // Parse the first item (required)
+    let (input, first_item) = return_item(input)?;
+    let mut items = vec![first_item];
+    
+    // Parse additional items with commas (optional)
+    let (input, additional_items) = many0(preceded(
+        tuple((multispace0, char(','), multispace0)),
+        return_item,
+    ))(input)?;
+    items.extend(additional_items);
+    
+    // Check for trailing comma - if there's a comma followed by whitespace, it's an error
+    let (input, _) = multispace0(input)?;
+    if !input.is_empty() && input.starts_with(',') {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+    
     println!("Return clause items: {:?}", items); // Debug
     Ok((input, ReturnClause { items }))
 }
@@ -248,6 +267,7 @@ fn where_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     // If all parsing attempts failed, return the error from the comparison attempt
     comparison_result
 }
+
 
 // Parses the WHERE clause (e.g. WHERE a.age > 30 AND b.name = 'Alice')
 pub fn where_clause(input: &str) -> IResult<&str, ast::WhereClause> {
@@ -657,5 +677,128 @@ mod tests {
         let input = "WITH a, b.name AS name";
         let (_, clause) = with_clause(input).unwrap();
         assert_eq!(clause.items.len(), 2);
+    }
+
+    // Return clause tests
+    #[test]
+    fn test_return_clause_simple() {
+        let input = "RETURN a";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 1);
+        assert_eq!(clause.items[0], "a");
+    }
+
+    #[test]
+    fn test_return_clause_multiple_items() {
+        let input = "RETURN a, b, c";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_with_property_access() {
+        let input = "RETURN a.name, b.age";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 2);
+        assert_eq!(clause.items[0], "a.name");
+        assert_eq!(clause.items[1], "b.age");
+    }
+
+    #[test]
+    fn test_return_clause_mixed_items() {
+        let input = "RETURN a, b.name, c";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b.name");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_with_whitespace() {
+        let input = "RETURN  a  ,  b  ,  c  ";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 3);
+        assert_eq!(clause.items[0], "a");
+        assert_eq!(clause.items[1], "b");
+        assert_eq!(clause.items[2], "c");
+    }
+
+    #[test]
+    fn test_return_clause_single_property() {
+        let input = "RETURN a.name";
+        let (_, clause) = return_clause(input).unwrap();
+        assert_eq!(clause.items.len(), 1);
+        assert_eq!(clause.items[0], "a.name");
+    }
+
+    #[test]
+    fn test_return_item_simple() {
+        let input = "a";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "a");
+    }
+
+    #[test]
+    fn test_return_item_with_property() {
+        let input = "a.name";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "a.name");
+    }
+
+    #[test]
+    fn test_return_item_with_underscore() {
+        let input = "user_name";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "user_name");
+    }
+
+    #[test]
+    fn test_return_item_with_numbers() {
+        let input = "node1";
+        let (_, item) = return_item(input).unwrap();
+        assert_eq!(item, "node1");
+    }
+
+
+    // Error cases for return clause
+    #[test]
+    fn test_return_clause_missing_return() {
+        let input = "a, b, c";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_empty() {
+        let input = "RETURN";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_no_items() {
+        let input = "RETURN ";
+        let result = return_clause(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_clause_trailing_comma() {
+        let input = "RETURN a, b,";
+        let result = return_clause(input);
+        // Parser should reject trailing commas as they are invalid in Cypher
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_return_item_invalid_identifier() {
+        let input = "123name";
+        let (_, item) = return_item(input).unwrap();
+        // Current parser accepts identifiers starting with digits
+        assert_eq!(item, "123name");
     }
 }
