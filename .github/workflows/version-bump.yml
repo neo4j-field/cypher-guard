@@ -1,0 +1,50 @@
+name: Version Bump
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Needed for tags
+
+      # Rust: Bump version in Cargo.toml
+      - name: Install cargo-release
+        run: cargo install cargo-release
+
+      - name: Bump Rust version (patch)
+        run: |
+          cargo release version --no-push --no-tag --execute patch
+          git add Cargo.toml rust/cypher_guard/Cargo.toml
+          git commit -m "chore: bump Rust version [skip ci]" || echo "No changes to commit"
+
+      # Python: Bump version in pyproject.toml (Poetry)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Bump Python version (patch)
+        run: |
+          cd rust/python_bindings
+          poetry version patch
+          cd ../..
+          git add rust/python_bindings/pyproject.toml
+          git commit -m "chore: bump Python version [skip ci]" || echo "No changes to commit"
+
+      # Tag and push
+      - name: Create and push tag
+        run: |
+          VERSION=$(grep '^version =' Cargo.toml | head -1 | cut -d '"' -f2)
+          git tag v$VERSION
+          git push origin main --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
