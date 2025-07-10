@@ -1,8 +1,9 @@
 use cypher_guard::{
-    get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema, DbSchema,
+    get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema,
+    DbSchema,
 };
+use napi::{Env, JsObject, Result as NapiResult};
 use napi_derive::napi;
-use napi::{JsObject, Env, Result as NapiResult};
 
 #[napi]
 pub fn validate_cypher(query: String, schema_json: String) -> napi::Result<bool> {
