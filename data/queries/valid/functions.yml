@@ -1,0 +1,523 @@
+name: "Neo4j Function Tests"
+description: "Comprehensive tests for Neo4j Cypher functions"
+category: "functions"
+queries:
+  # Aggregating Functions
+  - name: "avg_function"
+    description: "Test avg() aggregating function"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      RETURN avg(p.age) AS averageAge
+
+  - name: "collect_function"
+    description: "Test collect() aggregating function"
+    cypher: |
+      MATCH (c:Company)
+      RETURN c.industry, collect(c.companyName) AS companies
+
+  - name: "count_function"
+    description: "Test count() aggregating function"
+    cypher: |
+      MATCH (p:Person)
+      RETURN count(p) AS totalPersons, count(p.email) AS personsWithEmail
+
+  - name: "max_function"
+    description: "Test max() aggregating function"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      RETURN max(p.age) AS oldestAge
+
+  - name: "min_function"
+    description: "Test min() aggregating function"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.foundedYear IS NOT NULL
+      RETURN min(c.foundedYear) AS earliestFounded
+
+  - name: "percentile_cont_function"
+    description: "Test percentileCont() aggregating function"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      RETURN percentileCont(p.age, 0.5) AS medianAge
+
+  - name: "percentile_disc_function"
+    description: "Test percentileDisc() aggregating function"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.employeeCount IS NOT NULL
+      RETURN percentileDisc(c.employeeCount, 0.75) AS seventyFifthPercentile
+
+  - name: "stdev_function"
+    description: "Test stDev() and stDevP() aggregating functions"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      RETURN stDev(p.age) AS sampleStdDev, stDevP(p.age) AS populationStdDev
+
+  - name: "sum_function"
+    description: "Test sum() aggregating function"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.employeeCount IS NOT NULL
+      RETURN sum(c.employeeCount) AS totalEmployees
+
+  # List Functions
+  - name: "keys_function"
+    description: "Test keys() list function"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName, keys(p) AS propertyKeys
+      LIMIT 3
+
+  - name: "labels_function"
+    description: "Test labels() list function"
+    cypher: |
+      MATCH (n)
+      RETURN DISTINCT labels(n) AS nodeLabels
+
+  - name: "nodes_function"
+    description: "Test nodes() list function"
+    cypher: |
+      MATCH path = (p:Person)-[:KNOWS*1..2]->(friend:Person)
+      WHERE p.firstName = 'John'
+      RETURN nodes(path)[0].firstName AS start, 
+             nodes(path)[-1].firstName AS end,
+             size(nodes(path)) AS pathLength
+      LIMIT 3
+
+  - name: "range_function"
+    description: "Test range() list function"
+    cypher: |
+      RETURN range(1, 10, 2) AS oddNumbers,
+             range(0, 20, 5) AS multiplesOfFive
+
+  - name: "reduce_function"
+    description: "Test reduce() list function"
+    cypher: |
+      MATCH (p:Person)-[:KNOWS]->(friend:Person)
+      WITH p, collect(friend.age) AS friendAges
+      WHERE size(friendAges) > 2
+      RETURN p.firstName,
+             reduce(total = 0, age IN friendAges | total + age) AS totalFriendAge
+      LIMIT 3
+
+  - name: "relationships_function"
+    description: "Test relationships() list function"
+    cypher: |
+      MATCH path = (p:Person)-[*1..2]-(connected)
+      WHERE p.firstName = 'John'
+      RETURN size(relationships(path)) AS relationshipCount,
+             [r IN relationships(path) | type(r)] AS relationshipTypes
+      LIMIT 3
+
+  - name: "reverse_function"
+    description: "Test reverse() list function"
+    cypher: |
+      WITH ['first', 'second', 'third'] AS originalList
+      RETURN originalList, reverse(originalList) AS reversedList
+
+  - name: "tail_function"
+    description: "Test tail() list function"
+    cypher: |
+      WITH [1, 2, 3, 4, 5] AS numberList
+      RETURN numberList, tail(numberList) AS allButFirst
+
+  - name: "list_conversion_functions"
+    description: "Test list conversion functions"
+    cypher: |
+      WITH [true, 'false', 1, 0, null] AS mixedList
+      RETURN toBooleanList(mixedList) AS boolList,
+             toStringList(mixedList) AS stringList,
+             toIntegerList([1, '2', 3.0, null]) AS intList,
+             toFloatList([1, '2.5', 3, null]) AS floatList
+
+  # Logarithmic Functions
+  - name: "logarithmic_functions"
+    description: "Test logarithmic functions"
+    cypher: |
+      RETURN e() AS eulerNumber,
+             exp(1) AS eToThePowerOfOne,
+             log(e()) AS naturalLogOfE,
+             log10(100) AS log10Of100,
+             sqrt(16) AS squareRootOf16
+
+  # Numeric Functions
+  - name: "numeric_functions"
+    description: "Test numeric functions"
+    cypher: |
+      RETURN abs(-42) AS absoluteValue,
+             ceil(3.14) AS ceilingValue,
+             floor(3.99) AS floorValue,
+             rand() AS randomNumber,
+             round(3.14159, 2) AS roundedValue,
+             sign(-15) AS signValue
+
+  # Trigonometric Functions
+  - name: "trigonometric_functions"
+    description: "Test trigonometric functions"
+    cypher: |
+      RETURN pi() AS piValue,
+             sin(pi()/2) AS sineOf90Degrees,
+             cos(0) AS cosineOfZero,
+             tan(pi()/4) AS tangentOf45Degrees,
+             degrees(pi()) AS piInDegrees,
+             radians(180) AS degreesToRadians
+
+  - name: "inverse_trigonometric_functions"
+    description: "Test inverse trigonometric functions"
+    cypher: |
+      RETURN asin(1) AS arcSineOfOne,
+             acos(0) AS arcCosineOfZero,
+             atan(1) AS arcTangentOfOne,
+             atan2(1, 1) AS arcTangent2,
+             cot(pi()/4) AS cotangentOf45Degrees
+
+  # Predicate Functions
+  - name: "all_predicate_function_test"
+    description: "Test all() predicate function"
+    cypher: |
+      WITH [2, 4, 6, 8] AS evenNumbers, [1, 3, 5, 7] AS oddNumbers
+      RETURN all(x IN evenNumbers WHERE x % 2 = 0) AS allEven,
+             all(x IN oddNumbers WHERE x % 2 = 0) AS allOddAreEven
+
+  - name: "any_predicate_function_test"
+    description: "Test any() predicate function"
+    cypher: |
+      WITH [1, 3, 4, 7] AS mixedNumbers
+      RETURN any(x IN mixedNumbers WHERE x % 2 = 0) AS hasEvenNumber
+
+  - name: "exists_predicate_function_test"
+    description: "Test exists() predicate function"
+    cypher: |
+      MATCH (n)
+      RETURN labels(n)[0] AS nodeType,
+             exists(n.age) AS hasAge,
+             exists(n.employeeCount) AS hasEmployeeCount
+
+  - name: "is_empty_predicate_function_test"
+    description: "Test isEmpty() predicate function"
+    cypher: |
+      WITH [] AS emptyList, [1, 2] AS nonEmptyList, '' AS emptyString, 'text' AS nonEmptyString
+      RETURN isEmpty(emptyList) AS emptyListCheck,
+             isEmpty(nonEmptyList) AS nonEmptyListCheck,
+             isEmpty(emptyString) AS emptyStringCheck,
+             isEmpty(nonEmptyString) AS nonEmptyStringCheck
+
+  - name: "none_predicate_function_test"
+    description: "Test none() predicate function"
+    cypher: |
+      WITH [1, 3, 5, 7] AS oddNumbers
+      RETURN none(x IN oddNumbers WHERE x % 2 = 0) AS noneAreEven
+
+  - name: "single_predicate_function_test"
+    description: "Test single() predicate function"
+    cypher: |
+      WITH [1, 2, 3, 4] AS numbers
+      RETURN single(x IN numbers WHERE x = 2) AS exactlyOne,
+             single(x IN numbers WHERE x % 2 = 0) AS exactlyOneEven
+
+  # Scalar Functions
+  - name: "char_length_function"
+    description: "Test char_length() and character_length() scalar functions"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName, 
+             char_length(p.firstName) AS charLength,
+             character_length(p.firstName) AS characterLength
+      LIMIT 3
+
+  - name: "coalesce_function"
+    description: "Test coalesce() scalar function"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName,
+             coalesce(p.middleName, 'No middle name') AS middleName,
+             coalesce(p.age, 0) AS ageOrZero
+      LIMIT 3
+
+  - name: "element_id_function"
+    description: "Test elementId() scalar function"
+    cypher: |
+      MATCH (p:Person)-[r:KNOWS]->(friend:Person)
+      RETURN elementId(p) AS personId,
+             elementId(r) AS relationshipId,
+             elementId(friend) AS friendId
+      LIMIT 3
+
+  - name: "end_node_function"
+    description: "Test endNode() scalar function"
+    cypher: |
+      MATCH (p:Person)-[r:WORKS_FOR]->(c:Company)
+      RETURN p.firstName AS person,
+             endNode(r).companyName AS company
+      LIMIT 3
+
+  - name: "head_and_last_functions"
+    description: "Test head() and last() scalar functions"
+    cypher: |
+      WITH ['first', 'middle', 'last'] AS textList
+      RETURN head(textList) AS firstElement,
+             last(textList) AS lastElement
+
+  - name: "length_function"
+    description: "Test length() scalar function for paths"
+    cypher: |
+      MATCH path = (p:Person)-[:KNOWS*1..3]->(connected:Person)
+      WHERE p.firstName = 'John'
+      RETURN length(path) AS pathLength,
+             nodes(path)[0].firstName AS start,
+             nodes(path)[-1].firstName AS end
+      LIMIT 5
+
+  - name: "properties_function"
+    description: "Test properties() scalar function"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName, properties(p) AS allProperties
+      LIMIT 3
+
+  - name: "random_uuid_function"
+    description: "Test randomUUID() scalar function"
+    cypher: |
+      RETURN randomUUID() AS generatedUUID
+
+  - name: "size_function"
+    description: "Test size() scalar function"
+    cypher: |
+      MATCH (p:Person)
+      WITH p, [(p)-[:KNOWS]->(friend:Person) | friend] AS friends
+      RETURN p.firstName,
+             size(friends) AS friendCount,
+             size(p.firstName) AS nameLength
+      LIMIT 3
+
+  - name: "start_node_function"
+    description: "Test startNode() scalar function"
+    cypher: |
+      MATCH (p:Person)-[r:WORKS_FOR]->(c:Company)
+      RETURN startNode(r).firstName AS person,
+             c.companyName AS company
+      LIMIT 3
+
+  - name: "timestamp_function"
+    description: "Test timestamp() scalar function"
+    cypher: |
+      RETURN timestamp() AS currentTimestamp
+
+  - name: "type_conversion_functions"
+    description: "Test type conversion scalar functions"
+    cypher: |
+      WITH 42 AS number, true AS boolean, '123' AS stringNumber
+      RETURN toBoolean('true') AS stringToBoolean,
+             toBooleanOrNull('not a boolean') AS invalidBoolean,
+             toFloat(stringNumber) AS stringToFloat,
+             toFloatOrNull('not a number') AS invalidFloat,
+             toInteger('456') AS stringToInteger,
+             toIntegerOrNull('not a number') AS invalidInteger,
+             toString(number) AS numberToString
+
+  - name: "type_function"
+    description: "Test type() scalar function"
+    cypher: |
+      MATCH (p:Person)-[r]->(connected)
+      RETURN p.firstName, type(r) AS relationshipType, labels(connected)[0] AS connectedType
+      LIMIT 5
+
+  # String Functions
+  - name: "string_trim_functions"
+    description: "Test string trimming functions"
+    cypher: |
+      WITH '  hello world  ' AS paddedString
+      RETURN btrim(paddedString) AS bothTrimmed,
+             ltrim(paddedString) AS leftTrimmed,
+             rtrim(paddedString) AS rightTrimmed
+
+  - name: "string_case_functions"
+    description: "Test string case conversion functions"
+    cypher: |
+      WITH 'Hello World' AS mixedCase
+      RETURN lower(mixedCase) AS lowercase,
+             upper(mixedCase) AS uppercase,
+             lcase(mixedCase) AS alsoLowercase,
+             ucase(mixedCase) AS alsoUppercase
+
+  - name: "string_manipulation_functions"
+    description: "Test string manipulation functions"
+    cypher: |
+      WITH 'Hello World' AS text
+      RETURN left(text, 5) AS leftChars,
+             right(text, 5) AS rightChars,
+             substring(text, 6, 5) AS middleChars,
+             replace(text, 'World', 'Neo4j') AS replacedText,
+             reverse(text) AS reversedText
+
+  - name: "string_normalization_functions"
+    description: "Test string normalization functions"
+    cypher: |
+      WITH 'café' AS text
+      RETURN normalize(text) AS normalizedText,
+             normalize(text, 'NFC') AS nfcNormalized
+
+  - name: "string_split_functions"
+    description: "Test string splitting functions"
+    cypher: |
+      WITH 'apple,banana,cherry' AS fruits
+      RETURN split(fruits, ',') AS fruitList
+
+  - name: "string_conversion_functions"
+    description: "Test string conversion functions"
+    cypher: |
+      WITH 42 AS number, date('2024-01-15') AS dateValue
+      RETURN toString(number) AS numberToString,
+             toString(dateValue) AS dateToString
+
+  # Spatial Functions
+  - name: "point_function"
+    description: "Test point() spatial function"
+    cypher: |
+      RETURN point({x: 3, y: 4}) AS cartesianPoint,
+             point({latitude: 40.7128, longitude: -74.0060}) AS geographicPoint
+
+  - name: "distance_function"
+    description: "Test distance() spatial function"
+    cypher: |
+      WITH point({x: 0, y: 0}) AS origin, point({x: 3, y: 4}) AS destination
+      RETURN distance(origin, destination) AS cartesianDistance
+
+  - name: "point_properties_function"
+    description: "Test point property access"
+    cypher: |
+      MATCH (l:Location)
+      WHERE l.coordinates IS NOT NULL
+      RETURN l.city,
+             l.coordinates.x AS longitude,
+             l.coordinates.y AS latitude
+      LIMIT 3
+
+  # Temporal Duration Functions
+  - name: "duration_function"
+    description: "Test duration() temporal function"
+    cypher: |
+      RETURN duration('P1Y2M3DT4H5M6S') AS isoDuration,
+             duration({years: 1, months: 2, days: 3}) AS mapDuration
+
+  - name: "duration_between_function"
+    description: "Test duration.between() temporal function"
+    cypher: |
+      WITH date('2023-01-01') AS startDate, date('2024-01-01') AS endDate
+      RETURN duration.between(startDate, endDate) AS yearDuration
+
+  - name: "duration_in_seconds_function"
+    description: "Test duration.inSeconds() temporal function"
+    cypher: |
+      WITH duration('PT1H30M') AS oneHourThirtyMinutes
+      RETURN duration.inSeconds(oneHourThirtyMinutes) AS totalSeconds
+
+  - name: "duration_in_days_function"
+    description: "Test duration.inDays() temporal function"
+    cypher: |
+      WITH duration('P7D') AS oneWeek
+      RETURN duration.inDays(oneWeek) AS totalDays
+
+  - name: "duration_in_months_function"
+    description: "Test duration.inMonths() temporal function"
+    cypher: |
+      WITH duration('P1Y6M') AS oneYearSixMonths
+      RETURN duration.inMonths(oneYearSixMonths) AS totalMonths
+
+  # Temporal Instant Types Functions
+  - name: "date_functions"
+    description: "Test date() temporal functions"
+    cypher: |
+      RETURN date() AS currentDate,
+             date('2024-01-15') AS specificDate,
+             date({year: 2024, month: 1, day: 15}) AS mapDate
+
+  - name: "datetime_functions"
+    description: "Test datetime() temporal functions"
+    cypher: |
+      RETURN datetime() AS currentDateTime,
+             datetime('2024-01-15T10:30:00Z') AS specificDateTime,
+             datetime.realtime() AS realtimeDateTime,
+             datetime.statement() AS statementDateTime,
+             datetime.transaction() AS transactionDateTime
+
+  - name: "localdatetime_functions"
+    description: "Test localdatetime() temporal functions"
+    cypher: |
+      RETURN localdatetime() AS currentLocalDateTime,
+             localdatetime('2024-01-15T10:30:00') AS specificLocalDateTime,
+             localdatetime.realtime() AS realtimeLocalDateTime,
+             localdatetime.statement() AS statementLocalDateTime,
+             localdatetime.transaction() AS transactionLocalDateTime
+
+  - name: "localtime_functions"
+    description: "Test localtime() temporal functions"
+    cypher: |
+      RETURN localtime() AS currentLocalTime,
+             localtime('10:30:00') AS specificLocalTime,
+             localtime.realtime() AS realtimeLocalTime,
+             localtime.statement() AS statementLocalTime,
+             localtime.transaction() AS transactionLocalTime
+
+  - name: "time_functions"
+    description: "Test time() temporal functions"
+    cypher: |
+      RETURN time() AS currentTime,
+             time('10:30:00+02:00') AS specificTime,
+             time.realtime() AS realtimeTime,
+             time.statement() AS statementTime,
+             time.transaction() AS transactionTime
+
+  - name: "temporal_truncate_function"
+    description: "Test temporal truncate functions"
+    cypher: |
+      WITH datetime('2024-01-15T10:30:45.123Z') AS specificDateTime
+      RETURN date.truncate('day', specificDateTime) AS truncatedToDay,
+             datetime.truncate('hour', specificDateTime) AS truncatedToHour,
+             localtime.truncate('minute', specificDateTime) AS truncatedToMinute
+
+  # Complex Function Combinations
+  - name: "nested_function_calls"
+    description: "Test nested function combinations"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      WITH avg(p.age) AS avgAge
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      RETURN p.firstName,
+             round(sqrt(abs(p.age - avgAge)), 2) AS ageDeviationScore
+      LIMIT 5
+
+  - name: "function_with_aggregation"
+    description: "Test functions combined with aggregation"
+    cypher: |
+      MATCH (c:Company)
+      WITH c.industry AS industry, collect(c.employeeCount) AS employeeCounts
+      WHERE size(employeeCounts) > 1
+      WITH industry, employeeCounts,
+           reduce(total = 0, count IN employeeCounts | total + count) AS totalEmployees,
+           size(employeeCounts) AS companyCount
+      RETURN industry,
+             round(toFloat(totalEmployees) / companyCount, 2) AS avgEmployeesPerCompany
+
+  - name: "temporal_arithmetic_functions"
+    description: "Test temporal arithmetic with functions"
+    cypher: |
+      WITH date('2024-01-01') AS startDate
+      RETURN startDate,
+             startDate + duration('P1M') AS oneMonthLater,
+             duration.between(startDate, startDate + duration('P1Y')) AS oneYearDuration
+
+  - name: "string_and_list_functions_combined"
+    description: "Test string and list functions together"
+    cypher: |
+      MATCH (p:Person)
+      WITH collect(p.firstName) AS names
+      RETURN size(names) AS totalNames,
+             reduce(totalLength = 0, name IN names | totalLength + size(name)) AS totalCharacters,
+             [name IN names WHERE size(name) > 4 | upper(name)] AS longNamesUpper

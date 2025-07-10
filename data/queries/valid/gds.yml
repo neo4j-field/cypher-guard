@@ -1,0 +1,3 @@
+name: "Neo4j GDS Tests"
+description: "Comprehensive tests for Neo4j GDS functions"
+category: "gds"

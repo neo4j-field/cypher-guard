@@ -1,0 +1,352 @@
+name: "Advanced Cypher Queries"
+description: "Complex queries with EXISTS, multi-label matching, variable-length paths, and advanced patterns"
+category: "advanced"
+queries:
+  - name: "complex_social_network_analysis"
+    description: "Multi-level social network analysis with EXISTS and variable-length paths"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age > 25 
+      AND EXISTS {
+        MATCH (p)-[:WORKS_FOR]->(c:Company)
+        WHERE c.industry IN ['Technology', 'Healthcare']
+      }
+      WITH p, [(p)-[:WORKS_FOR]->(c:Company) | c.industry][0] AS personIndustry
+      MATCH (p)-[:KNOWS*1..4]->(connected:Person)
+      WHERE connected <> p
+      AND EXISTS {
+        MATCH (connected)-[:WORKS_FOR]->(otherCompany:Company)
+        WITH connected, otherCompany, personIndustry
+        WHERE otherCompany.industry <> personIndustry
+      }
+      WITH p, connected, 
+           length(shortestPath((p)-[:KNOWS*]-(connected))) AS socialDistance,
+           personIndustry,
+           [(connected)-[:WORKS_FOR]->(c:Company) | c.industry][0] AS connectedIndustry
+      WHERE socialDistance <= 3
+      WITH p.firstName + ' ' + p.lastName AS person,
+           personIndustry,
+           connected.firstName + ' ' + connected.lastName AS connection,
+           connectedIndustry,
+           socialDistance
+      WITH person, personIndustry, 
+           collect({
+             connection: connection,
+             industry: connectedIndustry,
+             distance: socialDistance
+           }) AS crossIndustryConnections
+      WHERE size(crossIndustryConnections) >= 2
+      UNWIND crossIndustryConnections AS conn
+      WITH person, personIndustry, conn.connection AS connection,
+           conn.industry AS connectionIndustry, conn.distance AS distance
+      ORDER BY person, distance, connection
+      RETURN person,
+             personIndustry,
+             collect({connection: connection, industry: connectionIndustry, distance: distance}) AS connections,
+             size(collect({connection: connection, industry: connectionIndustry, distance: distance})) AS totalCrossIndustryConnections
+
+  - name: "comprehensive_company_ecosystem_analysis"
+    description: "Deep analysis of company ecosystems with multiple relationship types and EXISTS patterns"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.foundedYear IS NOT NULL
+      AND EXISTS {
+        MATCH (c)-[:LOCATED_IN]->(l:Location)
+        WHERE l.country IN ['USA', 'UK']
+      }
+      WITH c, 2024 - c.foundedYear AS companyAge
+      WHERE companyAge >= 10
+      CALL {
+        WITH c
+        OPTIONAL MATCH (emp:Contractor|Employee)-[:WORKS_FOR]->(c)
+        WITH c, collect(emp) AS directEmployees
+        OPTIONAL MATCH (c)-[:LOCATED_IN]->(loc:Location)<-[:LOCATED_IN]-(competitor:Company)
+        WHERE competitor <> c 
+        AND EXISTS {
+          MATCH (competitor)
+          WHERE competitor.industry = c.industry
+        }
+        WITH c, directEmployees, collect(DISTINCT competitor) AS localCompetitors
+        UNWIND directEmployees AS employee
+        OPTIONAL MATCH (employee)-[:KNOWS*1..3]->(contact:Person)-[:WORKS_FOR]->(otherCompany:Company)
+        WHERE otherCompany <> c
+        AND EXISTS {
+          MATCH (otherCompany)-[:LOCATED_IN]->(otherLoc:Location)
+          MATCH (c)-[:LOCATED_IN]->(cLoc:Location)
+          WHERE otherLoc.country = cLoc.country
+        }
+        WITH c, directEmployees, localCompetitors, employee,
+             collect(DISTINCT {
+               contact: contact.firstName + ' ' + contact.lastName,
+               company: otherCompany.companyName,
+               industry: otherCompany.industry,
+               distance: length(shortestPath((employee)-[:KNOWS*]-(contact)))
+             }) AS networkConnections
+        RETURN size(directEmployees) AS employeeCount,
+               size(localCompetitors) AS competitorCount,
+               localCompetitors,
+               employee.firstName + ' ' + employee.lastName AS employeeName,
+               networkConnections
+      }
+      WITH c, companyAge, employeeCount, competitorCount, 
+           collect({
+             employee: employeeName,
+             connections: networkConnections
+           }) AS employeeNetworks
+      WHERE employeeCount > 0
+      WITH c.companyName AS company,
+           c.industry AS industry,
+           [(c)-[:LOCATED_IN]->(l:Location) | l.city + ', ' + l.country][0] AS location,
+           companyAge,
+           employeeCount,
+           competitorCount,
+           employeeNetworks,
+           reduce(totalConnections = 0, emp IN employeeNetworks | 
+             totalConnections + size(emp.connections)) AS totalNetworkConnections
+      ORDER BY totalNetworkConnections DESC, employeeCount DESC
+      RETURN company,
+             industry,
+             location,
+             companyAge,
+             employeeCount,
+             competitorCount,
+             totalNetworkConnections,
+             employeeNetworks[0..2] AS topEmployeeNetworks
+
+  - name: "multi_path_influence_mapping"
+    description: "Complex influence mapping using variable-length paths and EXISTS with multiple constraints"
+    cypher: |
+      MATCH (influencer:Person)
+      WHERE influencer.age >= 35
+      AND EXISTS {
+        MATCH (influencer)-[:WORKS_FOR]->(c:Company)
+        WHERE c.employeeCount >= 200
+      }
+      AND EXISTS {
+        MATCH (influencer)-[:KNOWS]->(friend:Person)
+        WITH influencer, count(friend) AS friendCount
+        WHERE friendCount >= 2
+      }
+      WITH influencer,
+           [(influencer)-[:WORKS_FOR]->(c:Company) | c][0] AS influencerCompany
+      MATCH (target:Person)
+      WHERE target <> influencer
+      AND target.age < influencer.age
+      AND EXISTS {
+        MATCH (target)-[:WORKS_FOR]->(tc:Company)
+        WHERE tc <> influencerCompany
+      }
+      OPTIONAL MATCH path1 = (influencer)-[:KNOWS*1..4]->(target)
+      WHERE ALL(node IN nodes(path1) WHERE node:Person)
+      OPTIONAL MATCH path2 = (influencer)-[:WORKS_FOR]->(ic:Company)-[:LOCATED_IN]->(loc:Location)<-[:LOCATED_IN]-(tc:Company)<-[:WORKS_FOR]-(target)
+      WITH influencer, target, influencerCompany,
+           [(target)-[:WORKS_FOR]->(c:Company) | c][0] AS targetCompany,
+           CASE 
+             WHEN path1 IS NOT NULL THEN length(path1)
+             ELSE null
+           END AS directSocialDistance,
+           CASE 
+             WHEN path2 IS NOT NULL THEN 3
+             ELSE null
+           END AS geographicConnectionDistance
+      WHERE directSocialDistance IS NOT NULL OR geographicConnectionDistance IS NOT NULL
+      WITH influencer.firstName + ' ' + influencer.lastName AS influencerName,
+           influencer.age AS influencerAge,
+           influencerCompany.companyName AS influencerCompanyName,
+           influencerCompany.industry AS influencerIndustry,
+           target.firstName + ' ' + target.lastName AS targetName,
+           target.age AS targetAge,
+           targetCompany.companyName AS targetCompanyName,
+           targetCompany.industry AS targetIndustry,
+           directSocialDistance,
+           geographicConnectionDistance
+      WITH influencerName, influencerAge, influencerCompanyName, influencerIndustry,
+           collect({
+             name: targetName,
+             age: targetAge,
+             company: targetCompanyName,
+             industry: targetIndustry,
+             socialDistance: directSocialDistance,
+             geographicDistance: geographicConnectionDistance,
+             totalInfluenceScore: CASE 
+               WHEN directSocialDistance IS NOT NULL AND geographicConnectionDistance IS NOT NULL 
+               THEN (5.0 / directSocialDistance) + (2.0 / geographicConnectionDistance)
+               WHEN directSocialDistance IS NOT NULL 
+               THEN (5.0 / directSocialDistance)
+               ELSE (2.0 / geographicConnectionDistance)
+             END
+           }) AS influenceTargets
+      WHERE size(influenceTargets) >= 1
+      UNWIND influenceTargets AS target
+      WITH influencerName, influencerAge, influencerCompanyName, influencerIndustry,
+           target
+      ORDER BY target.totalInfluenceScore DESC
+      WITH influencerName, influencerAge, influencerCompanyName, influencerIndustry,
+           collect(target)[0..5] AS topInfluenceTargets
+      RETURN influencerName,
+             influencerAge,
+             influencerCompanyName,
+             influencerIndustry,
+             size(topInfluenceTargets) AS totalTargets,
+             [target IN topInfluenceTargets | target.name] AS targetNames,
+             reduce(totalScore = 0.0, target IN topInfluenceTargets | totalScore + target.totalInfluenceScore) AS cumulativeInfluenceScore
+      ORDER BY cumulativeInfluenceScore DESC
+
+  - name: "advanced_pattern_matching_with_exists"
+    description: "Complex pattern matching with nested EXISTS and multiple relationship traversals"
+    cypher: |
+      MATCH (anchor:Person)
+      WHERE anchor.active = true
+      AND EXISTS {
+        MATCH (anchor)-[:WORKS_FOR]->(c:Company)-[:LOCATED_IN]->(l:Location)
+        WHERE l.country = 'USA'
+      }
+      WITH anchor
+      MATCH (anchor)-[:KNOWS*1..3]->(reachable:Person)
+      WHERE reachable <> anchor
+      AND EXISTS {
+        MATCH (reachable)-[:WORKS_FOR]->(rc:Company)
+        WHERE EXISTS {
+          MATCH (rc)-[:LOCATED_IN]->(rl:Location)
+          MATCH (anchor)-[:WORKS_FOR]->(ac:Company)-[:LOCATED_IN]->(al:Location)
+          WHERE rl.country = al.country
+        }
+      }
+      AND NOT EXISTS {
+        MATCH (anchor)-[:KNOWS]->(reachable)
+      }
+      WITH anchor, reachable,
+           length(shortestPath((anchor)-[:KNOWS*]-(reachable))) AS connectionDistance,
+           [(anchor)-[:WORKS_FOR]->(c:Company) | c.industry][0] AS anchorIndustry,
+           [(reachable)-[:WORKS_FOR]->(c:Company) | c.industry][0] AS reachableIndustry
+      WHERE connectionDistance >= 2
+      CALL {
+        WITH anchor, reachable
+        MATCH path = (anchor)-[:KNOWS*]-(reachable)
+        WITH nodes(path) AS pathNodes
+        UNWIND pathNodes AS pathNode
+        MATCH (pathNode:Person)-[:WORKS_FOR]->(pathCompany:Company)
+        RETURN collect(DISTINCT pathCompany.industry) AS pathIndustries,
+               collect(DISTINCT pathNode.firstName) AS pathPeople
+      }
+      WITH anchor.firstName + ' ' + anchor.lastName AS anchorName,
+           anchorIndustry,
+           reachable.firstName + ' ' + reachable.lastName AS reachableName,
+           reachableIndustry,
+           connectionDistance,
+           pathIndustries,
+           pathPeople,
+           CASE 
+             WHEN anchorIndustry = reachableIndustry THEN 'Same Industry'
+             WHEN anchorIndustry IN pathIndustries AND reachableIndustry IN pathIndustries THEN 'Connected Industries'
+             ELSE 'Cross Industry'
+           END AS industryRelationship
+      WITH anchorName, anchorIndustry,
+           collect({
+             name: reachableName,
+             industry: reachableIndustry,
+             distance: connectionDistance,
+             pathIndustries: pathIndustries,
+             pathPeople: pathPeople,
+             relationship: industryRelationship
+           }) AS indirectConnections
+      WHERE size(indirectConnections) >= 2
+      WITH anchorName, anchorIndustry, indirectConnections,
+           [conn IN indirectConnections WHERE conn.relationship = 'Cross Industry'] AS crossIndustryConnections,
+           [conn IN indirectConnections WHERE conn.relationship = 'Same Industry'] AS sameIndustryConnections,
+           [conn IN indirectConnections WHERE conn.relationship = 'Connected Industries'] AS connectedIndustryConnections
+      RETURN anchorName,
+             anchorIndustry,
+             size(indirectConnections) AS totalIndirectConnections,
+             size(crossIndustryConnections) AS crossIndustryCount,
+             size(sameIndustryConnections) AS sameIndustryCount,
+             size(connectedIndustryConnections) AS connectedIndustryCount,
+             indirectConnections[0..3] AS sampleConnections
+      ORDER BY totalIndirectConnections DESC, crossIndustryCount DESC
+
+  - name: "hierarchical_network_traversal"
+    description: "Deep hierarchical traversal with EXISTS validation and multi-label considerations"
+    cypher: |
+      MATCH (root:Person)
+      WHERE root.age >= 40
+      AND EXISTS {
+        MATCH (root)-[:WORKS_FOR]->(c:Company)
+        WHERE c.foundedYear <= 2000
+        AND c.employeeCount >= 300
+      }
+      WITH root, [(root)-[:WORKS_FOR]->(c:Company) | c][0] AS rootCompany
+      MATCH (root)-[:KNOWS*1..4]->(descendant:Person)
+      WHERE descendant <> root
+      AND descendant.age < root.age
+      AND EXISTS {
+        MATCH (descendant)-[:WORKS_FOR]->(dc:Company)
+        WHERE dc.foundedYear > rootCompany.foundedYear
+      }
+      WITH root, rootCompany, descendant,
+           [(descendant)-[:WORKS_FOR]->(c:Company) | c][0] AS descendantCompany,
+           length(shortestPath((root)-[:KNOWS*]-(descendant))) AS hierarchyDistance
+      WHERE hierarchyDistance <= 4
+      AND EXISTS {
+        MATCH (rootCompany)-[:LOCATED_IN]->(rl:Location)
+        MATCH (descendantCompany)-[:LOCATED_IN]->(dl:Location)
+        WHERE rl.country = dl.country OR rl.city = dl.city
+      }
+      CALL {
+        WITH root, descendant
+        MATCH path = shortestPath((root)-[:KNOWS*]-(descendant))
+        WITH nodes(path) AS hierarchyNodes
+        UNWIND range(0, size(hierarchyNodes)-1) AS nodeIndex
+        WITH hierarchyNodes[nodeIndex] AS node, nodeIndex
+        MATCH (node:Person)-[:WORKS_FOR]->(nodeCompany:Company)
+        WITH nodeIndex, node, nodeCompany
+        ORDER BY nodeIndex
+        RETURN collect({
+          level: nodeIndex,
+          person: node.firstName + ' ' + node.lastName,
+          age: node.age,
+          company: nodeCompany.companyName,
+          industry: nodeCompany.industry,
+          founded: nodeCompany.foundedYear
+        }) AS hierarchyPath
+      }
+      WITH root.firstName + ' ' + root.lastName AS rootName,
+           root.age AS rootAge,
+           rootCompany.companyName AS rootCompanyName,
+           rootCompany.industry AS rootIndustry,
+           rootCompany.foundedYear AS rootFounded,
+           descendant.firstName + ' ' + descendant.lastName AS descendantName,
+           descendant.age AS descendantAge,
+           descendantCompany.companyName AS descendantCompanyName,
+           descendantCompany.industry AS descendantIndustry,
+           descendantCompany.foundedYear AS descendantFounded,
+           hierarchyDistance,
+           hierarchyPath
+      WITH rootName, rootAge, rootCompanyName, rootIndustry, rootFounded,
+           collect({
+             descendant: descendantName,
+             age: descendantAge,
+             company: descendantCompanyName,
+             industry: descendantIndustry,
+             founded: descendantFounded,
+             distance: hierarchyDistance,
+             path: hierarchyPath,
+             generationGap: rootAge - descendantAge,
+             companyEvolution: descendantFounded - rootFounded
+           }) AS hierarchicalDescendants
+      WHERE size(hierarchicalDescendants) >= 2
+      WITH rootName, rootAge, rootCompanyName, rootIndustry, rootFounded,
+           hierarchicalDescendants,
+           [desc IN hierarchicalDescendants WHERE desc.industry <> rootIndustry] AS crossIndustryDescendants,
+           reduce(avgGenGap = 0.0, desc IN hierarchicalDescendants | avgGenGap + desc.generationGap) / size(hierarchicalDescendants) AS avgGenerationGap,
+           reduce(avgEvolution = 0.0, desc IN hierarchicalDescendants | avgEvolution + desc.companyEvolution) / size(hierarchicalDescendants) AS avgCompanyEvolution
+      RETURN rootName,
+             rootAge,
+             rootCompanyName,
+             rootIndustry,
+             rootFounded,
+             size(hierarchicalDescendants) AS totalDescendants,
+             size(crossIndustryDescendants) AS crossIndustryDescendants,
+             round(avgGenerationGap, 1) AS avgGenerationGap,
+             round(avgCompanyEvolution, 1) AS avgCompanyEvolution,
+             hierarchicalDescendants[0..2] AS sampleDescendants
+      ORDER BY totalDescendants DESC, avgGenerationGap DESC

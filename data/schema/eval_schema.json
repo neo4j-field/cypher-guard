@@ -1,0 +1,332 @@
+{
+  "nodeProps": {
+    "Person": [
+      {
+        "name": "firstName",
+        "neo4jType": "STRING",
+        "exampleValues": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4jType": "STRING",
+        "exampleValues": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4jType": "INTEGER",
+        "minValue": 0,
+        "maxValue": 120
+      },
+      {
+        "name": "email",
+        "neo4jType": "STRING",
+        "exampleValues": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4jType": "BOOLEAN",
+        "exampleValues": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4jType": "STRING",
+        "enumValues": ["Employee", "Contractor"],
+        "exampleValues": ["Employee", "Contractor"]
+      }
+    ],
+    "Employee": [
+      {
+        "name": "firstName",
+        "neo4jType": "STRING",
+        "exampleValues": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4jType": "STRING",
+        "exampleValues": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4jType": "INTEGER",
+        "minValue": 0,
+        "maxValue": 120
+      },
+      {
+        "name": "email",
+        "neo4jType": "STRING",
+        "exampleValues": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4jType": "BOOLEAN",
+        "exampleValues": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4jType": "STRING",
+        "enumValues": ["Employee"],
+        "exampleValues": ["Employee"]
+      }
+    ],
+    "Contractor": [
+      {
+        "name": "firstName",
+        "neo4jType": "STRING",
+        "exampleValues": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4jType": "STRING",
+        "exampleValues": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4jType": "INTEGER",
+        "minValue": 0,
+        "maxValue": 120
+      },
+      {
+        "name": "email",
+        "neo4jType": "STRING",
+        "exampleValues": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4jType": "BOOLEAN",
+        "exampleValues": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4jType": "STRING",
+        "enumValues": ["Contractor"],
+        "exampleValues": ["Contractor"]
+      }
+    ],
+    "Company": [
+      {
+        "name": "companyName",
+        "neo4jType": "STRING",
+        "exampleValues": ["Tech Corp", "Data Solutions Inc", "Innovation LLC"]
+      },
+      {
+        "name": "foundedYear",
+        "neo4jType": "INTEGER",
+        "minValue": 1800,
+        "maxValue": 2024
+      },
+      {
+        "name": "industry",
+        "neo4jType": "STRING",
+        "enumValues": ["Technology", "Finance", "Healthcare", "Education", "Manufacturing"]
+      },
+      {
+        "name": "employeeCount",
+        "neo4jType": "INTEGER",
+        "minValue": 1
+      }
+    ],
+    "Location": [
+      {
+        "name": "city",
+        "neo4jType": "STRING",
+        "exampleValues": ["New York", "San Francisco", "London", "Tokyo"]
+      },
+      {
+        "name": "country",
+        "neo4jType": "STRING",
+        "exampleValues": ["USA", "UK", "Japan", "Germany"]
+      },
+      {
+        "name": "coordinates",
+        "neo4jType": "POINT"
+        }
+    ]
+  },
+  "relProps": {
+    "WORKS_FOR": [
+      {
+        "name": "startDate",
+        "neo4jType": "DATE_TIME",
+        "exampleValues": ["2020-01-15T08:00:00Z", "2021-06-01T09:00:00Z"]
+      },
+      {
+        "name": "position",
+        "neo4jType": "STRING",
+        "exampleValues": ["Software Engineer", "Data Scientist", "Product Manager"]
+      },
+      {
+        "name": "salary",
+        "neo4jType": "FLOAT",
+        "minValue": 30000.0,
+        "maxValue": 500000.0
+      }
+    ],
+    "LOCATED_IN": [
+      {
+        "name": "since",
+        "neo4jType": "DATE_TIME",
+        "exampleValues": ["2019-03-01T00:00:00Z", "2020-07-15T00:00:00Z"]
+      }
+    ],
+    "KNOWS": [
+      {
+        "name": "relationshipType",
+        "neo4jType": "STRING",
+        "enumValues": ["friend", "colleague", "family", "acquaintance"],
+        "exampleValues": ["friend", "colleague", "family", "acquaintance"]
+      },
+      {
+        "name": "sinceYear",
+        "neo4jType": "INTEGER",
+        "minValue": 1950,
+        "maxValue": 2024
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "start": "Person",
+      "end": "Company",
+      "relType": "WORKS_FOR"
+    },
+    {
+      "start": "Employee",
+      "end": "Company",
+      "relType": "WORKS_FOR"
+    },
+    {
+      "start": "Contractor",
+      "end": "Company",
+      "relType": "WORKS_FOR"
+    },
+    {
+      "start": "Company",
+      "end": "Location",
+      "relType": "LOCATED_IN"
+    },
+    {
+      "start": "Person",
+      "end": "Person",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Person",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Employee",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Contractor",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Person",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Employee",
+      "relType": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Contractor",
+      "relType": "KNOWS"
+    }
+  ],
+  "metadata": {
+    "constraint": [
+      {
+        "id": 1,
+        "name": "person_node_key",
+        "constraintType": "NODE_KEY",
+        "entityType": "NODE",
+        "labelsOrTypes": ["Person"],
+        "properties": ["firstName", "lastName"],
+        "ownedIndex": "person_node_key_index"
+      },
+      {
+        "id": 2,
+        "name": "company_node_key",
+        "constraintType": "NODE_KEY",
+        "entityType": "NODE",
+        "labelsOrTypes": ["Company"],
+        "properties": ["companyName"],
+        "ownedIndex": "company_node_key_index"
+      },
+      {
+        "id": 3,
+        "name": "location_node_key",
+        "constraintType": "NODE_KEY",
+        "entityType": "NODE",
+        "labelsOrTypes": ["Location"],
+        "properties": ["city", "country"],
+        "ownedIndex": "location_node_key_index"
+      }
+    ],
+    "index": [
+      {
+        "label": "Person",
+        "properties": ["firstName", "lastName"],
+        "size": 15,
+        "indexType": "BTREE",
+        "valuesSelectivity": 1.0,
+        "distinctValues": 15.0
+      },
+      {
+        "label": "Company",
+        "properties": ["companyName"],
+        "size": 10,
+        "indexType": "BTREE",
+        "valuesSelectivity": 1.0,
+        "distinctValues": 10.0
+      },
+      {
+        "label": "Location",
+        "properties": ["city", "country"],
+        "size": 8,
+        "indexType": "BTREE",
+        "valuesSelectivity": 1.0,
+        "distinctValues": 8.0
+      },
+      {
+        "label": "Person",
+        "properties": ["email"],
+        "size": 15,
+        "indexType": "BTREE",
+        "valuesSelectivity": 1.0,
+        "distinctValues": 15.0
+      },
+      {
+        "label": "Person",
+        "properties": ["age"],
+        "size": 15,
+        "indexType": "BTREE",
+        "valuesSelectivity": 0.8,
+        "distinctValues": 12.0
+      },
+      {
+        "label": "Company",
+        "properties": ["industry"],
+        "size": 10,
+        "indexType": "BTREE",
+        "valuesSelectivity": 0.5,
+        "distinctValues": 5.0
+      },
+      {
+        "label": "Location",
+        "properties": ["coordinates"],
+        "size": 8,
+        "indexType": "POINT",
+        "valuesSelectivity": 1.0,
+        "distinctValues": 8.0
+      }
+    ]
+  }
+} 

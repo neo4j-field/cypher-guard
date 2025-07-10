@@ -1,0 +1,491 @@
+name: "Neo4j Database Operations Tests"
+description: "Comprehensive tests for all Neo4j database operations and administration commands"
+category: "database_operations"
+queries:
+  # Database Management Operations
+  - name: "show_databases"
+    description: "Show all databases in the DBMS"
+    cypher: |
+      SHOW DATABASES
+
+  - name: "show_databases_detailed"
+    description: "Show databases with detailed information"
+    cypher: |
+      SHOW DATABASES YIELD name, currentStatus, role, requestedStatus
+
+  - name: "show_default_database"
+    description: "Show default database information"
+    cypher: |
+      SHOW DEFAULT DATABASE
+
+  - name: "show_home_database"
+    description: "Show current user's home database"
+    cypher: |
+      SHOW HOME DATABASE
+
+  - name: "use_database_command"
+    description: "Switch to a specific database context"
+    cypher: |
+      :USE neo4j
+
+  # NOTE: The following CREATE/DROP/ALTER operations require admin privileges
+  # and may not work in all environments, but are included for completeness
+
+  - name: "create_database_with_options_syntax"
+    description: "Syntax for creating database with options (admin required)"
+    cypher: |
+      CREATE DATABASE testdb IF NOT EXISTS OPTIONS {storeFormat: 'aligned'}
+
+  - name: "alter_database_syntax"
+    description: "Syntax for altering database access mode (admin required)"
+    cypher: |
+      ALTER DATABASE testdb SET ACCESS READ ONLY
+
+  - name: "drop_database_syntax"
+    description: "Syntax for dropping a database (admin required)"
+    cypher: |
+      DROP DATABASE testdb IF EXISTS
+
+  # User Management Operations
+  - name: "show_current_user"
+    description: "Show information about the current user"
+    cypher: |
+      SHOW CURRENT USER
+
+  - name: "show_users"
+    description: "Show all users in the system (admin required)"
+    cypher: |
+      SHOW USERS
+
+  - name: "show_users_detailed"
+    description: "Show users with detailed information (admin required)"
+    cypher: |
+      SHOW USERS YIELD user, roles, suspended
+
+  - name: "create_user_syntax"
+    description: "Syntax for creating a user (admin required)"
+    cypher: |
+      CREATE USER alice SET PASSWORD 'password123' CHANGE REQUIRED
+
+  - name: "alter_user_syntax"
+    description: "Syntax for altering user (admin required)"
+    cypher: |
+      ALTER USER alice SET PASSWORD 'newpassword' CHANGE NOT REQUIRED
+
+  - name: "alter_current_user_password"
+    description: "Change current user password"
+    cypher: |
+      // ALTER CURRENT USER SET PASSWORD FROM 'old' TO 'new'
+
+  - name: "drop_user_syntax"
+    description: "Syntax for dropping a user (admin required)"
+    cypher: |
+      // DROP USER alice IF EXISTS
+
+  # Role Management Operations
+  - name: "show_roles"
+    description: "Show all roles in the system (admin required)"
+    cypher: |
+      SHOW ROLES
+
+  - name: "show_roles_detailed"
+    description: "Show roles with detailed information (admin required)"
+    cypher: |
+      SHOW ROLES YIELD role, suspended
+
+  - name: "create_role_syntax"
+    description: "Syntax for creating a role (admin required)"
+    cypher: |
+      CREATE ROLE developer
+
+  - name: "grant_role_syntax"
+    description: "Syntax for granting role to user (admin required)"
+    cypher: |
+      GRANT ROLE developer TO alice
+
+  - name: "revoke_role_syntax"
+    description: "Syntax for revoking role from user (admin required)"
+    cypher: |
+      REVOKE ROLE developer FROM alice
+  
+  - name: "drop_role_syntax"
+    description: "Syntax for dropping a role (admin required)"
+    cypher: |
+      DROP ROLE developer IF EXISTS
+
+  # Privilege Management Operations
+  - name: "show_privileges"
+    description: "Show all privileges (admin required)"
+    cypher: |
+      SHOW PRIVILEGES
+
+  - name: "show_user_privileges"
+    description: "Show privileges for specific user (admin required)"
+    cypher: |
+      SHOW USER alice PRIVILEGES
+
+  - name: "show_role_privileges"
+    description: "Show privileges for specific role (admin required)"
+    cypher: |
+      SHOW ROLE developer PRIVILEGES
+
+  - name: "grant_privilege_syntax"
+    description: "Syntax for granting database privilege (admin required)"
+    cypher: |
+      GRANT ACCESS ON DATABASE neo4j TO alice
+
+  - name: "revoke_privilege_syntax"
+    description: "Syntax for revoking database privilege (admin required)"
+    cypher: |
+      REVOKE ACCESS ON DATABASE neo4j FROM alice
+
+  # Index Management Operations
+  - name: "show_indexes"
+    description: "Show all indexes in current database"
+    cypher: |
+      SHOW INDEXES
+
+  - name: "show_indexes_detailed"
+    description: "Show indexes with detailed information"
+    cypher: |
+      SHOW INDEXES YIELD name, type, entityType, labelsOrTypes, properties, state
+
+  - name: "show_btree_indexes"
+    description: "Show only B-tree indexes"
+    cypher: |
+      SHOW BTREE INDEXES
+
+  - name: "show_range_indexes"
+    description: "Show only range indexes"
+    cypher: |
+      SHOW RANGE INDEXES
+
+  - name: "show_text_indexes"
+    description: "Show only text indexes"
+    cypher: |
+      SHOW TEXT INDEXES
+
+  - name: "show_point_indexes"
+    description: "Show only point indexes"
+    cypher: |
+      SHOW POINT INDEXES
+
+  - name: "create_range_index"
+    description: "Create a range index on a property"
+    cypher: |
+      CREATE RANGE INDEX person_age_index IF NOT EXISTS FOR (p:Person) ON (p.age)
+
+  - name: "create_text_index"
+    description: "Create a text index on a property"
+    cypher: |
+      CREATE TEXT INDEX person_name_text_index IF NOT EXISTS FOR (p:Person) ON (p.firstName)
+
+  - name: "create_composite_index"
+    description: "Create a composite index on multiple properties"
+    cypher: |
+      CREATE RANGE INDEX person_composite_index IF NOT EXISTS FOR (p:Person) ON (p.lastName, p.age)
+
+  - name: "create_relationship_index"
+    description: "Create an index on relationship property"
+    cypher: |
+      CREATE RANGE INDEX works_for_index IF NOT EXISTS FOR ()-[r:WORKS_FOR]-() ON (r.startDate)
+
+  - name: "drop_index_by_name"
+    description: "Drop an index by name"
+    cypher: |
+      DROP INDEX person_age_index IF EXISTS
+
+  # Constraint Management Operations
+  - name: "show_constraints"
+    description: "Show all constraints in current database"
+    cypher: |
+      SHOW CONSTRAINTS
+
+  - name: "show_constraints_detailed"
+    description: "Show constraints with detailed information"
+    cypher: |
+      SHOW CONSTRAINTS YIELD name, type, entityType, labelsOrTypes, properties
+
+  - name: "show_uniqueness_constraints"
+    description: "Show only uniqueness constraints"
+    cypher: |
+      SHOW UNIQUENESS CONSTRAINTS
+
+  - name: "show_existence_constraints"
+    description: "Show only node/relationship existence constraints"
+    cypher: |
+      SHOW EXISTENCE CONSTRAINTS
+
+  - name: "show_key_constraints"
+    description: "Show only node key constraints"
+    cypher: |
+      SHOW KEY CONSTRAINTS
+
+  - name: "create_uniqueness_constraint"
+    description: "Create a uniqueness constraint"
+    cypher: |
+      CREATE CONSTRAINT person_email_unique IF NOT EXISTS FOR (p:Person) REQUIRE p.email IS UNIQUE
+
+  - name: "create_existence_constraint"
+    description: "Create a node property existence constraint"
+    cypher: |
+      CREATE CONSTRAINT person_name_exists IF NOT EXISTS FOR (p:Person) REQUIRE p.firstName IS NOT NULL
+
+  - name: "create_key_constraint"
+    description: "Create a node key constraint"
+    cypher: |
+      CREATE CONSTRAINT person_key IF NOT EXISTS FOR (p:Person) REQUIRE (p.firstName, p.lastName) IS NODE KEY
+
+  - name: "create_relationship_existence_constraint"
+    description: "Create a relationship property existence constraint"
+    cypher: |
+      CREATE CONSTRAINT works_for_exists IF NOT EXISTS FOR ()-[r:WORKS_FOR]-() REQUIRE r.startDate IS NOT NULL
+
+  - name: "create_type_constraint"
+    description: "Create a property type constraint"
+    cypher: |
+      CREATE CONSTRAINT person_age_type IF NOT EXISTS FOR (p:Person) REQUIRE p.age IS :: INTEGER
+
+  - name: "drop_constraint_by_name"
+    description: "Drop a constraint by name"
+    cypher: |
+      DROP CONSTRAINT person_email_unique IF EXISTS
+
+  # Function and Procedure Operations
+  - name: "show_functions"
+    description: "Show all available functions"
+    cypher: |
+      SHOW FUNCTIONS
+
+  - name: "show_functions_detailed"
+    description: "Show functions with detailed information"
+    cypher: |
+      SHOW FUNCTIONS YIELD name, category, description
+
+  - name: "show_user_functions"
+    description: "Show only user-defined functions"
+    cypher: |
+      SHOW USER FUNCTIONS
+
+  - name: "show_built_in_functions"
+    description: "Show only built-in functions"
+    cypher: |
+      SHOW BUILT IN FUNCTIONS
+
+  - name: "show_procedures"
+    description: "Show all available procedures"
+    cypher: |
+      SHOW PROCEDURES
+
+  - name: "show_procedures_detailed"
+    description: "Show procedures with detailed information"
+    cypher: |
+      SHOW PROCEDURES YIELD name, description, mode
+
+  - name: "show_user_procedures"
+    description: "Show only user-defined procedures"
+    cypher: |
+      SHOW USER PROCEDURES
+
+  - name: "call_procedure_yield"
+    description: "Call a procedure with YIELD"
+    cypher: |
+      CALL db.schema.visualization() YIELD nodes, relationships
+      RETURN nodes, relationships
+
+  - name: "call_procedure_simple"
+    description: "Call a simple procedure"
+    cypher: |
+      CALL db.labels()
+
+  # Transaction Management Operations
+  - name: "show_transactions"
+    description: "Show current transactions (admin required)"
+    cypher: |
+      SHOW TRANSACTIONS
+
+  - name: "show_transactions_detailed"
+    description: "Show transactions with detailed information (admin required)"
+    cypher: |
+      SHOW TRANSACTIONS YIELD transactionId, currentQuery, status
+
+  - name: "terminate_transaction_syntax"
+    description: "Syntax for terminating a transaction (admin required)"
+    cypher: |
+      // TERMINATE TRANSACTION 'transaction-id'
+
+  # Database Schema Information
+  - name: "schema_visualization"
+    description: "Get database schema visualization"
+    cypher: |
+      CALL db.schema.visualization()
+
+  - name: "schema_node_properties"
+    description: "Get schema of node properties"
+    cypher: |
+      CALL db.schema.nodeTypeProperties()
+
+  - name: "schema_relationship_properties"
+    description: "Get schema of relationship properties"
+    cypher: |
+      CALL db.schema.relTypeProperties()
+
+  - name: "database_info"
+    description: "Get database information"
+    cypher: |
+      CALL db.info()
+
+  - name: "database_property_keys"
+    description: "Get all property keys in database"
+    cypher: |
+      CALL db.propertyKeys()
+
+  - name: "database_labels"
+    description: "Get all node labels in database"
+    cypher: |
+      CALL db.labels()
+
+  - name: "database_relationship_types"
+    description: "Get all relationship types in database"
+    cypher: |
+      CALL db.relationshipTypes()
+
+  # Server and Cluster Operations
+  - name: "show_servers"
+    description: "Show all servers in cluster (admin required)"
+    cypher: |
+      SHOW SERVERS
+
+  - name: "show_servers_detailed"
+    description: "Show servers with detailed information (admin required)"
+    cypher: |
+      SHOW SERVERS YIELD name, address, state, health
+
+  - name: "reallocate_databases_syntax"
+    description: "Syntax for reallocating databases in cluster (admin required)"
+    cypher: |
+      // REALLOCATE DATABASES
+
+  - name: "reallocate_databases_dryrun_syntax"
+    description: "Syntax for dry run database reallocation (admin required)"
+    cypher: |
+      // REALLOCATE DATABASES DRYRUN
+
+  # Database Alias Operations
+  - name: "show_aliases"
+    description: "Show database aliases"
+    cypher: |
+      SHOW ALIASES FOR DATABASE
+
+  - name: "create_alias_syntax"
+    description: "Syntax for creating database alias (admin required)"
+    cypher: |
+      CREATE ALIAS mydb FOR DATABASE neo4j
+
+  - name: "alter_alias_syntax"
+    description: "Syntax for altering database alias (admin required)"
+    cypher: |
+      ALTER ALIAS mydb TARGET neo4j
+
+  - name: "drop_alias_syntax"
+    description: "Syntax for dropping database alias (admin required)"
+    cypher: |
+      DROP ALIAS mydb IF EXISTS
+
+  # Configuration and Settings
+  - name: "show_settings"
+    description: "Show database settings (admin required)"
+    cypher: |
+      SHOW SETTINGS
+
+  - name: "show_settings_detailed"
+    description: "Show settings with detailed information (admin required)"
+    cypher: |
+      SHOW SETTINGS YIELD name, value, description
+
+  # Statistical Operations
+  - name: "count_statistics"
+    description: "Get count statistics for database"
+    cypher: |
+      CALL db.stats.retrieve('GRAPH COUNTS')
+
+  - name: "clear_query_caches"
+    description: "Clear query caches"
+    cypher: |
+      CALL db.clearQueryCaches()
+
+  - name: "ping_database"
+    description: "Ping the database"
+    cypher: |
+      CALL db.ping()
+
+  # Import/Export Operations
+  - name: "load_csv_basic"
+    description: "Basic LOAD CSV operation"
+    cypher: |
+      // LOAD CSV FROM 'file:///sample.csv' AS row
+      // RETURN row
+      // LIMIT 5
+
+  - name: "load_csv_with_headers"
+    description: "LOAD CSV with headers"
+    cypher: |
+      // LOAD CSV WITH HEADERS FROM 'file:///sample.csv' AS row
+      // RETURN row
+      // LIMIT 5
+
+  - name: "export_query_results"
+    description: "Export query results (requires APOC)"
+    cypher: |
+      CALL apoc.export.csv.query(
+        "MATCH (p:Person) RETURN p.firstName, p.lastName", 
+        "persons.csv", 
+        {}
+      )
+
+  # Monitoring and Performance
+  - name: "list_running_queries"
+    description: "List currently running queries (admin required)"
+    cypher: |
+      CALL db.listQueries()
+
+  - name: "kill_query_syntax"
+    description: "Syntax for killing a query (admin required)"
+    cypher: |
+      // CALL db.killQuery('query-id')
+
+  - name: "warm_up_database"
+    description: "Warm up the database"
+    cypher: |
+      CALL db.warmup()
+
+  - name: "database_components"
+    description: "Show database components"
+    cypher: |
+      CALL dbms.components()
+
+  - name: "query_jmx"
+    description: "Query JMX information"
+    cypher: |
+      CALL dbms.queryJmx('*:*')
+
+  # Utility Operations
+  - name: "create_uuid"
+    description: "Generate UUID"
+    cypher: |
+      RETURN randomUUID() AS uuid
+
+  - name: "current_timestamp"
+    description: "Get current timestamp"
+    cypher: |
+      RETURN timestamp() AS currentTime, datetime() AS currentDateTime
+
+  - name: "explain_query"
+    description: "Explain query execution plan"
+    cypher: |
+      EXPLAIN MATCH (p:Person) WHERE p.age > 30 RETURN p
+
+  - name: "profile_query"
+    description: "Profile query execution"
+    cypher: |
+      PROFILE MATCH (p:Person) WHERE p.age > 30 RETURN p

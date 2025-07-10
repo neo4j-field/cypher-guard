@@ -1,0 +1,16 @@
+id,firstName,lastName,age,email,active,employmentType
+1,John,Smith,28,john.smith@example.com,true,Employee
+2,Jane,Doe,32,jane.doe@example.com,true,Contractor
+3,Alice,Johnson,25,alice.johnson@example.com,true,Employee
+4,Bob,Williams,45,bob.williams@example.com,false,Employee
+5,Charlie,Brown,38,charlie.brown@example.com,true,Contractor
+6,Diana,Davis,29,diana.davis@example.com,true,Employee
+7,Eve,Miller,41,eve.miller@example.com,true,Employee
+8,Frank,Wilson,35,frank.wilson@example.com,false,Contractor
+9,Grace,Moore,27,grace.moore@example.com,true,Employee
+10,Henry,Taylor,52,henry.taylor@example.com,true,Employee
+11,Ivy,Anderson,33,ivy.anderson@example.com,true,Contractor
+12,Jack,Thomas,26,jack.thomas@example.com,true,Employee
+13,Kate,Jackson,39,kate.jackson@example.com,true,Contractor
+14,Liam,White,31,liam.white@example.com,true,Employee
+15,Mia,Harris,24,mia.harris@example.com,false,Employee 

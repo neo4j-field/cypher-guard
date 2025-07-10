@@ -48,3 +48,6 @@ clean:
 	find . -name "*.so" -delete
 	find . -name "node_modules" -type d -exec rm -rf {} +
 	find . -name "*.node" -delete 
+
+load-eval-data:
+	python3 data/ingest.py
