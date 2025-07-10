@@ -21,16 +21,16 @@ build-rust:
 	cargo build --verbose
 
 # Python targets
-poetry-install:
-	cd rust/python_bindings && poetry install
+uv-install:
+	cd rust/python_bindings && uv sync
 
 build: build-python
 
-build-python: poetry-install
-	cd rust/python_bindings && poetry run maturin develop
+build-python: uv-install
+	cd rust/python_bindings && uv run maturin develop
 
-test-python: poetry-install
-	cd rust/python_bindings && poetry run pytest tests/ -vv
+test-python: uv-install
+	cd rust/python_bindings && uv run pytest tests/ -vv
 
 # JavaScript targets
 build-js:

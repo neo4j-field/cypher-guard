@@ -7,34 +7,34 @@ def schema_json():
     {
         "node_props": {
         "Person": [
-            {"name": "name", "neo4j_type": {"type": "STRING"}},
-            {"name": "age", "neo4j_type": {"type": "INTEGER"}},
-            {"name": "created", "neo4j_type": {"type": "BOOLEAN"}}
+            {"name": "name", "neo4j_type": "STRING"},
+            {"name": "age", "neo4j_type": "INTEGER"},
+            {"name": "created", "neo4j_type": "BOOLEAN"}
         ],
         "Movie": [
-            {"name": "title", "neo4j_type": {"type": "STRING"}},
-            {"name": "year", "neo4j_type": {"type": "INTEGER"}}
+            {"name": "title", "neo4j_type": "STRING"},
+            {"name": "year", "neo4j_type": "INTEGER"}
         ],
         "Station": [
-            {"name": "name", "neo4j_type": {"type": "STRING"}},
-            {"name": "location", "neo4j_type": {"type": "POINT"}}
+            {"name": "name", "neo4j_type": "STRING"},
+            {"name": "location", "neo4j_type": "POINT"}
         ],
         "Stop": [
-            {"name": "departs", "neo4j_type": {"type": "STRING"}},
-            {"name": "arrives", "neo4j_type": {"type": "STRING"}}
+            {"name": "departs", "neo4j_type": "STRING"},
+            {"name": "arrives", "neo4j_type": "STRING"}
         ]
     },
     "rel_props": {
         "KNOWS": [
-            {"name": "since", "neo4j_type": {"type": "DATE_TIME"}}
+            {"name": "since", "neo4j_type": "DateTime"}
         ],
         "ACTED_IN": [
-            {"name": "role", "neo4j_type": {"type": "STRING"}}
+            {"name": "role", "neo4j_type": "STRING"}
         ],
         "CALLS_AT": [],
         "NEXT": [],
         "LINK": [
-            {"name": "distance", "neo4j_type": {"type": "FLOAT"}}
+            {"name": "distance", "neo4j_type": "FLOAT"}
         ]
     },
     "relationships": [

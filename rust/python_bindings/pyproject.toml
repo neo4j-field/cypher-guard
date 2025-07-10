@@ -1,11 +1,18 @@
-[tool.poetry]
+[project]
 name = "cypher_guard"
 version = "0.1.0"
 description = "Python bindings for Cypher Guard"
-authors = ["Your Name <your.email@example.com>"]
 
-[tool.poetry.dependencies]
-python = "^3.8"
+dependencies = []
+requires-python = ">=3.8"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "maturin>=1.4,<2.0",
+    "testcontainers>=3.7",
+    "neo4j>=5.0"
+]
 
 [build-system]
 requires = ["maturin>=1.4,<2.0"]

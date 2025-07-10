@@ -19,13 +19,15 @@ cargo build --release
 ### Python
 
 ```sh
-# Install with maturin (recommended)
-pip install maturin
-cd rust/python_bindings
-maturin develop
+# Install uv (if not already)
+pip install uv
 
-# Or use the Makefile (installs maturin if needed)
-make
+# Install dependencies from pyproject.toml
+uv pip install -r pyproject.toml
+
+# Build Python bindings
+uv pip install maturin
+maturin develop
 ```
 
 ### TypeScript/JavaScript
