@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use ::cypher_guard::{
     get_cypher_validation_errors, parse_query, validate_cypher_with_schema, CypherGuardError,
     CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError, DbSchema,
@@ -7,7 +9,6 @@ use ::cypher_guard::{
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use std::io::Write;
 
 // === Custom Python Exception Classes ===
 #[pyclass(extends=PyException)]
