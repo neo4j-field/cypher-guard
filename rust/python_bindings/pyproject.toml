@@ -4,14 +4,15 @@ version = "0.1.0"
 description = "Python bindings for Cypher Guard"
 
 dependencies = []
-requires-python = ">=3.8"
+requires-python = ">=3.9.0"
 
 [dependency-groups]
 dev = [
     "pytest>=7.0",
     "maturin>=1.4,<2.0",
     "testcontainers>=3.7",
-    "neo4j>=5.0"
+    "neo4j>=5.0",
+    "neo4j-graphrag>=1.8.0"
 ]
 
 [build-system]
