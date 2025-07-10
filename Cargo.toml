@@ -3,7 +3,8 @@ resolver = "2"
 members = [
     "rust/cypher_guard",
     "rust/python_bindings",
-    "rust/js_bindings"
+    "rust/js_bindings",
+    "eval/rust"
 ]
 
 [workspace.package]

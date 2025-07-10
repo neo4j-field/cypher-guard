@@ -1,8 +1,34 @@
 # Makefile for cypher-guard Python bindings
 
-.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all
+.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all eval-rust
 
 all: build-python
+
+help:
+	@echo "Cypher Guard Build System"
+	@echo "========================="
+	@echo ""
+	@echo "Rust targets:"
+	@echo "  build-rust     - Build Rust components"
+	@echo "  test-rust      - Run Rust tests"
+	@echo "  fmt            - Check Rust formatting"
+	@echo "  clippy         - Run Rust linting"
+	@echo ""
+	@echo "Python targets:"
+	@echo "  build-python   - Build Python bindings"
+	@echo "  test-python    - Run Python tests"
+	@echo ""
+	@echo "JavaScript targets:"
+	@echo "  build-js       - Build JavaScript bindings"
+	@echo "  test-js        - Run JavaScript tests"
+	@echo ""
+	@echo "Evaluation targets:"
+	@echo "  eval-rust      - Run evaluation with default settings"
+	@echo ""
+	@echo "Utility targets:"
+	@echo "  load-eval-data - Load test data into Neo4j"
+	@echo "  clean          - Clean all build artifacts"
+	@echo "  help           - Show this help message"
 
 # Rust targets (matches CI)
 test-rust: fmt clippy build
@@ -51,3 +77,11 @@ clean:
 
 load-eval-data:
 	python3 data/ingest.py
+
+# Evaluation targets
+eval-rust: build-rust
+	cargo run --bin eval -- \
+		--schema data/schema/eval_schema.json \
+		--queries data/queries \
+		--verbose \
+		--detailed

@@ -1,0 +1,335 @@
+name: "Neo4j Predicate Tests"
+description: "Comprehensive tests for all Neo4j Cypher predicates and operators"
+category: "predicates"
+queries:
+  # Boolean Operators
+  - name: "boolean_and_operator"
+    description: "Test AND boolean operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age > 30 AND p.active = true
+      RETURN p.firstName, p.age, p.active
+
+  - name: "boolean_or_operator"
+    description: "Test OR boolean operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age > 50 OR p.industry = 'Technology'
+      RETURN p.firstName, p.age
+
+  - name: "boolean_xor_operator"
+    description: "Test XOR boolean operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE (p.age > 35) XOR (p.active = false)
+      RETURN p.firstName, p.age, p.active
+
+  - name: "boolean_not_operator"
+    description: "Test NOT boolean operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE NOT p.active = false
+      RETURN p.firstName, p.active
+
+  # Comparison Operators
+  - name: "equality_operator"
+    description: "Test = equality operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age = 30
+      RETURN p.firstName, p.age
+
+  - name: "inequality_operator"
+    description: "Test <> inequality operator"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.industry <> 'Technology'
+      RETURN c.companyName, c.industry
+
+  - name: "less_than_operator"
+    description: "Test < less than operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age < 30
+      RETURN p.firstName, p.age
+
+  - name: "greater_than_operator"
+    description: "Test > greater than operator"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.employeeCount > 200
+      RETURN c.companyName, c.employeeCount
+
+  - name: "less_than_or_equal_operator"
+    description: "Test <= less than or equal operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age <= 35
+      RETURN p.firstName, p.age
+
+  - name: "greater_than_or_equal_operator"
+    description: "Test >= greater than or equal operator"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.foundedYear >= 2000
+      RETURN c.companyName, c.foundedYear
+
+  - name: "is_null_operator"
+    description: "Test IS NULL operator"
+    cypher: |
+      MATCH (n)
+      WHERE n.nonExistentProperty IS NULL
+      RETURN labels(n)[0] AS nodeType, count(*) AS count
+
+  - name: "is_not_null_operator"
+    description: "Test IS NOT NULL operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.email IS NOT NULL
+      RETURN p.firstName, p.email
+
+  # List Operators
+  - name: "in_operator_with_list"
+    description: "Test IN operator with list"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.industry IN ['Technology', 'Healthcare', 'Finance']
+      RETURN c.companyName, c.industry
+
+  - name: "in_operator_with_range"
+    description: "Test IN operator with range"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IN range(25, 35)
+      RETURN p.firstName, p.age
+
+  # String Operators
+  - name: "starts_with_operator"
+    description: "Test STARTS WITH string operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.firstName STARTS WITH 'J'
+      RETURN p.firstName, p.lastName
+
+  - name: "ends_with_operator"
+    description: "Test ENDS WITH string operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.lastName ENDS WITH 'son'
+      RETURN p.firstName, p.lastName
+
+  - name: "contains_operator"
+    description: "Test CONTAINS string operator"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.companyName CONTAINS 'Tech'
+      RETURN c.companyName
+
+  - name: "regex_operator"
+    description: "Test =~ regex operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.email =~ '.*@example\\.com'
+      RETURN p.firstName, p.email
+
+  - name: "is_normalized_operator"
+    description: "Test IS NORMALIZED string operator"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.firstName IS NORMALIZED
+      RETURN p.firstName
+
+  - name: "is_not_normalized_operator"
+    description: "Test IS NOT NORMALIZED string operator"
+    cypher: |
+      WITH 'café' AS unnormalized, normalize('café') AS normalized
+      RETURN unnormalized IS NOT NORMALIZED AS isUnormalized,
+             normalized IS NORMALIZED AS isNormalized
+
+  # Path Pattern Expressions (EXISTS)
+  - name: "exists_simple_pattern"
+    description: "Test EXISTS with simple path pattern"
+    cypher: |
+      MATCH (p:Person)
+      WHERE EXISTS {
+        MATCH (p)-[:WORKS_FOR]->(:Company)
+      }
+      RETURN p.firstName, p.lastName
+
+  - name: "exists_complex_pattern"
+    description: "Test EXISTS with complex path pattern"
+    cypher: |
+      MATCH (p:Person)
+      WHERE EXISTS {
+        MATCH (p)-[:WORKS_FOR]->(c:Company)-[:LOCATED_IN]->(:Location)
+        WHERE c.industry = 'Technology'
+      }
+      RETURN p.firstName
+
+  - name: "not_exists_pattern"
+    description: "Test NOT EXISTS with path pattern"
+    cypher: |
+      MATCH (p:Person)
+      WHERE NOT EXISTS {
+        MATCH (p)-[:KNOWS]->(:Person)
+        WHERE p.age > 40
+      }
+      RETURN p.firstName, p.age
+
+  # Type Predicate Expressions
+  - name: "value_type_checking"
+    description: "Test type checking predicates with built-in functions"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName,
+             p.age IS NOT NULL AND toInteger(toString(p.age)) = p.age AS ageIsInteger,
+             p.active IS NOT NULL AND toString(p.active) IN ['true', 'false'] AS activeIsBoolean,
+             p.email IS NOT NULL AND size(p.email) > 0 AS emailIsString
+
+  - name: "type_validation_with_coercion"
+    description: "Test type validation and coercion using built-in functions"
+    cypher: |
+      WITH [1, '2', 3.0, true, null] AS mixedList
+      UNWIND mixedList AS value
+      RETURN value,
+             toIntegerOrNull(toString(value)) AS asInteger,
+             toString(value) AS asString,
+             toFloatOrNull(toString(value)) AS asFloat,
+             toBooleanOrNull(toString(value)) AS asBoolean
+
+  # Predicate Functions
+  - name: "all_predicate_function"
+    description: "Test all() predicate function"
+    cypher: |
+      MATCH (p:Person)-[:KNOWS]->(friend:Person)
+      WITH p, collect(friend.age) AS friendAges
+      WHERE all(age IN friendAges WHERE age IS NOT NULL AND age > 20)
+      RETURN p.firstName, friendAges
+
+  - name: "any_predicate_function"
+    description: "Test any() predicate function"
+    cypher: |
+      MATCH (p:Person)-[:KNOWS]->(friend:Person)
+      WITH p, collect(friend.age) AS friendAges
+      WHERE any(age IN friendAges WHERE age > 40)
+      RETURN p.firstName, friendAges
+
+  - name: "none_predicate_function"
+    description: "Test none() predicate function"
+    cypher: |
+      MATCH (p:Person)-[:KNOWS]->(friend:Person)
+      WITH p, collect(friend.age) AS friendAges
+      WHERE none(age IN friendAges WHERE age > 60)
+      RETURN p.firstName, friendAges
+
+  - name: "single_predicate_function"
+    description: "Test single() predicate function"
+    cypher: |
+      MATCH (c:Company)
+      MATCH (c)<-[:WORKS_FOR]-(emp:Person)
+      WITH c, collect(emp) AS employees
+      WHERE single(emp IN employees WHERE emp.age > 40)
+      RETURN c.companyName, [emp IN employees | emp.firstName + '(' + toString(emp.age) + ')'] AS employeeInfo
+
+  - name: "exists_property_function"
+    description: "Test exists() function for properties"
+    cypher: |
+      MATCH (n)
+      RETURN labels(n)[0] AS nodeType,
+             exists(n.age) AS hasAge,
+             exists(n.employeeCount) AS hasEmployeeCount,
+             exists(n.coordinates) AS hasCoordinates
+
+  - name: "isempty_function_tests"
+    description: "Test isEmpty() function with different types"
+    cypher: |
+      WITH {name: 'John', details: {}} AS person,
+           [] AS emptyList,
+           ['item'] AS nonEmptyList,
+           '' AS emptyString,
+           'text' AS nonEmptyString
+      RETURN isEmpty(person.details) AS emptyMap,
+             isEmpty(emptyList) AS emptyListCheck,
+             isEmpty(nonEmptyList) AS nonEmptyListCheck,
+             isEmpty(emptyString) AS emptyStringCheck,
+             isEmpty(nonEmptyString) AS nonEmptyStringCheck
+
+  # Complex Predicate Combinations
+  - name: "chained_comparison_operators"
+    description: "Test chained comparison operators"
+    cypher: |
+      MATCH (p:Person)
+      WHERE 20 < p.age < 40
+      RETURN p.firstName, p.age
+
+  - name: "complex_boolean_combination"
+    description: "Test complex boolean operator combinations"
+    cypher: |
+      MATCH (p:Person)
+      WHERE (p.age > 30 AND p.active = true) OR (p.age < 25 AND p.active = false)
+      RETURN p.firstName, p.age, p.active
+
+  - name: "nested_exists_with_predicates"
+    description: "Test nested EXISTS with multiple predicates"
+    cypher: |
+      MATCH (p:Person)
+      WHERE EXISTS {
+        MATCH (p)-[:WORKS_FOR]->(c:Company)
+        WHERE c.employeeCount > 100
+        AND EXISTS {
+          MATCH (c)-[:LOCATED_IN]->(l:Location)
+          WHERE l.country = 'USA'
+        }
+      }
+      RETURN p.firstName
+
+  - name: "regex_with_case_insensitive"
+    description: "Test regex operator with case-insensitive matching"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.firstName =~ '(?i)john.*'
+      RETURN p.firstName
+
+  - name: "list_comprehension_with_predicates"
+    description: "Test list comprehension with predicate filtering"
+    cypher: |
+      MATCH (p:Person)
+      WITH p, [(p)-[:KNOWS]->(friend:Person) WHERE friend.age > p.age | friend.firstName] AS olderFriends
+      WHERE size(olderFriends) > 0
+      RETURN p.firstName, p.age, olderFriends
+
+  - name: "pattern_predicate_in_where"
+    description: "Test pattern predicates directly in WHERE"
+    cypher: |
+      MATCH (p:Person)
+      WHERE (p)-[:WORKS_FOR]->(:Company {industry: 'Technology'})
+      AND (p)-[:KNOWS]->(:Person)
+      RETURN p.firstName
+
+  - name: "temporal_comparison_predicates"
+    description: "Test temporal value comparisons"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.foundedYear > 1990 AND c.foundedYear < 2010
+      RETURN c.companyName, c.foundedYear
+
+  - name: "null_safe_property_access"
+    description: "Test null-safe property access in predicates"
+    cypher: |
+      MATCH (n)
+      WHERE coalesce(n.age, 0) > 30
+      RETURN labels(n)[0] AS nodeType, n.age
+
+  - name: "property_existence_with_value_check"
+    description: "Test property existence combined with value validation"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL AND p.age > 0 AND p.age < 120
+      RETURN p.firstName, p.age
+
+  - name: "multiple_label_predicate"
+    description: "Test predicates with multiple node labels"
+    cypher: |
+      MATCH (n)
+      WHERE 'Person' IN labels(n) AND size(labels(n)) = 1
+      RETURN n.firstName, labels(n) AS nodeLabels
