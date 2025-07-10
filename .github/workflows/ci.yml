@@ -54,27 +54,25 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
+    - name: Install uv
+      uses: astral-sh/setup-uv@v1
       with:
         version: latest
-        virtualenvs-create: true
-        virtualenvs-in-project: true
     
-    - name: Cache Poetry dependencies
+    - name: Cache uv dependencies
       uses: actions/cache@v3
       with:
-        path: .venv
-        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        path: rust/python_bindings/.venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('rust/python_bindings/uv.lock') }}
     
     - name: Install dependencies
-      run: poetry install
+      run: cd rust/python_bindings && uv sync
     
     - name: Build Python bindings
-      run: poetry run maturin develop
+      run: cd rust/python_bindings && uv run maturin develop
     
     - name: Run Python tests
-      run: poetry run pytest rust/python_bindings/tests/ -vv
+      run: cd rust/python_bindings && uv run pytest tests/ -vv
 
   test-js:
     name: Test JavaScript Bindings
