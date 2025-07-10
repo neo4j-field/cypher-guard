@@ -60,25 +60,25 @@ let result = validate_cypher_with_schema(query, &schema);
 ### Python API
 
 ```python
-from cypher_guard import validate_cypher_py, get_validation_errors_py
+from cypher_guard import validate_cypher, get_validation_errors
 
 schema_json = '{...}'  # Your schema as JSON
 query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since"
 
-is_valid = validate_cypher_py(query, schema_json)
-errors = get_validation_errors_py(query, schema_json)
+is_valid = validate_cypher(query, schema_json)
+errors = get_validation_errors(query, schema_json)
 ```
 
 ### TypeScript/JavaScript API
 
 ```typescript
-import { validateCypherJs, getValidationErrorsJs } from "cypher-guard";
+import { validateCypher, getValidationErrors } from "cypher-guard";
 
 const schemaJson = '{...}';
 const query = "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since";
 
-const isValid = validateCypherJs(query, schemaJson);
-const errors = getValidationErrorsJs(query, schemaJson);
+const isValid = validateCypher(query, schemaJson);
+const errors = getValidationErrors(query, schemaJson);
 ```
 
 ---

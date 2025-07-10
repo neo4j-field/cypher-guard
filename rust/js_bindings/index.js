@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { validateCypherJs, getValidationErrorsJs } = nativeBinding
+const { validateCypher, getValidationErrors } = nativeBinding
 
-module.exports.validateCypherJs = validateCypherJs
-module.exports.getValidationErrorsJs = getValidationErrorsJs
+module.exports.validateCypher = validateCypher
+module.exports.getValidationErrors = getValidationErrors

@@ -1,4 +1,4 @@
-from cypher_guard import validate_cypher_py, get_validation_errors_py
+from cypher_guard import validate_cypher, get_validation_errors
 import pytest
 
 @pytest.fixture(scope="session")
@@ -97,7 +97,7 @@ def valid_qpp_cypher_queries():
     "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.invalid_property",  # 'invalid_property' is not a valid property
 ])
 def test_cypher_query_invalid_property(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
@@ -105,7 +105,7 @@ def test_cypher_query_invalid_property(query: str, schema_json: str):
     "MATCH (a:Station)-[r:CONNECTS]->(b:Station) RETURN a.name",  # 'CONNECTS' is not a valid relationship type
 ])
 def test_cypher_query_invalid_relationship_type(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
@@ -113,7 +113,7 @@ def test_cypher_query_invalid_relationship_type(query: str, schema_json: str):
     "MATCH (a:Train) RETURN a.name",  # 'Train' is not a valid label
 ])
 def test_cypher_query_invalid_node_label(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
@@ -121,7 +121,7 @@ def test_cypher_query_invalid_node_label(query: str, schema_json: str):
     "MATCH (a:Person) WHERE a.name = 123 RETURN a.name",  # 'name' should be STRING, not INTEGER
 ])
 def test_cypher_query_invalid_property_type(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
@@ -129,7 +129,7 @@ def test_cypher_query_invalid_property_type(query: str, schema_json: str):
     "MATCH (a:Stop)<-[r:CALLS_AT]-(b:Station) RETURN a.name",  # CALLS_AT is defined as Stop->Station, not Stop<-Station
 ])
 def test_cypher_query_invalid_relationship_direction(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
@@ -137,24 +137,24 @@ def test_cypher_query_invalid_relationship_direction(query: str, schema_json: st
     "MATCH (a:Station)-[r:LINK]->(b:Station) WHERE r.duration = 10 RETURN a.name"  # LINK doesn't have a 'duration' property, and doesn't exist on any rel or node
 ])
 def test_cypher_query_invalid_relationship_property(query: str, schema_json: str):
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", get_valid_cypher_queries())
 def test_valid_queries(query: str, schema_json: str):
-    assert  validate_cypher_py(query, schema_json)
+    assert  validate_cypher(query, schema_json)
        
 @pytest.mark.parametrize("query", get_valid_qpp_cypher_queries())
 def test_valid_qpps(query: str, schema_json: str):
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_basic_validation_valid(schema_json: str):
     query = "MATCH (p:Person) RETURN p.name"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_relationship_pattern_valid(schema_json: str):
     query = "MATCH (a:Person)-[r:KNOWS {since: 2020}]->(b:Person) RETURN a.name, r.since"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_quantified_path_pattern_valid(schema_json: str):
     query = """
@@ -163,11 +163,11 @@ def test_quantified_path_pattern_valid(schema_json: str):
     (a:Stop)-[:CALLS_AT]->(:Station { name: 'Clapham Junction' })
     RETURN d.departs AS departureTime, a.arrives AS arrivalTime
     """
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_merge_clause_valid(schema_json: str):
     query = "MERGE (a:Person {name: 'Alice'}) ON CREATE SET a.created = true"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_path_variable_with_predicate_valid(schema_json: str):
     query = """
@@ -180,28 +180,28 @@ def test_path_variable_with_predicate_valid(schema_json: str):
     RETURN reduce(acc = 0, r in relationships(p) | round(acc + r.distance, 2))
     AS distance
     """
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_with_clause_valid(schema_json: str):
     query = "MATCH (a:Person) WITH a RETURN a.name"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_with_clause_alias_valid(schema_json: str):
     query = "MATCH (a:Person) WITH a AS b RETURN b.name"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_with_clause_wildcard_valid(schema_json: str):
     query = "MATCH (a:Person) WITH * RETURN a.name"
-    assert validate_cypher_py(query, schema_json)
+    assert validate_cypher(query, schema_json)
 
 def test_with_clause_invalid_variable(schema_json: str):
     query = "MATCH (a:Person) WITH b RETURN b.name"
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert errors and any("not defined in previous scope" in e for e in errors)
 
 def test_with_clause_invalid_alias_expression(schema_json: str):
     query = "MATCH (a:Person) WITH b AS c RETURN c.name"
-    errors = get_validation_errors_py(query, schema_json)
+    errors = get_validation_errors(query, schema_json)
     assert errors and any("not defined in previous scope" in e for e in errors)
 
 
