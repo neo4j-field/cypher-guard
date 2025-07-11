@@ -1,6 +1,6 @@
 # Makefile for cypher-guard Python bindings
 
-.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all eval-rust
+.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all eval-rust docs docs-rust docs-python docs-js
 
 all: build-python
 
@@ -21,6 +21,12 @@ help:
 	@echo "JavaScript targets:"
 	@echo "  build-js       - Build JavaScript bindings"
 	@echo "  test-js        - Run JavaScript tests"
+	@echo ""
+	@echo "Documentation targets:"
+	@echo "  docs           - Generate all API documentation"
+	@echo "  docs-rust      - Generate Rust API documentation"
+	@echo "  docs-python    - Generate Python API documentation"
+	@echo "  docs-js        - Generate JavaScript API documentation"
 	@echo ""
 	@echo "Evaluation targets:"
 	@echo "  eval-rust      - Run evaluation with default settings"
@@ -65,6 +71,30 @@ build-js:
 test-js:
 	cd rust/js_bindings && npm test
 
+# Documentation targets
+docs: docs-rust docs-python docs-js
+	@echo "All API documentation generated at docs/api/"
+
+docs-rust:
+	@echo "Generating Rust API documentation..."
+	cd rust/cypher_guard && cargo doc --no-deps --features python-bindings
+	mkdir -p docs/api/rust
+	cp -r target/doc/* docs/api/rust/
+	@echo "Rust documentation generated at docs/api/rust/"
+
+docs-python: uv-install
+	@echo "Generating Python API documentation..."
+	cd rust/python_bindings && uv add --dev pdoc3
+	cd rust/python_bindings && uv run pdoc --html --output-dir ../../docs/api/python cypher_guard
+	@echo "Python documentation generated at docs/api/python/"
+
+docs-js:
+	@echo "Generating JavaScript API documentation..."
+	cd rust/js_bindings && npm ci
+	cd rust/js_bindings && npm install --save-dev typedoc
+	cd rust/js_bindings && npx typedoc --out ../../docs/api/javascript src/lib.ts --theme default
+	@echo "JavaScript documentation generated at docs/api/javascript/"
+
 # Utility targets
 install: build
 
@@ -73,7 +103,8 @@ clean:
 	find . -name "__pycache__" -type d -exec rm -rf {} +
 	find . -name "*.so" -delete
 	find . -name "node_modules" -type d -exec rm -rf {} +
-	find . -name "*.node" -delete 
+	find . -name "*.node" -delete
+	rm -rf docs/api/
 
 load-eval-data:
 	python3 data/ingest.py

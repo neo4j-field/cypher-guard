@@ -1,0 +1,282 @@
+name: Generate API Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+
+jobs:
+  generate-docs:
+    name: Generate API Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: rust-docs
+    
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v1
+      with:
+        version: latest
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: rust/js_bindings/package-lock.json
+    
+    # Generate Rust documentation
+    - name: Generate Rust docs
+      run: |
+        cd rust/cypher_guard
+        cargo doc --no-deps --features python-bindings
+        cd ../..
+        
+        # Copy Rust docs to output directory
+        mkdir -p docs/api/rust
+        cp -r rust/cypher_guard/target/doc/* docs/api/rust/
+    
+    # Generate Python documentation
+    - name: Generate Python docs
+      run: |
+        cd rust/python_bindings
+        uv sync
+        
+        # Install pdoc for documentation generation
+        uv add --dev pdoc3
+        
+        # Generate Python API docs
+        uv run pdoc --html --output-dir ../../docs/api/python cypher_guard
+        
+        cd ../..
+    
+    # Generate JavaScript documentation
+    - name: Generate JavaScript docs
+      run: |
+        cd rust/js_bindings
+        npm ci
+        
+        # Install typedoc for TypeScript documentation
+        npm install --save-dev typedoc
+        
+        # Generate TypeScript docs
+        npx typedoc --out ../../docs/api/javascript src/lib.ts --theme default
+        
+        cd ../..
+    
+    # Create API documentation index
+    - name: Create API docs index
+      run: |
+        cat > docs/api/index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Cypher Guard API Documentation</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+                .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #333; text-align: center; margin-bottom: 40px; }
+                .docs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 30px; }
+                .doc-card { border: 1px solid #e1e5e9; border-radius: 8px; padding: 20px; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; }
+                .doc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+                .doc-card h3 { margin: 0 0 10px 0; color: #0366d6; }
+                .doc-card p { margin: 0; color: #666; line-height: 1.5; }
+                .language-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+                .rust { background: #dea584; color: #000; }
+                .python { background: #3776ab; color: white; }
+                .javascript { background: #f7df1e; color: #000; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 Cypher Guard API Documentation</h1>
+                <p style="text-align: center; color: #666; margin-bottom: 30px;">
+                    Comprehensive API documentation for all Cypher Guard language bindings
+                </p>
+                
+                <div class="docs-grid">
+                    <a href="rust/" class="doc-card">
+                        <span class="language-badge rust">Rust</span>
+                        <h3>Rust API Reference</h3>
+                        <p>Complete Rust API documentation with examples, type definitions, and implementation details.</p>
+                    </a>
+                    
+                    <a href="python/" class="doc-card">
+                        <span class="language-badge python">Python</span>
+                        <h3>Python API Reference</h3>
+                        <p>Python bindings documentation with function signatures, exception types, and usage examples.</p>
+                    </a>
+                    
+                    <a href="javascript/" class="doc-card">
+                        <span class="language-badge javascript">JavaScript/TypeScript</span>
+                        <h3>JavaScript API Reference</h3>
+                        <p>TypeScript definitions and JavaScript API documentation with examples and type information.</p>
+                    </a>
+                </div>
+                
+                <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="https://github.com/neo4j-field/cypher-guard">GitHub Repository</a></li>
+                        <li><a href="https://github.com/neo4j-field/cypher-guard/releases">Releases</a></li>
+                        <li><a href="../VERSIONING.md">Versioning Guide</a></li>
+                        <li><a href="../RELEASES.md">Release Notes</a></li>
+                    </ul>
+                </div>
+            </div>
+        </body>
+        </html>
+        EOF
+    
+    # Create language-specific README files
+    - name: Create Rust API README
+      run: |
+        cat > docs/api/rust/README.md << 'EOF'
+        # Cypher Guard Rust API
+
+        This directory contains the complete Rust API documentation for Cypher Guard.
+
+        ## Quick Start
+
+        ```rust
+        use cypher_guard::{validate_cypher_with_schema, DbSchema};
+
+        let schema = DbSchema::from_json_string(schema_json)?;
+        let result = validate_cypher_with_schema(query, &schema)?;
+        ```
+
+        ## Main Modules
+
+        - **lib** - Main public API
+        - **schema** - Database schema structures
+        - **validation** - Query validation logic
+        - **errors** - Error types and handling
+        - **parser** - Cypher parsing modules
+
+        ## Examples
+
+        See the [examples directory](../../../examples/) for complete usage examples.
+        EOF
+    
+    - name: Create Python API README
+      run: |
+        cat > docs/api/python/README.md << 'EOF'
+        # Cypher Guard Python API
+
+        This directory contains the complete Python API documentation for Cypher Guard.
+
+        ## Quick Start
+
+        ```python
+        from cypher_guard import validate_cypher, DbSchema
+
+        schema = DbSchema.from_json_string(schema_json)
+        result = validate_cypher(query, schema)
+        ```
+
+        ## Main Functions
+
+        - `validate_cypher()` - Validate a Cypher query
+        - `get_validation_errors()` - Get detailed validation errors
+        - `parse_query()` - Parse query to AST
+        - `DbSchema` - Schema loading and management
+
+        ## Exception Types
+
+        - `CypherValidationError` - Base validation error
+        - `InvalidNodeLabel` - Invalid node label
+        - `InvalidRelationshipType` - Invalid relationship type
+        - And many more specific error types...
+
+        ## Examples
+
+        See the [examples directory](../../../examples/) for complete usage examples.
+        EOF
+    
+    - name: Create JavaScript API README
+      run: |
+        cat > docs/api/javascript/README.md << 'EOF'
+        # Cypher Guard JavaScript/TypeScript API
+
+        This directory contains the complete JavaScript/TypeScript API documentation for Cypher Guard.
+
+        ## Quick Start
+
+        ```typescript
+        import { validateCypher, getValidationErrors } from "cypher-guard";
+
+        const result = validateCypher(query, schemaJson);
+        const errors = getValidationErrors(query, schemaJson);
+        ```
+
+        ## Main Functions
+
+        - `validateCypher()` - Validate a Cypher query
+        - `getValidationErrors()` - Get detailed validation errors
+        - `parseQuery()` - Parse query to AST
+        - `DbSchema` - Schema loading and management
+
+        ## Type Definitions
+
+        Full TypeScript definitions are included for all functions and types.
+
+        ## Examples
+
+        See the [examples directory](../../../examples/) for complete usage examples.
+        EOF
+    
+    # Deploy to GitHub Pages
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+    
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/api
+    
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+      if: github.ref == 'refs/heads/main'
+    
+    # Create documentation summary
+    - name: Create documentation summary
+      run: |
+        echo "## 📚 API Documentation Generated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Rust API Docs**: Generated with `cargo doc`" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Python API Docs**: Generated with `pdoc3`" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **JavaScript API Docs**: Generated with `typedoc`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "🚀 **Deployed to**: https://${{ github.repository_owner }}.github.io/cypher-guard/api/" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "📝 **Preview**: Documentation generated for PR review" >> $GITHUB_STEP_SUMMARY
+        fi 
