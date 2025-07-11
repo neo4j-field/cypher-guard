@@ -1,0 +1,202 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+env:
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+    
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v1
+      with:
+        version: latest
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: rust/js_bindings/package-lock.json
+    
+    # Build Rust core library
+    - name: Build Rust core
+      run: |
+        cd rust/cypher_guard
+        cargo build --release --features python-bindings
+    
+    # Build Python bindings
+    - name: Build Python bindings
+      run: |
+        cd rust/python_bindings
+        uv sync
+        uv run maturin build --release
+    
+    # Build JavaScript bindings
+    - name: Build JavaScript bindings
+      run: |
+        cd rust/js_bindings
+        npm ci
+        npm run build
+    
+    # Build evaluation tool
+    - name: Build evaluation tool
+      run: |
+        cargo build --release --bin eval
+    
+    # Determine version
+    - name: Get version
+      id: get_version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+    
+    # Create release assets
+    - name: Create release assets
+      run: |
+        mkdir -p release-assets
+        
+        # Copy Rust binaries
+        cp target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
+        cp rust/cypher_guard/target/release/libcypher_guard.so release-assets/libcypher_guard-linux.so
+        
+        # Copy Python wheel
+        cp rust/python_bindings/target/wheels/*.whl release-assets/
+        
+        # Copy JavaScript package
+        cp rust/js_bindings/cypher_guard-*.tgz release-assets/ 2>/dev/null || true
+        
+        # Copy evaluation tool
+        cp target/release/eval release-assets/cypher_guard_eval-x86_64-unknown-linux-gnu
+        
+        # Create checksums
+        cd release-assets
+        sha256sum * > checksums.txt
+    
+    # Create GitHub release
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.tag }}
+        release_name: Cypher Guard ${{ steps.get_version.outputs.version }}
+        body: |
+          ## Cypher Guard ${{ steps.get_version.outputs.version }}
+          
+          ### What's New
+          - Enhanced Cypher query validation
+          - Improved error reporting with structured error types
+          - Comprehensive evaluation suite for testing validation accuracy
+          - Python and JavaScript bindings with proper exception handling
+          
+          ### Downloads
+          - **Rust Library**: `cypher_guard-x86_64-unknown-linux-gnu`
+          - **Python Package**: `cypher_guard-*.whl`
+          - **JavaScript Package**: `cypher_guard-*.tgz`
+          - **Evaluation Tool**: `cypher_guard_eval-x86_64-unknown-linux-gnu`
+          
+          ### Installation
+          
+          **Python:**
+          ```bash
+          pip install cypher_guard-*.whl
+          ```
+          
+          **JavaScript:**
+          ```bash
+          npm install cypher_guard-*.tgz
+          ```
+          
+          **Rust:**
+          ```bash
+          cargo add cypher-guard
+          ```
+          
+          ### Usage
+          ```python
+          from cypher_guard import validate_query, DbSchema
+          
+          schema = DbSchema.from_json_file("schema.json")
+          result = validate_query("MATCH (n:Person) RETURN n", schema)
+          ```
+          
+          See the [README](https://github.com/neo4j-field/cypher-guard) for more details.
+        draft: false
+        prerelease: false
+    
+    # Upload release assets
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/checksums.txt
+        asset_name: checksums.txt
+        asset_content_type: text/plain
+    
+    - name: Upload Rust Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/cypher_guard-x86_64-unknown-linux-gnu
+        asset_name: cypher_guard-x86_64-unknown-linux-gnu
+        asset_content_type: application/octet-stream
+    
+    - name: Upload Python Wheel
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/*.whl
+        asset_name: cypher_guard-python.whl
+        asset_content_type: application/zip
+    
+    - name: Upload Evaluation Tool
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/cypher_guard_eval-x86_64-unknown-linux-gnu
+        asset_name: cypher_guard_eval-x86_64-unknown-linux-gnu
+        asset_content_type: application/octet-stream 
