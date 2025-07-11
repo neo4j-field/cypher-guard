@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if verbose {
         println!("{}", "📄 Loading schema...".bright_green());
     }
-    
+
     let schema = match DbSchema::from_json_file(schema_path) {
         Ok(schema) => {
             if verbose {
@@ -148,7 +148,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (file_path, expected_valid) in query_files {
         if verbose {
-            println!("📂 Processing: {}", file_path.display().to_string().bright_cyan());
+            println!(
+                "📂 Processing: {}",
+                file_path.display().to_string().bright_cyan()
+            );
         }
 
         match process_query_file(&file_path, &schema, expected_valid, verbose) {
@@ -180,7 +183,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Print failures if any
-    let failures: Vec<_> = results.iter().filter(|r| r.is_valid != r.expected_valid).collect();
+    let failures: Vec<_> = results
+        .iter()
+        .filter(|r| r.is_valid != r.expected_valid)
+        .collect();
     if !failures.is_empty() {
         println!();
         print_failures(&failures);
@@ -189,22 +195,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn discover_query_files(queries_dir: &str) -> Result<Vec<(PathBuf, bool)>, Box<dyn std::error::Error>> {
+fn discover_query_files(
+    queries_dir: &str,
+) -> Result<Vec<(PathBuf, bool)>, Box<dyn std::error::Error>> {
     let mut query_files = Vec::new();
-    
+
     for entry in WalkDir::new(queries_dir) {
         let entry = entry?;
         let path = entry.path();
-        
-        if path.extension().and_then(|s| s.to_str()) == Some("yml") 
-            || path.extension().and_then(|s| s.to_str()) == Some("yaml") {
-            
+
+        if path.extension().and_then(|s| s.to_str()) == Some("yml")
+            || path.extension().and_then(|s| s.to_str()) == Some("yaml")
+        {
             // Determine if queries should be valid based on directory structure
             let expected_valid = path.to_string_lossy().contains("valid");
             query_files.push((path.to_path_buf(), expected_valid));
         }
     }
-    
+
     // Sort for consistent ordering
     query_files.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(query_files)
@@ -220,7 +228,11 @@ fn process_query_file(
     let query_file: QueryFile = serde_yaml::from_str(&content)?;
 
     if verbose {
-        println!("   📋 {}: {} queries", query_file.name, query_file.queries.len());
+        println!(
+            "   📋 {}: {} queries",
+            query_file.name,
+            query_file.queries.len()
+        );
     }
 
     let mut results = Vec::new();
@@ -269,17 +281,32 @@ fn process_query_file(
 fn print_summary(stats: &EvalStats) {
     println!("{}", "📊 EVALUATION SUMMARY".bright_blue().bold());
     println!("═══════════════════════════════════════");
-    
-    println!("Files processed: {}", stats.total_files.to_string().bright_cyan());
-    println!("Total queries: {}", stats.total_queries.to_string().bright_cyan());
+
+    println!(
+        "Files processed: {}",
+        stats.total_files.to_string().bright_cyan()
+    );
+    println!(
+        "Total queries: {}",
+        stats.total_queries.to_string().bright_cyan()
+    );
     println!();
-    
+
     println!("Results:");
-    println!("  ✅ Correct validations: {}", stats.successful_validations.to_string().bright_green());
-    println!("  ❌ Incorrect validations: {}", stats.failed_validations.to_string().bright_red());
-    println!("  🚫 Parsing errors: {}", stats.parsing_errors.to_string().bright_yellow());
+    println!(
+        "  ✅ Correct validations: {}",
+        stats.successful_validations.to_string().bright_green()
+    );
+    println!(
+        "  ❌ Incorrect validations: {}",
+        stats.failed_validations.to_string().bright_red()
+    );
+    println!(
+        "  🚫 Parsing errors: {}",
+        stats.parsing_errors.to_string().bright_yellow()
+    );
     println!();
-    
+
     let accuracy = stats.accuracy();
     let accuracy_color = if accuracy >= 90.0 {
         accuracy.to_string().bright_green()
@@ -288,33 +315,39 @@ fn print_summary(stats: &EvalStats) {
     } else {
         accuracy.to_string().bright_red()
     };
-    
+
     println!("🎯 Accuracy: {}%", accuracy_color.bold());
 }
 
 fn print_detailed_results(results: &[ValidationResult]) {
     println!("{}", "📋 DETAILED RESULTS".bright_blue().bold());
     println!("═══════════════════════════════════════");
-    
+
     let mut by_file: HashMap<PathBuf, Vec<&ValidationResult>> = HashMap::new();
     for result in results {
-        by_file.entry(result.file_path.clone()).or_default().push(result);
+        by_file
+            .entry(result.file_path.clone())
+            .or_default()
+            .push(result);
     }
-    
+
     for (file_path, file_results) in by_file {
         println!();
-        println!("📂 {}", file_path.display().to_string().bright_cyan().bold());
-        
+        println!(
+            "📂 {}",
+            file_path.display().to_string().bright_cyan().bold()
+        );
+
         for result in file_results {
             let status = if result.is_valid == result.expected_valid {
                 "✅ PASS".bright_green()
             } else {
                 "❌ FAIL".bright_red()
             };
-            
+
             println!("   {} {}", status, result.query_name.bright_white());
             println!("      📝 {}", result.query_description.dimmed());
-            
+
             if let Some(error) = &result.error_message {
                 println!("      🚫 Error: {}", error.bright_red());
             }
@@ -325,21 +358,38 @@ fn print_detailed_results(results: &[ValidationResult]) {
 fn print_failures(failures: &[&ValidationResult]) {
     println!("{}", "❌ FAILED VALIDATIONS".bright_red().bold());
     println!("═══════════════════════════════════════");
-    
+
     for failure in failures {
         println!();
-        println!("📂 File: {}", failure.file_path.display().to_string().bright_cyan());
+        println!(
+            "📂 File: {}",
+            failure.file_path.display().to_string().bright_cyan()
+        );
         println!("📝 Query: {}", failure.query_name.bright_white().bold());
         println!("📋 Description: {}", failure.query_description);
-        println!("🎯 Expected: {}", if failure.expected_valid { "VALID".bright_green() } else { "INVALID".bright_red() });
-        println!("📊 Got: {}", if failure.is_valid { "VALID".bright_green() } else { "INVALID".bright_red() });
-        
+        println!(
+            "🎯 Expected: {}",
+            if failure.expected_valid {
+                "VALID".bright_green()
+            } else {
+                "INVALID".bright_red()
+            }
+        );
+        println!(
+            "📊 Got: {}",
+            if failure.is_valid {
+                "VALID".bright_green()
+            } else {
+                "INVALID".bright_red()
+            }
+        );
+
         if let Some(error) = &failure.error_message {
             println!("🚫 Error: {}", error.bright_yellow());
         }
-        
+
         println!("🔍 Cypher:");
         println!("{}", failure.cypher.bright_white().on_black());
         println!("{}", "─".repeat(50).dimmed());
     }
-} 
+}
