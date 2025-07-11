@@ -92,7 +92,7 @@ docs-js:
 	@echo "Generating JavaScript API documentation..."
 	cd rust/js_bindings && npm ci
 	cd rust/js_bindings && npm install --save-dev typedoc
-	cd rust/js_bindings && npx typedoc --out ../../docs/api/javascript src/lib.ts --theme default
+	cd rust/js_bindings && npx typedoc --out ../../docs/api/javascript index.d.ts --theme default
 	@echo "JavaScript documentation generated at docs/api/javascript/"
 
 # Utility targets

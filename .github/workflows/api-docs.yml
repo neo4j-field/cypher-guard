@@ -84,8 +84,8 @@ jobs:
         # Install typedoc for TypeScript documentation
         npm install --save-dev typedoc
         
-        # Generate TypeScript docs
-        npx typedoc --out ../../docs/api/javascript src/lib.ts --theme default
+        # Generate TypeScript docs from the type definitions
+        npx typedoc --out ../../docs/api/javascript index.d.ts --theme default
         
         cd ../..
     

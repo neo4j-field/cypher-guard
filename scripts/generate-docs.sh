@@ -112,7 +112,7 @@ if [[ "$TARGET" == "javascript" || "$TARGET" == "all" ]]; then
     fi
     
     # Generate TypeScript docs
-    npx typedoc --out ../../docs/api/javascript src/lib.ts --theme default
+    npx typedoc --out ../../docs/api/javascript index.d.ts --theme default
     
     cd ../..
     
