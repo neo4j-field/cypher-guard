@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feat/validation-rewrite ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, feat/validation-rewrite ]
 
 env:
   PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
@@ -34,13 +34,13 @@ jobs:
       run: cargo fmt --all -- --check
     
     - name: Lint with clippy
-      run: cd rust/cypher_guard && cargo clippy -- -D warnings -A clippy::uninlined_format_args
+      run: cd rust/cypher_guard && cargo clippy --features python-bindings -- -D warnings -A clippy::uninlined_format_args
     
     - name: Build
-      run: cd rust/cypher_guard && cargo build --verbose
+      run: cd rust/cypher_guard && cargo build --features python-bindings --verbose
     
     - name: Run tests
-      run: cd rust/cypher_guard && cargo test --verbose
+      run: cd rust/cypher_guard && cargo test --features python-bindings --verbose
 
   test-python:
     name: Test Python Bindings
@@ -54,27 +54,25 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
+    - name: Install uv
+      uses: astral-sh/setup-uv@v1
       with:
         version: latest
-        virtualenvs-create: true
-        virtualenvs-in-project: true
     
-    - name: Cache Poetry dependencies
+    - name: Cache uv dependencies
       uses: actions/cache@v3
       with:
-        path: .venv
-        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        path: rust/python_bindings/.venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('rust/python_bindings/uv.lock') }}
     
     - name: Install dependencies
-      run: poetry install
+      run: cd rust/python_bindings && uv sync
     
     - name: Build Python bindings
-      run: poetry run maturin develop
+      run: cd rust/python_bindings && uv run maturin develop
     
     - name: Run Python tests
-      run: poetry run pytest rust/python_bindings/tests/ -vv
+      run: cd rust/python_bindings && uv run pytest tests/ -vv
 
   test-js:
     name: Test JavaScript Bindings

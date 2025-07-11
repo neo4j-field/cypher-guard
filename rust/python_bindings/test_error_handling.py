@@ -70,21 +70,21 @@ def test_validation_functions():
     
     # Test valid query
     try:
-        result = cypher_guard.validate_cypher_py("MATCH (p:Person) RETURN p.name", schema_json)
-        print("✅ validate_cypher_py with valid query succeeded")
+        result = cypher_guard.validate_cypher("MATCH (p:Person) RETURN p.name", schema_json)
+        print("✅ validate_cypher with valid query succeeded")
     except Exception as e:
-        print(f"❌ validate_cypher_py with valid query failed: {e}")
+        print(f"❌ validate_cypher with valid query failed: {e}")
         return False
     
     # Test invalid query (property doesn't exist)
     try:
-        result = cypher_guard.validate_cypher_py("MATCH (p:Person) RETURN p.invalid_prop", schema_json)
-        print("❌ validate_cypher_py with invalid query should have failed")
+        result = cypher_guard.validate_cypher("MATCH (p:Person) RETURN p.invalid_prop", schema_json)
+        print("❌ validate_cypher with invalid query should have failed")
         return False
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e)
-        print(f"✅ validate_cypher_py with invalid query correctly raised {error_type}: {error_msg}")
+        print(f"✅ validate_cypher with invalid query correctly raised {error_type}: {error_msg}")
         return True
 
 if __name__ == "__main__":

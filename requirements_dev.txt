@@ -1,3 +1,0 @@
-pytest==8.3.5
-neo4j_graphrag==1.7.0
-testcontainers==4.10.0

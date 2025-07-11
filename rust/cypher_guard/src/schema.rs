@@ -159,19 +159,19 @@ struct EnumType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaProperty {
-    /// Name of the property
+    #[pyo3(get)]
     pub name: String,
-    /// Neo4j type of the property
+    #[pyo3(get)]
     pub neo4j_type: PropertyType,
-    /// Enum values for the property, optional
+    #[pyo3(get)]
     pub enum_values: Option<Vec<String>>,
-    /// Minimum value for the property, optional
+    #[pyo3(get)]
     pub min_value: Option<f64>,
-    /// Maximum value for the property, optional
+    #[pyo3(get)]
     pub max_value: Option<f64>,
-    /// Distinct value count for the property, optional
+    #[pyo3(get)]
     pub distinct_value_count: Option<i64>,
-    /// Example values for the property, optional
+    #[pyo3(get)]
     pub example_values: Option<Vec<String>>,
 }
 
@@ -440,11 +440,11 @@ impl DbSchemaProperty {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaRelationshipPattern {
-    /// Start node label of the relationship
+    #[pyo3(get)]
     pub start: String,
-    /// End node label of the relationship
+    #[pyo3(get)]
     pub end: String,
-    /// Type of the relationship
+    #[pyo3(get)]
     pub rel_type: String,
 }
 
@@ -514,21 +514,21 @@ impl DbSchemaRelationshipPattern {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaConstraint {
-    /// ID of the constraint
+    #[pyo3(get)]
     pub id: i64,
-    /// Name of the constraint
+    #[pyo3(get)]
     pub name: String,
-    /// Type of the constraint
+    #[pyo3(get)]
     pub constraint_type: String,
-    /// Entity type of the constraint
+    #[pyo3(get)]
     pub entity_type: String,
-    /// Labels or types of the constraint
+    #[pyo3(get)]
     pub labels_or_types: Vec<String>,
-    /// Properties of the constraint
+    #[pyo3(get)]
     pub properties: Vec<String>,
-    /// Owned index of the constraint
+    #[pyo3(get)]
     pub owned_index: String,
-    /// Property type of the constraint
+    #[pyo3(get)]
     pub property_type: Option<String>,
 }
 
@@ -707,17 +707,17 @@ impl DbSchemaConstraint {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaIndex {
-    /// Label of the index
+    #[pyo3(get)]
     pub label: String,
-    /// Properties of the index
+    #[pyo3(get)]
     pub properties: Vec<String>,
-    /// Size of the index
+    #[pyo3(get)]
     pub size: i64,
-    /// Type of the index
+    #[pyo3(get)]
     pub index_type: String,
-    /// Values selectivity of the index
+    #[pyo3(get)]
     pub values_selectivity: f64,
-    /// Distinct values of the index
+    #[pyo3(get)]
     pub distinct_values: f64,
 }
 
@@ -832,9 +832,9 @@ impl DbSchemaIndex {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchemaMetadata {
-    /// Constraints in the schema
+    #[pyo3(get)]
     pub constraint: Vec<DbSchemaConstraint>,
-    /// Indexes in the schema
+    #[pyo3(get)]
     pub index: Vec<DbSchemaIndex>,
 }
 
@@ -951,13 +951,13 @@ impl DbSchemaMetadata {
 #[serde(default)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
-    /// Node keys and vector of properties for each node label
+    #[pyo3(get)]
     pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
-    /// Relationship keys and vector of properties for each relationship type
+    #[pyo3(get)]
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
-    /// Vector of relationships
+    #[pyo3(get)]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
-    /// Metadata about the schema containing constraint and index
+    #[pyo3(get)]
     pub metadata: DbSchemaMetadata,
 }
 

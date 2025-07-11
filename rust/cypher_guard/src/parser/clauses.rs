@@ -873,7 +873,7 @@ mod tests {
                 assert_eq!(operator, ">");
                 assert_eq!(right, "30");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -892,7 +892,7 @@ mod tests {
                 assert_eq!(operator, "=");
                 assert_eq!(right, "Alice");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -913,7 +913,7 @@ mod tests {
                         assert_eq!(o, ">");
                         assert_eq!(r, "30");
                     }
-                    _ => assert!(false, "Expected comparison on left "),
+                    _ => unreachable!("Expected comparison on left "),
                 }
                 match &**right {
                     ast::WhereCondition::Comparison {
@@ -925,10 +925,10 @@ mod tests {
                         assert_eq!(o, "=");
                         assert_eq!(r, "Bob");
                     }
-                    _ => assert!(false, "Expected comparison on right "),
+                    _ => unreachable!("Expected comparison on right "),
                 }
             }
-            _ => assert!(false, "Expected AND condition "),
+            _ => unreachable!("Expected AND condition "),
         }
     }
 
@@ -949,7 +949,7 @@ mod tests {
                         assert_eq!(o, ">");
                         assert_eq!(r, "30");
                     }
-                    _ => assert!(false, "Expected comparison on left "),
+                    _ => unreachable!("Expected comparison on left "),
                 }
                 match &**right {
                     ast::WhereCondition::Comparison {
@@ -961,10 +961,10 @@ mod tests {
                         assert_eq!(o, "=");
                         assert_eq!(r, "Bob");
                     }
-                    _ => assert!(false, "Expected comparison on right "),
+                    _ => unreachable!("Expected comparison on right "),
                 }
             }
-            _ => assert!(false, "Expected OR condition"),
+            _ => unreachable!("Expected OR condition"),
         }
     }
 
@@ -983,7 +983,7 @@ mod tests {
                 assert_eq!(operator, "IS NULL");
                 assert_eq!(right, "");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1002,7 +1002,7 @@ mod tests {
                 assert_eq!(operator, "IS NOT NULL");
                 assert_eq!(right, "");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1021,7 +1021,7 @@ mod tests {
                 assert_eq!(operator, "<>");
                 assert_eq!(right, "Alice");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1035,7 +1035,7 @@ mod tests {
                 assert_eq!(path_var, "a");
                 assert_eq!(property, "age");
             }
-            _ => assert!(false, "Expected path property condition"),
+            _ => unreachable!("Expected path property condition"),
         }
     }
 
@@ -1049,7 +1049,7 @@ mod tests {
                 assert_eq!(path_var, "a");
                 assert_eq!(property, "age");
             }
-            _ => assert!(false, "Expected path property condition"),
+            _ => unreachable!("Expected path property condition"),
         }
     }
 
@@ -1067,7 +1067,7 @@ mod tests {
                 assert_eq!(arguments.len(), 1);
                 assert_eq!(arguments[0], "a".to_string() + "." + "name");
             }
-            _ => assert!(false, "Expected function call condition"),
+            _ => unreachable!("Expected function call condition"),
         }
     }
 
@@ -1086,7 +1086,7 @@ mod tests {
                 assert_eq!(operator, ">");
                 assert_eq!(right, "5");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1106,9 +1106,9 @@ mod tests {
                     assert_eq!(operator, "=");
                     assert_eq!(right, "Alice");
                 }
-                _ => assert!(false, "Expected comparison inside NOT "),
+                _ => unreachable!("Expected comparison inside NOT "),
             },
-            _ => assert!(false, "Expected NOT condition "),
+            _ => unreachable!("Expected NOT condition "),
         }
     }
 
@@ -1128,9 +1128,9 @@ mod tests {
                     assert_eq!(operator, ">");
                     assert_eq!(right, "30");
                 }
-                _ => assert!(false, "Expected comparison inside parentheses"),
+                _ => unreachable!("Expected comparison inside parentheses"),
             },
-            _ => assert!(false, "Expected parenthesized condition"),
+            _ => unreachable!("Expected parenthesized condition"),
         }
     }
 
@@ -1155,9 +1155,7 @@ mod tests {
                                     assert_eq!(o1, ">");
                                     assert_eq!(r1, "30");
                                 }
-                                _ => {
-                                    assert!(false, "Expected comparison inside parentheses (left) ")
-                                }
+                                _ => unreachable!("Expected comparison inside parentheses (left) "),
                             }
                             match &**r {
                                 ast::WhereCondition::Comparison {
@@ -1169,15 +1167,14 @@ mod tests {
                                     assert_eq!(o2, "=");
                                     assert_eq!(r2, "Bob");
                                 }
-                                _ => assert!(
-                                    false,
-                                    "Expected comparison inside parentheses (right) "
-                                ),
+                                _ => {
+                                    unreachable!("Expected comparison inside parentheses (right) ")
+                                }
                             }
                         }
-                        _ => assert!(false, "Expected AND inside parentheses "),
+                        _ => unreachable!("Expected AND inside parentheses "),
                     },
-                    _ => assert!(false, "Expected parenthesized condition "),
+                    _ => unreachable!("Expected parenthesized condition "),
                 }
                 // Second condition should be NOT
                 match &**right {
@@ -1191,12 +1188,12 @@ mod tests {
                             assert_eq!(operator, "=");
                             assert_eq!(right, "true");
                         }
-                        _ => assert!(false, "Expected comparison inside NOT "),
+                        _ => unreachable!("Expected comparison inside NOT "),
                     },
-                    _ => assert!(false, "Expected NOT condition "),
+                    _ => unreachable!("Expected NOT condition "),
                 }
             }
-            _ => assert!(false, "Expected OR condition "),
+            _ => unreachable!("Expected OR condition "),
         }
     }
 
@@ -1217,7 +1214,7 @@ mod tests {
                         assert_eq!(o, ">");
                         assert_eq!(r, "30");
                     }
-                    _ => assert!(false, "Expected comparison on left "),
+                    _ => unreachable!("Expected comparison on left "),
                 }
                 match &**right {
                     ast::WhereCondition::Comparison {
@@ -1229,10 +1226,10 @@ mod tests {
                         assert_eq!(o, "=");
                         assert_eq!(r, "Bob");
                     }
-                    _ => assert!(false, "Expected comparison on right "),
+                    _ => unreachable!("Expected comparison on right "),
                 }
             }
-            _ => assert!(false, "Expected AND condition "),
+            _ => unreachable!("Expected AND condition "),
         }
     }
 
@@ -1268,7 +1265,7 @@ mod tests {
                 assert_eq!(path_var, "a");
                 assert_eq!(property, "age");
             }
-            _ => assert!(false, "Expected path property condition"),
+            _ => unreachable!("Expected path property condition"),
         }
     }
 
@@ -1282,7 +1279,7 @@ mod tests {
                 assert_eq!(path_var, "a");
                 assert_eq!(property, "age");
             }
-            _ => assert!(false, "Expected path property condition"),
+            _ => unreachable!("Expected path property condition"),
         }
     }
 
@@ -1315,7 +1312,7 @@ mod tests {
                 assert_eq!(operator, ">");
                 assert_eq!(right, "30");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1334,7 +1331,7 @@ mod tests {
                 assert_eq!(operator, ">");
                 assert_eq!(right, "30");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1353,7 +1350,7 @@ mod tests {
                 assert_eq!(operator, ">");
                 assert_eq!(right, "30");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1371,7 +1368,7 @@ mod tests {
                 assert_eq!(operator, "=");
                 assert_eq!(right, "Alice");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1389,7 +1386,7 @@ mod tests {
                 assert_eq!(operator, "=");
                 assert_eq!(right, "true");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 
@@ -1407,7 +1404,7 @@ mod tests {
                 assert_eq!(operator, "=");
                 assert_eq!(right, "NULL");
             }
-            _ => assert!(false, "Expected comparison condition"),
+            _ => unreachable!("Expected comparison condition"),
         }
     }
 }
