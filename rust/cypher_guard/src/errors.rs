@@ -61,6 +61,25 @@ pub enum CypherGuardValidationError {
 
     #[error("Invalid label: {0}")]
     InvalidLabel(String),
+
+    #[error("Invalid node label: {0}")]
+    InvalidNodeLabel(String),
+
+    #[error("Invalid relationship type: {0}")]
+    InvalidRelationshipType(String),
+
+    #[error("Invalid node property '{property}' on label '{label}'")]
+    InvalidNodeProperty { label: String, property: String },
+
+    #[error("Invalid relationship property '{property}' on type '{rel_type}'")]
+    InvalidRelationshipProperty { rel_type: String, property: String },
+
+    #[error("Invalid property access '{variable}.{property}' in {context} clause")]
+    InvalidPropertyAccess {
+        variable: String,
+        property: String,
+        context: String,
+    },
 }
 
 impl CypherGuardValidationError {
@@ -85,6 +104,43 @@ impl CypherGuardValidationError {
 
     pub fn invalid_label(label: impl Into<String>) -> Self {
         Self::InvalidLabel(label.into())
+    }
+
+    pub fn invalid_node_label(label: impl Into<String>) -> Self {
+        Self::InvalidNodeLabel(label.into())
+    }
+
+    pub fn invalid_relationship_type(rel_type: impl Into<String>) -> Self {
+        Self::InvalidRelationshipType(rel_type.into())
+    }
+
+    pub fn invalid_node_property(label: impl Into<String>, property: impl Into<String>) -> Self {
+        Self::InvalidNodeProperty {
+            label: label.into(),
+            property: property.into(),
+        }
+    }
+
+    pub fn invalid_relationship_property(
+        rel_type: impl Into<String>,
+        property: impl Into<String>,
+    ) -> Self {
+        Self::InvalidRelationshipProperty {
+            rel_type: rel_type.into(),
+            property: property.into(),
+        }
+    }
+
+    pub fn invalid_property_access(
+        variable: impl Into<String>,
+        property: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self::InvalidPropertyAccess {
+            variable: variable.into(),
+            property: property.into(),
+            context: context.into(),
+        }
     }
 
     /// Returns the property name if this is an InvalidPropertyName error
@@ -123,6 +179,50 @@ impl CypherGuardValidationError {
     pub fn label_name(&self) -> Option<&str> {
         match self {
             Self::InvalidLabel(label) => Some(label),
+            _ => None,
+        }
+    }
+
+    /// Returns the node label name if this is an InvalidNodeLabel error
+    pub fn node_label_name(&self) -> Option<&str> {
+        match self {
+            Self::InvalidNodeLabel(label) => Some(label),
+            _ => None,
+        }
+    }
+
+    /// Returns the relationship type name if this is an InvalidRelationshipType error
+    pub fn relationship_type_name(&self) -> Option<&str> {
+        match self {
+            Self::InvalidRelationshipType(rel_type) => Some(rel_type),
+            _ => None,
+        }
+    }
+
+    /// Returns the node property details if this is an InvalidNodeProperty error
+    pub fn node_property_details(&self) -> Option<(&str, &str)> {
+        match self {
+            Self::InvalidNodeProperty { label, property } => Some((label, property)),
+            _ => None,
+        }
+    }
+
+    /// Returns the relationship property details if this is an InvalidRelationshipProperty error
+    pub fn relationship_property_details(&self) -> Option<(&str, &str)> {
+        match self {
+            Self::InvalidRelationshipProperty { rel_type, property } => Some((rel_type, property)),
+            _ => None,
+        }
+    }
+
+    /// Returns the property access details if this is an InvalidPropertyAccess error
+    pub fn property_access_details(&self) -> Option<(&str, &str, &str)> {
+        match self {
+            Self::InvalidPropertyAccess {
+                variable,
+                property,
+                context,
+            } => Some((variable, property, context)),
             _ => None,
         }
     }

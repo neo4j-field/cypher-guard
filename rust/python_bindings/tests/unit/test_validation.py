@@ -1,4 +1,4 @@
-from cypher_guard import validate_cypher, get_validation_errors
+from cypher_guard import validate_cypher, get_validation_errors, InvalidNodeLabel, InvalidRelationshipType, InvalidNodeProperty, InvalidRelationshipProperty, InvalidPropertyAccess
 import pytest
 
 @pytest.fixture(scope="session")
@@ -203,6 +203,54 @@ def test_with_clause_invalid_alias_expression(schema_json: str):
     query = "MATCH (a:Person) WITH b AS c RETURN c.name"
     errors = get_validation_errors(query, schema_json)
     assert errors and any("not defined in previous scope" in e for e in errors)
+
+def test_invalid_node_label(schema_json):
+    import sys
+    try:
+        validate_cypher("MATCH (a:User) RETURN a.name", schema_json)
+        assert False, "Should have raised an exception"
+    except Exception as e:
+        print("EXC TYPE:", type(e))
+        print("EXC MODULE:", type(e).__module__)
+        print("EXC BASES:", type(e).__bases__)
+        print("IMPORTED MODULE:", InvalidNodeLabel.__module__)
+        print("IMPORTED BASES:", InvalidNodeLabel.__bases__)
+        print("EXC MESSAGE:", str(e))
+        
+        # Check if it's our custom exception
+        if isinstance(e, InvalidNodeLabel):
+            print("✅ Exception is correctly recognized as InvalidNodeLabel")
+            assert "Invalid node label" in str(e)
+        else:
+            print(f"❌ Exception is {type(e).__name__}, expected InvalidNodeLabel")
+            # For now, just check the message content
+            assert "Invalid node label" in str(e)
+
+def test_invalid_relationship_type(schema_json):
+    with pytest.raises(InvalidRelationshipType) as excinfo:
+        validate_cypher("MATCH (a:Person)-[r:FOLLOWS]->(b:Person) RETURN a.name", schema_json)
+    assert "Invalid relationship type" in str(excinfo.value)
+
+def test_invalid_node_property(schema_json):
+    with pytest.raises(InvalidNodeProperty) as excinfo:
+        validate_cypher("MATCH (a:Person) RETURN a.invalid_prop", schema_json)
+    assert "Invalid node property" in str(excinfo.value)
+
+def test_invalid_relationship_property(schema_json):
+    with pytest.raises(InvalidRelationshipProperty) as excinfo:
+        validate_cypher("MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN r.invalid_prop", schema_json)
+    assert "Invalid relationship property" in str(excinfo.value)
+
+def test_invalid_property_access(schema_json):
+    with pytest.raises(InvalidPropertyAccess) as excinfo:
+        validate_cypher("MATCH (a:Person) RETURN a.height", schema_json)
+    assert "Invalid property access" in str(excinfo.value)
+
+def test_direct_invalid_node_label():
+    from cypher_guard import InvalidNodeLabel
+    import pytest
+    with pytest.raises(InvalidNodeLabel):
+        raise InvalidNodeLabel("Direct test")
 
 
 

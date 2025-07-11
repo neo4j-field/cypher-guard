@@ -44,13 +44,10 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
     if errors.is_empty() {
         Ok(true)
     } else {
-        // Convert validation errors to a single error message
-        let msg = errors
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        Err(CypherGuardError::InvalidQuery(msg))
+        // Return the first validation error to preserve specific error types
+        Err(CypherGuardError::Validation(
+            errors.into_iter().next().unwrap(),
+        ))
     }
 }
 
