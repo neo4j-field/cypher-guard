@@ -370,6 +370,15 @@ Current test status: **73 passed, 26 failed** (mostly test expectation mismatche
 
 ---
 
+## Documentation
+
+- **[Releases](docs/RELEASES.md)** - Download latest releases and view changelog
+- **[Versioning Guide](docs/VERSIONING.md)** - Release management and versioning
+- **[API Reference](docs/API.md)** - Complete API documentation
+- **[Schema Format](docs/SCHEMA.md)** - Schema definition guide
+
+---
+
 ## Contributing
 
 This project is open source and welcomes contributions! Please open issues or submit pull requests for improvements or bug fixes.

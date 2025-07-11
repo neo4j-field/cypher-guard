@@ -1,50 +1,145 @@
 name: Version Bump
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+  pull_request:
+    types: [closed]
+    branches: [ main ]
 
 jobs:
   bump-version:
+    name: Bump Version
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      pull-requests: write
+    
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Needed for tags
-
-      # Rust: Bump version in Cargo.toml
-      - name: Install cargo-release
-        run: cargo install cargo-release
-
-      - name: Bump Rust version (patch)
-        run: |
-          cargo release version --no-push --no-tag --execute patch
-          git add Cargo.toml rust/cypher_guard/Cargo.toml
-          git commit -m "chore: bump Rust version [skip ci]" || echo "No changes to commit"
-
-      # Python: Bump version in pyproject.toml (Poetry)
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Poetry
-        run: pip install poetry
-
-      - name: Bump Python version (patch)
-        run: |
-          cd rust/python_bindings
-          poetry version patch
-          cd ../..
-          git add rust/python_bindings/pyproject.toml
-          git commit -m "chore: bump Python version [skip ci]" || echo "No changes to commit"
-
-      # Tag and push
-      - name: Create and push tag
-        run: |
-          VERSION=$(grep '^version =' Cargo.toml | head -1 | cut -d '"' -f2)
-          git tag v$VERSION
-          git push origin main --tags
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+    
+    - name: Determine version type
+      id: version_type
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "type=${{ github.event.inputs.version_type }}" >> $GITHUB_OUTPUT
+        else
+          # Auto-detect based on PR labels or commit messages
+          PR_BODY="${{ github.event.pull_request.body }}"
+          if echo "$PR_BODY" | grep -qi "breaking\|major"; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif echo "$PR_BODY" | grep -qi "feature\|minor"; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+        fi
+    
+    - name: Get current version
+      id: current_version
+      run: |
+        CURRENT_VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+        echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Calculate new version
+      id: new_version
+      run: |
+        CURRENT_VERSION="${{ steps.current_version.outputs.version }}"
+        VERSION_TYPE="${{ steps.version_type.outputs.type }}"
+        
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR="${VERSION_PARTS[0]}"
+        MINOR="${VERSION_PARTS[1]}"
+        PATCH="${VERSION_PARTS[2]}"
+        
+        case $VERSION_TYPE in
+          major)
+            NEW_MAJOR=$((MAJOR + 1))
+            NEW_MINOR=0
+            NEW_PATCH=0
+            ;;
+          minor)
+            NEW_MAJOR=$MAJOR
+            NEW_MINOR=$((MINOR + 1))
+            NEW_PATCH=0
+            ;;
+          patch)
+            NEW_MAJOR=$MAJOR
+            NEW_MINOR=$MINOR
+            NEW_PATCH=$((PATCH + 1))
+            ;;
+        esac
+        
+        NEW_VERSION="$NEW_MAJOR.$NEW_MINOR.$NEW_PATCH"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Update version in Cargo.toml
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.version }}"
+        sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
+        
+        # Also update individual package versions if they exist
+        find . -name "Cargo.toml" -not -path "./target/*" -exec sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" {} \;
+    
+    - name: Update version in Python package
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.version }}"
+        if [ -f "rust/python_bindings/pyproject.toml" ]; then
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" rust/python_bindings/pyproject.toml
+        fi
+    
+    - name: Update version in JavaScript package
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.version }}"
+        if [ -f "rust/js_bindings/package.json" ]; then
+          sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" rust/js_bindings/package.json
+        fi
+    
+    - name: Create version bump commit
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "Bump version to ${{ steps.new_version.outputs.version }}"
+    
+    - name: Create and push tag
+      run: |
+        git tag ${{ steps.new_version.outputs.tag }}
+        git push origin ${{ steps.new_version.outputs.tag }}
+    
+    - name: Push version bump commit
+      run: |
+        git push origin main
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🎉 Version bumped to **${{ steps.new_version.outputs.version }}** (${{ steps.version_type.outputs.type }})
+          
+          A new release will be created automatically.`
+          }) 
