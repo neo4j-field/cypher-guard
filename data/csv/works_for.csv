@@ -1,0 +1,16 @@
+personFirstName,personLastName,companyName,startDate,position,salary
+John,Smith,Tech Corp,2020-01-15T09:30:00.000+0100,Software Engineer,85000.0
+Jane,Doe,Tech Corp,2019-03-01T08:15:32.142+0100,Data Scientist,95000.0
+Alice,Johnson,Data Solutions Inc,2021-06-01T10:45:15.250+0100,Product Manager,110000.0
+Bob,Williams,Innovation LLC,2018-09-15T14:20:45.500+0100,Senior Developer,120000.0
+Charlie,Brown,MedTech Systems,2020-11-01T11:30:00.000+0100,Healthcare Analyst,70000.0
+Diana,Davis,EduLearn Platform,2021-02-01T13:15:30.750+0100,Education Consultant,65000.0
+Eve,Miller,FinanceFirst Bank,2017-04-15T16:45:22.100+0100,Financial Advisor,90000.0
+Frank,Wilson,ManufacturingPro,2019-08-01T12:00:00.000+0100,Manufacturing Engineer,80000.0
+Grace,Moore,HealthCare Plus,2020-05-15T15:30:45.300+0100,Healthcare Coordinator,75000.0
+Henry,Taylor,EduTech Innovations,2021-09-01T07:45:12.400+0100,Education Technology Lead,100000.0
+Ivy,Anderson,Investment Partners,2018-12-01T17:20:30.600+0100,Investment Analyst,88000.0
+Jack,Thomas,Tech Corp,2021-03-15T10:15:40.800+0100,Junior Developer,60000.0
+Kate,Jackson,Data Solutions Inc,2020-07-01T14:30:25.900+0100,UI/UX Designer,78000.0
+Liam,White,Innovation LLC,2019-11-15T11:45:55.200+0100,DevOps Engineer,105000.0
+Mia,Harris,MedTech Systems,2021-01-01T08:00:00.000+0100,Research Scientist,92000.0 

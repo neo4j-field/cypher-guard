@@ -1,0 +1,64 @@
+name: "Simple Read Queries"
+description: "Basic read-only queries for the existing graph schema"
+category: "simple_reads"
+queries:
+  - name: "basic_node_match"
+    description: "Basic node matching and property selection"
+    cypher: |
+      MATCH (p:Person)
+      RETURN p.firstName, p.lastName, p.email
+
+  - name: "where_clause_filtering"
+    description: "WHERE clause with comparison and boolean filtering"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age > 25 AND p.active = true
+      RETURN p.firstName, p.lastName, p.age
+
+  - name: "simple_relationship_match"
+    description: "Basic relationship traversal"
+    cypher: |
+      MATCH (p:Person)-[r:WORKS_FOR]->(c:Company)
+      RETURN p.firstName, p.lastName, c.companyName
+
+  - name: "aggregation_function"
+    description: "Basic aggregation with COUNT"
+    cypher: |
+      MATCH (p:Person)
+      RETURN count(p) AS total_persons
+
+  - name: "null_property_check"
+    description: "IS NOT NULL property existence check"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.email IS NOT NULL
+      RETURN p.firstName, p.lastName, p.email
+      LIMIT 1
+
+  - name: "order_by_clause"
+    description: "ORDER BY with DESC and property filtering"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.employeeCount IS NOT NULL
+      RETURN c.companyName, c.employeeCount
+      ORDER BY c.employeeCount DESC
+
+  - name: "point_property_handling"
+    description: "Spatial point property access"
+    cypher: |
+      MATCH (l:Location)
+      WHERE l.coordinates IS NOT NULL
+      RETURN l.city, l.country, l.coordinates
+
+  - name: "multi_hop_traversal"
+    description: "Multi-relationship path traversal"
+    cypher: |
+      MATCH (p:Person)-[:WORKS_FOR]->(c:Company)-[:LOCATED_IN]->(l:Location)
+      RETURN p.firstName, c.companyName, l.city
+
+  - name: "optional_match"
+    description: "OPTIONAL MATCH for null-safe relationship traversal"
+    cypher: |
+      MATCH (p:Person)
+      OPTIONAL MATCH (p)-[:WORKS_FOR]->(c:Company)
+      RETURN p.firstName, p.lastName, c.companyName

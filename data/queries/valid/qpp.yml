@@ -1,0 +1,3 @@
+name: "Neo4j QPP Tests"
+description: "Comprehensive tests for Neo4j QPP functions"
+category: "qpp"

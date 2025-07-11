@@ -16,6 +16,7 @@ pub type Result<T> = std::result::Result<T, CypherGuardError>;
 /// Enum representing possible property types in the schema.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
+#[allow(non_camel_case_types)]
 pub enum PropertyType {
     /// String property
     STRING,
@@ -27,8 +28,8 @@ pub enum PropertyType {
     BOOLEAN,
     /// Point property (for spatial data)
     POINT,
-    /// DateTime property
-    DateTime,
+    /// DATE_TIME property
+    DATE_TIME,
     /// List property
     LIST,
 }
@@ -41,7 +42,7 @@ impl fmt::Display for PropertyType {
             PropertyType::FLOAT => write!(f, "FLOAT"),
             PropertyType::BOOLEAN => write!(f, "BOOLEAN"),
             PropertyType::POINT => write!(f, "POINT"),
-            PropertyType::DateTime => write!(f, "DATE_TIME"),
+            PropertyType::DATE_TIME => write!(f, "DATE_TIME"),
             PropertyType::LIST => write!(f, "LIST"),
         }
     }
@@ -55,7 +56,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DateTime),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(CypherGuardError::Schema(
                 CypherGuardSchemaError::InvalidFormat(format!("Invalid property type: {}", s)),
@@ -74,7 +75,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" => Ok(PropertyType::BOOLEAN),
             "POINT" => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DateTime),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "Invalid property type: {}",
@@ -110,7 +111,7 @@ impl PropertyType {
 
     #[classmethod]
     fn datetime(_cls: &Bound<'_, PyType>) -> Self {
-        PropertyType::DateTime
+        PropertyType::DATE_TIME
     }
 
     #[classmethod]
@@ -128,7 +129,7 @@ impl PropertyType {
             "FLOAT" => Ok(PropertyType::FLOAT),
             "BOOLEAN" | "BOOL" => Ok(PropertyType::BOOLEAN),
             "POINT"  => Ok(PropertyType::POINT),
-            "DATE_TIME" => Ok(PropertyType::DateTime),
+            "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
             _ => Err(pyo3::exceptions::PyValueError::new_err(
                 format!("Invalid property type: '{}'. Valid types: STRING, INTEGER, FLOAT, BOOLEAN, POINT, DATE_TIME, LIST", s)
@@ -1597,7 +1598,7 @@ mod tests {
     }
 
     fn create_knows_since_property() -> DbSchemaProperty {
-        DbSchemaProperty::new("since", PropertyType::DateTime)
+        DbSchemaProperty::new("since", PropertyType::DATE_TIME)
     }
 
     // fn create_favorite_color_property() -> DbSchemaProperty {
@@ -1657,7 +1658,7 @@ mod tests {
             PropertyType::INTEGER,
             PropertyType::FLOAT,
             PropertyType::BOOLEAN,
-            PropertyType::DateTime,
+            PropertyType::DATE_TIME,
             // PropertyType::ENUM("ColorEnum".to_string()),
         ];
         for t in types {

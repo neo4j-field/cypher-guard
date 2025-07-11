@@ -1,0 +1,210 @@
+name: "Intermediate Cypher Queries"
+description: "Intermediate complexity queries with advanced clauses and patterns"
+category: "intermediate"
+queries:
+  - name: "with_clause_aggregation"
+    description: "WITH clause for intermediate processing and aggregation"
+    cypher: |
+      MATCH (p:Person)
+      WITH p.age AS personAge, count(*) AS ageCount
+      WHERE personAge IS NOT NULL AND personAge > 30
+      WITH personAge, ageCount
+      ORDER BY personAge
+      RETURN personAge, ageCount,
+             CASE 
+               WHEN personAge < 35 THEN 'Young Adult'
+               WHEN personAge < 45 THEN 'Middle Age'
+               ELSE 'Senior'
+             END AS ageGroup
+
+  - name: "unwind_list_processing"
+    description: "UNWIND to process lists and aggregate by industry"
+    cypher: |
+      WITH ['Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing'] AS industries
+      UNWIND industries AS industry
+      MATCH (c:Company)
+      WHERE c.industry = industry
+      WITH industry, c, c.employeeCount AS empCount
+      WHERE empCount IS NOT NULL
+      RETURN industry, 
+             count(c) AS companyCount,
+             avg(empCount) AS avgEmployees,
+             max(empCount) AS maxEmployees
+      ORDER BY avgEmployees DESC
+
+  - name: "subquery_with_call"
+    description: "CALL subquery to calculate employee statistics per company"
+    cypher: |
+      MATCH (c:Company)
+      CALL {
+        WITH c
+        MATCH (p:Person)-[:WORKS_FOR]->(c)
+        RETURN count(p) AS actualEmployees,
+               avg(p.age) AS avgEmployeeAge
+      }
+      WITH c, actualEmployees, avgEmployeeAge
+      WHERE actualEmployees > 0
+      RETURN c.companyName, 
+             c.employeeCount AS reportedEmployees,
+             actualEmployees,
+             round(avgEmployeeAge, 1) AS avgAge
+      ORDER BY actualEmployees DESC
+
+  - name: "complex_with_filtering"
+    description: "Complex WITH chain with multiple filtering steps"
+    cypher: |
+      MATCH (p:Person)-[:WORKS_FOR]->(c:Company)-[:LOCATED_IN]->(l:Location)
+      WITH l.country AS country, c.industry AS industry, count(p) AS workerCount
+      WHERE workerCount >= 1
+      WITH country, collect({industry: industry, workers: workerCount}) AS industryData
+      WHERE size(industryData) >= 2
+      WITH country, industryData, 
+           reduce(total = 0, item IN industryData | total + item.workers) AS totalWorkers
+      UNWIND industryData AS data
+      RETURN country, 
+             data.industry AS industry,
+             data.workers AS workers,
+             totalWorkers
+      ORDER BY country, workers DESC
+
+  - name: "unwind_nested_data"
+    description: "UNWIND with nested data structures and relationship patterns"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age IS NOT NULL
+      WITH collect({
+        name: p.firstName + ' ' + p.lastName,
+        age: p.age,
+        ageGroup: CASE 
+          WHEN p.age < 30 THEN 'young'
+          WHEN p.age < 40 THEN 'middle'
+          ELSE 'senior'
+        END
+      }) AS personData
+      UNWIND personData AS person
+      WITH person.ageGroup AS group, collect(person) AS groupMembers
+      WHERE size(groupMembers) >= 3
+      RETURN group,
+             size(groupMembers) AS memberCount,
+             [member IN groupMembers | member.name][0..3] AS sampleNames
+      ORDER BY memberCount DESC
+
+  - name: "call_subquery_aggregation"
+    description: "CALL subquery with aggregation and conditional logic"
+    cypher: |
+      MATCH (l:Location)
+      CALL {
+        WITH l
+        MATCH (c:Company)-[:LOCATED_IN]->(l)
+        OPTIONAL MATCH (p:Person)-[:WORKS_FOR]->(c)
+        RETURN count(DISTINCT c) AS companyCount,
+               count(p) AS totalEmployees,
+               collect(DISTINCT c.industry) AS industries
+      }
+      WITH l, companyCount, totalEmployees, industries
+      WHERE companyCount > 0
+      RETURN l.city + ', ' + l.country AS location,
+             companyCount,
+             totalEmployees,
+             size(industries) AS industryDiversity,
+             CASE 
+               WHEN totalEmployees > 5 THEN 'Major Hub'
+               WHEN totalEmployees > 2 THEN 'Business Center'
+               ELSE 'Small Presence'
+             END AS hubType
+      ORDER BY totalEmployees DESC
+
+  - name: "with_pattern_comprehension"
+    description: "WITH clause using pattern comprehension for complex data gathering"
+    cypher: |
+      MATCH (p:Person)
+      WHERE p.age > 25
+      WITH p, 
+           [(p)-[:KNOWS]->(friend:Person) | friend.firstName] AS friendNames,
+           [(p)-[:WORKS_FOR]->(c:Company)-[:LOCATED_IN]->(l:Location) | l.city] AS workLocation
+      WHERE size(friendNames) > 2
+      WITH p.firstName AS person,
+           size(friendNames) AS friendCount,
+           friendNames[0..3] AS topFriends,
+           head(workLocation) AS city
+      RETURN person,
+             friendCount,
+             topFriends,
+             city,
+             CASE 
+               WHEN friendCount > 5 THEN 'Very Social'
+               WHEN friendCount > 3 THEN 'Social'
+               ELSE 'Reserved'
+             END AS socialType
+      ORDER BY friendCount DESC
+
+  - name: "unwind_range_processing"
+    description: "UNWIND with range for batch processing simulation"
+    cypher: |
+      UNWIND range(20, 60, 5) AS ageThreshold
+      CALL {
+        WITH ageThreshold
+        MATCH (p:Person)
+        WHERE p.age >= ageThreshold AND p.age < ageThreshold + 5
+        RETURN count(p) AS personCount,
+               collect(p.firstName)[0..2] AS sampleNames
+      }
+      WITH ageThreshold, personCount, sampleNames
+      WHERE personCount > 0
+      RETURN ageThreshold AS ageRange,
+             personCount,
+             sampleNames,
+             ageThreshold + 4 AS maxAge
+      ORDER BY ageThreshold
+
+  - name: "conditional_subquery_processing"
+    description: "CALL subquery with conditional logic and multiple return values"
+    cypher: |
+      MATCH (c:Company)
+      WHERE c.foundedYear IS NOT NULL
+      CALL {
+        WITH c
+        MATCH (p:Person)-[:WORKS_FOR]->(c)
+        WITH c, collect(p) AS employees
+        RETURN size(employees) AS empCount,
+               CASE 
+                 WHEN size(employees) = 0 THEN []
+                 ELSE [emp IN employees WHERE emp.age > 35 | emp.firstName]
+               END AS seniorEmployees
+      }
+      WITH c, empCount, seniorEmployees,
+           2024 - c.foundedYear AS companyAge
+      WHERE empCount > 0
+      RETURN c.companyName,
+             companyAge,
+             empCount,
+             size(seniorEmployees) AS seniorCount,
+             round(toFloat(size(seniorEmployees)) / empCount * 100, 1) AS seniorPercentage
+      ORDER BY companyAge DESC
+
+  - name: "multi_step_with_chain"
+    description: "Complex multi-step WITH chain for data transformation"
+    cypher: |
+      MATCH (p:Person)-[:KNOWS]->(friend:Person)
+      WITH p, count(friend) AS friendCount, collect(friend.age) AS friendAges
+      WHERE friendCount >= 2
+      WITH p, friendCount, 
+           [age IN friendAges WHERE age IS NOT NULL] AS validAges
+      WHERE size(validAges) > 0
+      WITH p.firstName AS person,
+           p.age AS personAge,
+           friendCount,
+           round(reduce(sum = 0.0, age IN validAges | sum + age) / size(validAges), 1) AS avgFriendAge
+      WITH person, personAge, friendCount, avgFriendAge,
+           abs(personAge - avgFriendAge) AS ageDifference
+      RETURN person,
+             personAge,
+             friendCount,
+             avgFriendAge,
+             ageDifference,
+             CASE 
+               WHEN ageDifference < 3 THEN 'Similar Age Friends'
+               WHEN ageDifference < 8 THEN 'Mixed Age Friends'
+               ELSE 'Diverse Age Friends'
+             END AS friendshipType
+      ORDER BY ageDifference

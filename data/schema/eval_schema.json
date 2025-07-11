@@ -1,0 +1,332 @@
+{
+  "node_props": {
+    "Person": [
+      {
+        "name": "firstName",
+        "neo4j_type": "STRING",
+        "example_values": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4j_type": "STRING",
+        "example_values": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4j_type": "INTEGER",
+        "min_value": 0,
+        "max_value": 120
+      },
+      {
+        "name": "email",
+        "neo4j_type": "STRING",
+        "example_values": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4j_type": "BOOLEAN",
+        "example_values": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4j_type": "STRING",
+        "enum_values": ["Employee", "Contractor"],
+        "example_values": ["Employee", "Contractor"]
+      }
+    ],
+    "Employee": [
+      {
+        "name": "firstName",
+        "neo4j_type": "STRING",
+        "example_values": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4j_type": "STRING",
+        "example_values": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4j_type": "INTEGER",
+        "min_value": 0,
+        "max_value": 120
+      },
+      {
+        "name": "email",
+        "neo4j_type": "STRING",
+        "example_values": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4j_type": "BOOLEAN",
+        "example_values": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4j_type": "STRING",
+        "enum_values": ["Employee"],
+        "example_values": ["Employee"]
+      }
+    ],
+    "Contractor": [
+      {
+        "name": "firstName",
+        "neo4j_type": "STRING",
+        "example_values": ["John", "Jane", "Alice", "Bob"]
+      },
+      {
+        "name": "lastName", 
+        "neo4j_type": "STRING",
+        "example_values": ["Smith", "Doe", "Johnson", "Williams"]
+      },
+      {
+        "name": "age",
+        "neo4j_type": "INTEGER",
+        "min_value": 0,
+        "max_value": 120
+      },
+      {
+        "name": "email",
+        "neo4j_type": "STRING",
+        "example_values": ["john.smith@example.com", "jane.doe@example.com"]
+      },
+      {
+        "name": "active",
+        "neo4j_type": "BOOLEAN",
+        "example_values": ["true", "false"]
+      },
+      {
+        "name": "employmentType",
+        "neo4j_type": "STRING",
+        "enum_values": ["Contractor"],
+        "example_values": ["Contractor"]
+      }
+    ],
+    "Company": [
+      {
+        "name": "companyName",
+        "neo4j_type": "STRING",
+        "example_values": ["Tech Corp", "Data Solutions Inc", "Innovation LLC"]
+      },
+      {
+        "name": "foundedYear",
+        "neo4j_type": "INTEGER",
+        "min_value": 1800,
+        "max_value": 2024
+      },
+      {
+        "name": "industry",
+        "neo4j_type": "STRING",
+        "enum_values": ["Technology", "Finance", "Healthcare", "Education", "Manufacturing"]
+      },
+      {
+        "name": "employeeCount",
+        "neo4j_type": "INTEGER",
+        "min_value": 1
+      }
+    ],
+    "Location": [
+      {
+        "name": "city",
+        "neo4j_type": "STRING",
+        "example_values": ["New York", "San Francisco", "London", "Tokyo"]
+      },
+      {
+        "name": "country",
+        "neo4j_type": "STRING",
+        "example_values": ["USA", "UK", "Japan", "Germany"]
+      },
+      {
+        "name": "coordinates",
+        "neo4j_type": "POINT"
+        }
+    ]
+  },
+  "rel_props": {
+    "WORKS_FOR": [
+      {
+        "name": "startDate",
+        "neo4j_type": "DATE_TIME",
+        "example_values": ["2020-01-15T08:00:00Z", "2021-06-01T09:00:00Z"]
+      },
+      {
+        "name": "position",
+        "neo4j_type": "STRING",
+        "example_values": ["Software Engineer", "Data Scientist", "Product Manager"]
+      },
+      {
+        "name": "salary",
+        "neo4j_type": "FLOAT",
+        "min_value": 30000.0,
+        "max_value": 500000.0
+      }
+    ],
+    "LOCATED_IN": [
+      {
+        "name": "since",
+        "neo4j_type": "DATE_TIME",
+        "example_values": ["2019-03-01T00:00:00Z", "2020-07-15T00:00:00Z"]
+      }
+    ],
+    "KNOWS": [
+      {
+        "name": "relationshipType",
+        "neo4j_type": "STRING",
+        "enum_values": ["friend", "colleague", "family", "acquaintance"],
+        "example_values": ["friend", "colleague", "family", "acquaintance"]
+      },
+      {
+        "name": "sinceYear",
+        "neo4j_type": "INTEGER",
+        "min_value": 1950,
+        "max_value": 2024
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "start": "Person",
+      "end": "Company",
+      "rel_type": "WORKS_FOR"
+    },
+    {
+      "start": "Employee",
+      "end": "Company",
+      "rel_type": "WORKS_FOR"
+    },
+    {
+      "start": "Contractor",
+      "end": "Company",
+      "rel_type": "WORKS_FOR"
+    },
+    {
+      "start": "Company",
+      "end": "Location",
+      "rel_type": "LOCATED_IN"
+    },
+    {
+      "start": "Person",
+      "end": "Person",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Person",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Employee",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Employee",
+      "end": "Contractor",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Person",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Employee",
+      "rel_type": "KNOWS"
+    },
+    {
+      "start": "Contractor",
+      "end": "Contractor",
+      "rel_type": "KNOWS"
+    }
+  ],
+  "metadata": {
+    "constraint": [
+      {
+        "id": 1,
+        "name": "person_node_key",
+        "constraint_type": "NODE_KEY",
+        "entity_type": "NODE",
+        "labels_or_types": ["Person"],
+        "properties": ["firstName", "lastName"],
+        "owned_index": "person_node_key_index"
+      },
+      {
+        "id": 2,
+        "name": "company_node_key",
+        "constraint_type": "NODE_KEY",
+        "entity_type": "NODE",
+        "labels_or_types": ["Company"],
+        "properties": ["companyName"],
+        "owned_index": "company_node_key_index"
+      },
+      {
+        "id": 3,
+        "name": "location_node_key",
+        "constraint_type": "NODE_KEY",
+        "entity_type": "NODE",
+        "labels_or_types": ["Location"],
+        "properties": ["city", "country"],
+        "owned_index": "location_node_key_index"
+      }
+    ],
+    "index": [
+      {
+        "label": "Person",
+        "properties": ["firstName", "lastName"],
+        "size": 15,
+        "index_type": "BTREE",
+        "values_selectivity": 1.0,
+        "distinct_values": 15.0
+      },
+      {
+        "label": "Company",
+        "properties": ["companyName"],
+        "size": 10,
+        "index_type": "BTREE",
+        "values_selectivity": 1.0,
+        "distinct_values": 10.0
+      },
+      {
+        "label": "Location",
+        "properties": ["city", "country"],
+        "size": 8,
+        "index_type": "BTREE",
+        "values_selectivity": 1.0,
+        "distinct_values": 8.0
+      },
+      {
+        "label": "Person",
+        "properties": ["email"],
+        "size": 15,
+        "index_type": "BTREE",
+        "values_selectivity": 1.0,
+        "distinct_values": 15.0
+      },
+      {
+        "label": "Person",
+        "properties": ["age"],
+        "size": 15,
+        "index_type": "BTREE",
+        "values_selectivity": 0.8,
+        "distinct_values": 12.0
+      },
+      {
+        "label": "Company",
+        "properties": ["industry"],
+        "size": 10,
+        "index_type": "BTREE",
+        "values_selectivity": 0.5,
+        "distinct_values": 5.0
+      },
+      {
+        "label": "Location",
+        "properties": ["coordinates"],
+        "size": 8,
+        "index_type": "POINT",
+        "values_selectivity": 1.0,
+        "distinct_values": 8.0
+      }
+    ]
+  }
+} 
