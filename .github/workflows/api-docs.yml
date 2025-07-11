@@ -59,7 +59,7 @@ jobs:
         
         # Copy Rust docs to output directory
         mkdir -p docs/api/rust
-        cp -r rust/cypher_guard/target/doc/* docs/api/rust/
+        cp -r target/doc/* docs/api/rust/
     
     # Generate Python documentation
     - name: Generate Python docs
