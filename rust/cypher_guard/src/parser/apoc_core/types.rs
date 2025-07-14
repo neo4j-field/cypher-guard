@@ -54,7 +54,7 @@ impl ApocType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{Node, Relationship, Path};
+    use crate::parser::ast::{NodePattern, RelationshipPattern, PatternElement};
 
     #[test]
     fn test_type_matching() {

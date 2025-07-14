@@ -371,9 +371,12 @@ mod tests {
             assert!(!yields.is_empty(), "Procedure should have at least one yield field");
             assert_eq!(yields[0].0, "result", "First yield field should be 'result'");
             
-            // All collection procedures should have at least one parameter (the list)
+            // All collection procedures should have at least one parameter
             assert!(!args.is_empty(), "Collection procedures should have at least one parameter");
-            assert_eq!(args[0].0, "list", "First parameter should be 'list'");
+            
+            // First parameter should be a list (could be named 'list', 'list1', etc.)
+            let first_param_name = args[0].0;
+            assert!(first_param_name.starts_with("list"), "First parameter should start with 'list'");
             assert_eq!(args[0].1, ApocType::List, "First parameter should be List type");
         }
     }

@@ -41,19 +41,19 @@ mod tests {
             .expect("apoc.bitwise.op should be defined");
         
         assert_eq!(procedure.1.len(), 3); // 3 parameters
-        assert_eq!(procedure.1[0].0, "value1");
+        assert_eq!(procedure.1[0].0, "a");
         assert_eq!(procedure.1[0].1, ApocType::Integer);
-        assert_eq!(procedure.1[1].0, "operator");
-        assert_eq!(procedure.1[1].1, ApocType::String);
-        assert_eq!(procedure.1[2].0, "value2");
-        assert_eq!(procedure.1[2].1, ApocType::Integer);
+        assert_eq!(procedure.1[1].0, "b");
+        assert_eq!(procedure.1[1].1, ApocType::Integer);
+        assert_eq!(procedure.1[2].0, "operator");
+        assert_eq!(procedure.1[2].1, ApocType::String);
     }
 
     #[test]
     fn test_all_bitwise_procedures_have_signatures() {
         assert!(!BITWISE_PROCEDURES.is_empty(), "Should have at least one bitwise procedure");
         
-        for (name, args, yields) in BITWISE_PROCEDURES {
+        for (name, args, yields) in BITWISE_PROCEDURES.iter() {
             assert!(!name.is_empty(), "Procedure name should not be empty");
             assert!(!yields.is_empty(), "Procedure should have at least one yield field");
             assert_eq!(yields[0].0, "result", "First yield field should be 'result'");

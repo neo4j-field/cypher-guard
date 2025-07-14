@@ -948,6 +948,7 @@ impl DbSchemaMetadata {
 
 /// Main structure representing a database schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     #[pyo3(get)]
