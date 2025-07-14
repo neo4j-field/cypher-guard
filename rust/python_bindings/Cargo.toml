@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 cypher-guard = { path = "../cypher_guard", features = ["python-bindings"] }
-pyo3 = { workspace = true, features = ["extension-module"] }
+pyo3 = { workspace = true, features = ["extension-module", "macros"] }
 
 [build-dependencies]
 pyo3-build-config = "0.21.2"

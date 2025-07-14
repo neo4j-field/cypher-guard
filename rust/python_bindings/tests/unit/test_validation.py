@@ -26,7 +26,7 @@ def schema_json():
     },
     "rel_props": {
         "KNOWS": [
-            {"name": "since", "neo4j_type": "DateTime"}
+            {"name": "since", "neo4j_type": "DATE_TIME"}
         ],
         "ACTED_IN": [
             {"name": "role", "neo4j_type": "STRING"}

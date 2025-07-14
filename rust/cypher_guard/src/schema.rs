@@ -946,10 +946,8 @@ impl DbSchemaMetadata {
     }
 }
 
-/// Main schema struct for the graph database.
-/// This is a collection of node labels, relationship types, properties, enums, and metadata.
+/// Main structure representing a database schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     #[pyo3(get)]
