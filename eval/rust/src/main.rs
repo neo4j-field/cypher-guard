@@ -40,6 +40,7 @@ struct EvalStats {
     successful_validations: usize,
     failed_validations: usize,
     parsing_errors: usize,
+    #[allow(dead_code)]
     schema_validation_errors: usize,
 }
 

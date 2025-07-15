@@ -129,6 +129,12 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
         }
     }
 
+    // Extract from UNWIND clause
+    if let Some(unwind_clause) = &query.unwind_clause {
+        elements.add_variable(unwind_clause.variable.clone());
+        // Optionally, could track type info here in the future
+    }
+
     elements
 }
 
@@ -421,9 +427,43 @@ pub fn validate_query_elements(
     errors
 }
 
+#[allow(dead_code)]
+/// Main entry point for full Cypher query validation.
+///
+/// This function performs all clause-level, cross-clause, and schema-level validation.
+/// As new Cypher features are added (e.g., clause order, type inference, parameter checks),
+/// extend this function to keep validation logic centralized and maintainable.
+pub fn validate_query(
+    query: &Query,
+    elements: &QueryElements,
+    schema: &DbSchema,
+) -> Vec<CypherGuardValidationError> {
+    let mut errors = Vec::new();
+
+    // Basic UNWIND validation: check type of UNWIND expression
+    if let Some(unwind_clause) = &query.unwind_clause {
+        use crate::parser::ast::UnwindExpression;
+        match &unwind_clause.expression {
+            UnwindExpression::List(_) => {},
+            UnwindExpression::Parameter(_) => {},
+            other => {
+                errors.push(CypherGuardValidationError::type_mismatch(
+                    "list or parameter",
+                    format!("{:?}", other),
+                ));
+            }
+        }
+    }
+
+    // Existing validation logic
+    errors.extend(validate_query_elements(elements, schema));
+    errors
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::ast::{UnwindClause, UnwindExpression, PropertyValue, Query};
     use crate::schema::{DbSchema, DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType};
 
     fn create_test_schema() -> DbSchema {
@@ -483,6 +523,7 @@ mod tests {
             with_clause: None,
             where_clause: None,
             return_clause: None,
+            unwind_clause: None,
         };
 
         let elements = extract_query_elements(&query);
@@ -518,6 +559,7 @@ mod tests {
                 }],
             }),
             return_clause: None,
+            unwind_clause: None,
         };
 
         let elements = extract_query_elements(&query);
@@ -554,6 +596,7 @@ mod tests {
             return_clause: Some(ReturnClause {
                 items: vec!["a.name".to_string(), "a.age".to_string()],
             }),
+            unwind_clause: None,
         };
 
         let elements = extract_query_elements(&query);
@@ -597,6 +640,7 @@ mod tests {
             }),
             where_clause: None,
             return_clause: None,
+            unwind_clause: None,
         };
 
         let elements = extract_query_elements(&query);
@@ -610,6 +654,24 @@ mod tests {
             elements.property_accesses[0].context,
             PropertyContext::With
         ));
+    }
+
+    #[test]
+    fn test_extract_query_elements_with_unwind() {
+        let query = Query {
+            match_clause: None,
+            merge_clause: None,
+            create_clause: None,
+            with_clause: None,
+            where_clause: None,
+            return_clause: None,
+            unwind_clause: Some(UnwindClause {
+                expression: UnwindExpression::List(vec![PropertyValue::Number(1), PropertyValue::Number(2)]),
+                variable: "x".to_string(),
+            }),
+        };
+        let elements = extract_query_elements(&query);
+        assert!(elements.undefined_variables.contains("x"));
     }
 
     #[test]
@@ -846,5 +908,42 @@ mod tests {
             errors[0],
             CypherGuardValidationError::InvalidPropertyAccess { .. }
         ));
+    }
+
+    #[test]
+    fn test_validate_unwind_expression_type() {
+        let mut query = Query {
+            match_clause: None,
+            merge_clause: None,
+            create_clause: None,
+            with_clause: None,
+            where_clause: None,
+            return_clause: None,
+            unwind_clause: Some(UnwindClause {
+                expression: UnwindExpression::Identifier("foo".to_string()),
+                variable: "x".to_string(),
+            }),
+        };
+        let elements = QueryElements::new();
+        let schema = DbSchema::new();
+        let errors = validate_query(&query, &elements, &schema);
+        assert!(!errors.is_empty());
+        assert!(errors.iter().any(|e| matches!(e, CypherGuardValidationError::TypeMismatch { .. })));
+
+        // Valid: list
+        query.unwind_clause = Some(UnwindClause {
+            expression: UnwindExpression::List(vec![PropertyValue::Number(1)]),
+            variable: "x".to_string(),
+        });
+        let errors = validate_query(&query, &elements, &schema);
+        assert!(errors.is_empty());
+
+        // Valid: parameter
+        query.unwind_clause = Some(UnwindClause {
+            expression: UnwindExpression::Parameter("foo".to_string()),
+            variable: "x".to_string(),
+        });
+        let errors = validate_query(&query, &elements, &schema);
+        assert!(errors.is_empty());
     }
 }

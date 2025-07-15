@@ -12,6 +12,7 @@ use crate::parser::ast;
 use crate::parser::ast::{
     CreateClause, MatchClause, MatchElement, MergeClause, OnCreateClause, OnMatchClause,
     PropertyValue, Query, ReturnClause, SetClause, WithClause, WithExpression, WithItem,
+    UnwindClause, UnwindExpression,
 };
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
@@ -25,6 +26,7 @@ pub enum Clause {
     Return(ReturnClause),
     With(WithClause),
     Query(Query),
+    Unwind(UnwindClause),
 }
 
 pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
@@ -538,6 +540,72 @@ pub fn with_clause(input: &str) -> IResult<&str, WithClause> {
     Ok((input, WithClause { items }))
 }
 
+// Parses a Cypher parameter (e.g., $param)
+fn parameter(input: &str) -> IResult<&str, String> {
+    let (input, _) = char('$')(input)?;
+    let (input, name) = identifier(input)?;
+    Ok((input, name.to_string()))
+}
+
+// Parses the UNWIND clause (e.g. UNWIND [1,2,3] AS x)
+pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("UNWIND")(input)?;
+    let (input, _) = multispace1(input)?;
+
+    // Try to parse a parameter
+    if let Ok((input, param)) = parameter(input) {
+        let (input, _) = multispace1(input)?;
+        let (input, _) = tag("AS")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, variable) = identifier(input)?;
+        return Ok((input, UnwindClause {
+            expression: UnwindExpression::Parameter(param),
+            variable: variable.to_string(),
+        }));
+    }
+
+    // Try to parse a list expression first (collapse nested if let)
+    if let Ok((input, ast::PropertyValue::List(items))) = property_value(input) {
+        let (input, _) = multispace1(input)?;
+        let (input, _) = tag("AS")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, variable) = identifier(input)?;
+        return Ok((input, UnwindClause {
+            expression: UnwindExpression::List(items),
+            variable: variable.to_string(),
+        }));
+    }
+
+    // Try to parse a function call
+    if let Ok((input, (name, args))) = function_call(input) {
+        let (input, _) = multispace1(input)?;
+        let (input, _) = tag("AS")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, variable) = identifier(input)?;
+        let args = args.into_iter().map(ast::PropertyValue::String).collect();
+        return Ok((input, UnwindClause {
+            expression: UnwindExpression::FunctionCall { name, args },
+            variable: variable.to_string(),
+        }));
+    }
+
+    // Try to parse an identifier (variable)
+    if let Ok((input, ident)) = identifier(input) {
+        let (input, _) = multispace1(input)?;
+        let (input, _) = tag("AS")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, variable) = identifier(input)?;
+        return Ok((input, UnwindClause {
+            expression: UnwindExpression::Identifier(ident.to_string()),
+            variable: variable.to_string(),
+        }));
+    }
+
+    // If none matched, return error
+    Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag)))
+}
+
 // Parses a clause (MATCH, RETURN, etc.)
 pub fn clause(input: &str) -> IResult<&str, Clause> {
     println!("Parsing clause: {}", input);
@@ -548,6 +616,7 @@ pub fn clause(input: &str) -> IResult<&str, Clause> {
         map(merge_clause, Clause::Merge),
         map(create_clause, Clause::Create),
         map(with_clause, Clause::With),
+        map(unwind_clause, Clause::Unwind),
     ))(input)
 }
 
@@ -564,6 +633,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         with_clause: None,
         where_clause: None,
         return_clause: None,
+        unwind_clause: None,
     };
     for clause in clauses {
         match clause {
@@ -572,6 +642,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             Clause::Create(create_clause) => query.create_clause = Some(create_clause),
             Clause::With(with_clause) => query.with_clause = Some(with_clause),
             Clause::Return(return_clause) => query.return_clause = Some(return_clause),
+            Clause::Unwind(unwind_clause) => query.unwind_clause = Some(unwind_clause),
             _ => (),
         }
     }
@@ -583,19 +654,25 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     println!("[property_value] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
 
+    // Try to parse as a parameter
+    if let Ok((input, param)) = parameter(input) {
+        println!("[property_value] <<< EXIT: Parameter({})", param);
+        return Ok((input, PropertyValue::Parameter(param)));
+    }
+
     // Try to parse as a list/array
     if let Ok((rest, _)) = char::<_, nom::error::Error<&str>>('[')(input) {
         let (rest, items) = separated_list0(
             tuple((multispace0, char(','), multispace0)),
             alt((
                 map(string_literal, PropertyValue::String),
-                map(identifier, |s| PropertyValue::String(s.to_string())),
                 map(numeric_literal, |n| {
                     PropertyValue::Number(n.parse().unwrap())
                 }),
                 map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
                 map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
                 map(tag_no_case("NULL"), |_| PropertyValue::Null),
+                map(parameter, PropertyValue::Parameter),
             )),
         )(rest)?;
         let (rest, _) = char(']')(rest)?;
@@ -612,13 +689,13 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
                 tuple((multispace0, char(':'), multispace0)),
                 alt((
                     map(string_literal, PropertyValue::String),
-                    map(identifier, |s| PropertyValue::String(s.to_string())),
                     map(numeric_literal, |n| {
                         PropertyValue::Number(n.parse().unwrap())
                     }),
                     map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
                     map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
                     map(tag_no_case("NULL"), |_| PropertyValue::Null),
+                    map(parameter, PropertyValue::Parameter),
                 )),
             )),
         )(rest)?;
@@ -641,6 +718,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
         map(tag_no_case("true"), |_| PropertyValue::Boolean(true)),
         map(tag_no_case("false"), |_| PropertyValue::Boolean(false)),
         map(tag_no_case("NULL"), |_| PropertyValue::Null),
+        map(parameter, PropertyValue::Parameter),
     ))(input)?;
     println!("[property_value] <<< EXIT: {:?}", value);
     Ok((input, value))
@@ -650,6 +728,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 mod tests {
     use super::*;
     use crate::parser::ast::{Direction, PatternElement};
+    use crate::parser::ast::{UnwindExpression, PropertyValue};
 
     #[test]
     fn test_optional_match_clause() {
@@ -1406,5 +1485,90 @@ mod tests {
             }
             _ => unreachable!("Expected comparison condition"),
         }
+    }
+
+    #[test]
+    fn test_unwind_clause_literal_list() {
+        let input = "UNWIND [1, 2, 3] AS x";
+        let (_, clause) = unwind_clause(input).unwrap();
+        assert_eq!(clause.expression, UnwindExpression::List(vec![PropertyValue::Number(1), PropertyValue::Number(2), PropertyValue::Number(3)]));
+        assert_eq!(clause.variable, "x");
+    }
+
+    #[test]
+    fn test_unwind_clause_identifier() {
+        let input = "UNWIND myList AS y";
+        let (_, clause) = unwind_clause(input).unwrap();
+        assert_eq!(clause.expression, UnwindExpression::Identifier("myList".to_string()));
+        assert_eq!(clause.variable, "y");
+    }
+
+    #[test]
+    fn test_unwind_clause_function_call() {
+        let input = "UNWIND collect(a) AS z";
+        let (_, clause) = unwind_clause(input).unwrap();
+        assert_eq!(clause.expression, UnwindExpression::FunctionCall { name: "collect".to_string(), args: vec![PropertyValue::String("a".to_string())] });
+        assert_eq!(clause.variable, "z");
+    }
+
+    #[test]
+    fn test_unwind_clause_empty_list() {
+        let input = "UNWIND [] AS n";
+        let (_, clause) = unwind_clause(input).unwrap();
+        assert_eq!(clause.expression, UnwindExpression::List(vec![]));
+        assert_eq!(clause.variable, "n");
+    }
+
+    #[test]
+    fn test_unwind_clause_parameter() {
+        let input = "UNWIND $events AS event";
+        let (_, clause) = unwind_clause(input).unwrap();
+        assert_eq!(clause.expression, UnwindExpression::Parameter("events".to_string()));
+        assert_eq!(clause.variable, "event");
+    }
+
+    #[test]
+    fn test_property_value_parameter() {
+        let input = "$name";
+        let (_, value) = property_value(input).unwrap();
+        assert_eq!(value, PropertyValue::Parameter("name".to_string()));
+    }
+
+    #[test]
+    fn test_property_value_parameter_in_list() {
+        let input = "[1, $id, 3]";
+        let (_, value) = property_value(input).unwrap();
+        assert_eq!(value, PropertyValue::List(vec![
+            PropertyValue::Number(1),
+            PropertyValue::Parameter("id".to_string()),
+            PropertyValue::Number(3),
+        ]));
+    }
+
+    #[test]
+    fn test_property_value_parameter_in_map() {
+        let input = "{foo: $bar}";
+        let (_, value) = property_value(input).unwrap();
+        let mut expected = std::collections::HashMap::new();
+        expected.insert("foo".to_string(), PropertyValue::Parameter("bar".to_string()));
+        assert_eq!(value, PropertyValue::Map(expected));
+    }
+
+    #[test]
+    fn test_unwind_clause_missing_as() {
+        let input = "UNWIND [1,2,3] x";
+        assert!(unwind_clause(input).is_err());
+    }
+
+    #[test]
+    fn test_unwind_clause_missing_variable() {
+        let input = "UNWIND [1,2,3] AS ";
+        assert!(unwind_clause(input).is_err());
+    }
+
+    #[test]
+    fn test_unwind_clause_unsupported_expression() {
+        let input = "UNWIND a + b AS x";
+        assert!(unwind_clause(input).is_err());
     }
 }

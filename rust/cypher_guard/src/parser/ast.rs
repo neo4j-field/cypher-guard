@@ -7,6 +7,7 @@ pub struct Query {
     pub with_clause: Option<WithClause>,
     pub where_clause: Option<WhereClause>,
     pub return_clause: Option<ReturnClause>,
+    pub unwind_clause: Option<UnwindClause>,
 }
 
 // RETURN clause (simple)
@@ -177,6 +178,7 @@ pub enum PropertyValue {
         name: String,
         args: Vec<PropertyValue>,
     },
+    Parameter(String),
 }
 
 // MERGE clause
@@ -236,4 +238,21 @@ pub enum WithExpression {
 pub struct WithItem {
     pub expression: WithExpression,
     pub alias: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct UnwindClause {
+    pub expression: UnwindExpression,
+    pub variable: String,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum UnwindExpression {
+    List(Vec<PropertyValue>),
+    Identifier(String),
+    FunctionCall {
+        name: String,
+        args: Vec<PropertyValue>,
+    },
+    Parameter(String),
 }
