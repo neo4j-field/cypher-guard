@@ -444,8 +444,8 @@ pub fn validate_query(
     if let Some(unwind_clause) = &query.unwind_clause {
         use crate::parser::ast::UnwindExpression;
         match &unwind_clause.expression {
-            UnwindExpression::List(_) => {},
-            UnwindExpression::Parameter(_) => {},
+            UnwindExpression::List(_) => {}
+            UnwindExpression::Parameter(_) => {}
             other => {
                 errors.push(CypherGuardValidationError::type_mismatch(
                     "list or parameter",
@@ -463,7 +463,7 @@ pub fn validate_query(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{UnwindClause, UnwindExpression, PropertyValue, Query};
+    use crate::parser::ast::{PropertyValue, Query, UnwindClause, UnwindExpression};
     use crate::schema::{DbSchema, DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType};
 
     fn create_test_schema() -> DbSchema {
@@ -666,7 +666,10 @@ mod tests {
             where_clause: None,
             return_clause: None,
             unwind_clause: Some(UnwindClause {
-                expression: UnwindExpression::List(vec![PropertyValue::Number(1), PropertyValue::Number(2)]),
+                expression: UnwindExpression::List(vec![
+                    PropertyValue::Number(1),
+                    PropertyValue::Number(2),
+                ]),
                 variable: "x".to_string(),
             }),
         };
@@ -928,7 +931,9 @@ mod tests {
         let schema = DbSchema::new();
         let errors = validate_query(&query, &elements, &schema);
         assert!(!errors.is_empty());
-        assert!(errors.iter().any(|e| matches!(e, CypherGuardValidationError::TypeMismatch { .. })));
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, CypherGuardValidationError::TypeMismatch { .. })));
 
         // Valid: list
         query.unwind_clause = Some(UnwindClause {

@@ -11,8 +11,8 @@ use nom::{
 use crate::parser::ast;
 use crate::parser::ast::{
     CreateClause, MatchClause, MatchElement, MergeClause, OnCreateClause, OnMatchClause,
-    PropertyValue, Query, ReturnClause, SetClause, WithClause, WithExpression, WithItem,
-    UnwindClause, UnwindExpression,
+    PropertyValue, Query, ReturnClause, SetClause, UnwindClause, UnwindExpression, WithClause,
+    WithExpression, WithItem,
 };
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
@@ -559,10 +559,13 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
         let (input, _) = tag("AS")(input)?;
         let (input, _) = multispace1(input)?;
         let (input, variable) = identifier(input)?;
-        return Ok((input, UnwindClause {
-            expression: UnwindExpression::Parameter(param),
-            variable: variable.to_string(),
-        }));
+        return Ok((
+            input,
+            UnwindClause {
+                expression: UnwindExpression::Parameter(param),
+                variable: variable.to_string(),
+            },
+        ));
     }
 
     // Try to parse a list expression first (collapse nested if let)
@@ -571,10 +574,13 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
         let (input, _) = tag("AS")(input)?;
         let (input, _) = multispace1(input)?;
         let (input, variable) = identifier(input)?;
-        return Ok((input, UnwindClause {
-            expression: UnwindExpression::List(items),
-            variable: variable.to_string(),
-        }));
+        return Ok((
+            input,
+            UnwindClause {
+                expression: UnwindExpression::List(items),
+                variable: variable.to_string(),
+            },
+        ));
     }
 
     // Try to parse a function call
@@ -584,10 +590,13 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
         let (input, _) = multispace1(input)?;
         let (input, variable) = identifier(input)?;
         let args = args.into_iter().map(ast::PropertyValue::String).collect();
-        return Ok((input, UnwindClause {
-            expression: UnwindExpression::FunctionCall { name, args },
-            variable: variable.to_string(),
-        }));
+        return Ok((
+            input,
+            UnwindClause {
+                expression: UnwindExpression::FunctionCall { name, args },
+                variable: variable.to_string(),
+            },
+        ));
     }
 
     // Try to parse an identifier (variable)
@@ -596,14 +605,20 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
         let (input, _) = tag("AS")(input)?;
         let (input, _) = multispace1(input)?;
         let (input, variable) = identifier(input)?;
-        return Ok((input, UnwindClause {
-            expression: UnwindExpression::Identifier(ident.to_string()),
-            variable: variable.to_string(),
-        }));
+        return Ok((
+            input,
+            UnwindClause {
+                expression: UnwindExpression::Identifier(ident.to_string()),
+                variable: variable.to_string(),
+            },
+        ));
     }
 
     // If none matched, return error
-    Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Tag)))
+    Err(nom::Err::Error(nom::error::Error::new(
+        input,
+        nom::error::ErrorKind::Tag,
+    )))
 }
 
 // Parses a clause (MATCH, RETURN, etc.)
@@ -728,7 +743,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 mod tests {
     use super::*;
     use crate::parser::ast::{Direction, PatternElement};
-    use crate::parser::ast::{UnwindExpression, PropertyValue};
+    use crate::parser::ast::{PropertyValue, UnwindExpression};
 
     #[test]
     fn test_optional_match_clause() {
@@ -1491,7 +1506,14 @@ mod tests {
     fn test_unwind_clause_literal_list() {
         let input = "UNWIND [1, 2, 3] AS x";
         let (_, clause) = unwind_clause(input).unwrap();
-        assert_eq!(clause.expression, UnwindExpression::List(vec![PropertyValue::Number(1), PropertyValue::Number(2), PropertyValue::Number(3)]));
+        assert_eq!(
+            clause.expression,
+            UnwindExpression::List(vec![
+                PropertyValue::Number(1),
+                PropertyValue::Number(2),
+                PropertyValue::Number(3)
+            ])
+        );
         assert_eq!(clause.variable, "x");
     }
 
@@ -1499,7 +1521,10 @@ mod tests {
     fn test_unwind_clause_identifier() {
         let input = "UNWIND myList AS y";
         let (_, clause) = unwind_clause(input).unwrap();
-        assert_eq!(clause.expression, UnwindExpression::Identifier("myList".to_string()));
+        assert_eq!(
+            clause.expression,
+            UnwindExpression::Identifier("myList".to_string())
+        );
         assert_eq!(clause.variable, "y");
     }
 
@@ -1507,7 +1532,13 @@ mod tests {
     fn test_unwind_clause_function_call() {
         let input = "UNWIND collect(a) AS z";
         let (_, clause) = unwind_clause(input).unwrap();
-        assert_eq!(clause.expression, UnwindExpression::FunctionCall { name: "collect".to_string(), args: vec![PropertyValue::String("a".to_string())] });
+        assert_eq!(
+            clause.expression,
+            UnwindExpression::FunctionCall {
+                name: "collect".to_string(),
+                args: vec![PropertyValue::String("a".to_string())]
+            }
+        );
         assert_eq!(clause.variable, "z");
     }
 
@@ -1523,7 +1554,10 @@ mod tests {
     fn test_unwind_clause_parameter() {
         let input = "UNWIND $events AS event";
         let (_, clause) = unwind_clause(input).unwrap();
-        assert_eq!(clause.expression, UnwindExpression::Parameter("events".to_string()));
+        assert_eq!(
+            clause.expression,
+            UnwindExpression::Parameter("events".to_string())
+        );
         assert_eq!(clause.variable, "event");
     }
 
@@ -1538,11 +1572,14 @@ mod tests {
     fn test_property_value_parameter_in_list() {
         let input = "[1, $id, 3]";
         let (_, value) = property_value(input).unwrap();
-        assert_eq!(value, PropertyValue::List(vec![
-            PropertyValue::Number(1),
-            PropertyValue::Parameter("id".to_string()),
-            PropertyValue::Number(3),
-        ]));
+        assert_eq!(
+            value,
+            PropertyValue::List(vec![
+                PropertyValue::Number(1),
+                PropertyValue::Parameter("id".to_string()),
+                PropertyValue::Number(3),
+            ])
+        );
     }
 
     #[test]
@@ -1550,7 +1587,10 @@ mod tests {
         let input = "{foo: $bar}";
         let (_, value) = property_value(input).unwrap();
         let mut expected = std::collections::HashMap::new();
-        expected.insert("foo".to_string(), PropertyValue::Parameter("bar".to_string()));
+        expected.insert(
+            "foo".to_string(),
+            PropertyValue::Parameter("bar".to_string()),
+        );
         assert_eq!(value, PropertyValue::Map(expected));
     }
 
