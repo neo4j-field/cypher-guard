@@ -1773,11 +1773,10 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
-            assert!(context.contains("query start"));
-            assert!(details.contains("RETURN must come after a reading clause"));
+        if let Err(CypherGuardParsingError::ReturnBeforeOtherClauses) = result {
+            // Expected specific error variant
         } else {
-            panic!("Expected InvalidClauseOrder error");
+            panic!("Expected ReturnBeforeOtherClauses error");
         }
     }
 
@@ -1787,11 +1786,10 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
-            assert!(context.contains("query start"));
-            assert!(details.contains("WHERE must come after a reading clause"));
+        if let Err(CypherGuardParsingError::WhereBeforeMatch) = result {
+            // Expected specific error variant
         } else {
-            panic!("Expected InvalidClauseOrder error");
+            panic!("Expected WhereBeforeMatch error");
         }
     }
 
@@ -1829,11 +1827,10 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
-            assert!(context.contains("after RETURN"));
-            assert!(details.contains("MATCH cannot come after RETURN clause"));
+        if let Err(CypherGuardParsingError::MatchAfterReturn) = result {
+            // Expected specific error variant
         } else {
-            panic!("Expected InvalidClauseOrder error");
+            panic!("Expected MatchAfterReturn error");
         }
     }
 
@@ -1857,11 +1854,10 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
-            assert!(context.contains("after RETURN"));
-            assert!(details.contains("WITH cannot come after RETURN clause"));
+        if let Err(CypherGuardParsingError::WithAfterReturn) = result {
+            // Expected specific error variant
         } else {
-            panic!("Expected InvalidClauseOrder error");
+            panic!("Expected WithAfterReturn error");
         }
     }
 
@@ -1871,11 +1867,10 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
-            assert!(context.contains("after RETURN"));
-            assert!(details.contains("UNWIND cannot come after RETURN clause"));
+        if let Err(CypherGuardParsingError::UnwindAfterReturn) = result {
+            // Expected specific error variant
         } else {
-            panic!("Expected InvalidClauseOrder error");
+            panic!("Expected UnwindAfterReturn error");
         }
     }
 

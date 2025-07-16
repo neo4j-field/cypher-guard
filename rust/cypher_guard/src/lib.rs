@@ -37,16 +37,10 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
                 // Try to reconstruct the validation error based on the input
                 // This is a bit hacky but works for our specific case
                 if query.contains("RETURN") && query.contains("MATCH") && query.find("RETURN").unwrap() < query.find("MATCH").unwrap() {
-                    return Err(CypherGuardParsingError::invalid_clause_order(
-                        "query start",
-                        "RETURN must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)"
-                    ));
+                    return Err(CypherGuardParsingError::return_before_other_clauses());
                 }
                 if query.contains("WHERE") && query.contains("MATCH") && query.find("WHERE").unwrap() < query.find("MATCH").unwrap() {
-                    return Err(CypherGuardParsingError::invalid_clause_order(
-                        "query start",
-                        "WHERE must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)"
-                    ));
+                    return Err(CypherGuardParsingError::where_before_match());
                 }
                 if query.contains("WITH") && query.contains("MATCH") && query.find("WITH").unwrap() < query.find("MATCH").unwrap() {
                     return Err(CypherGuardParsingError::invalid_clause_order(
@@ -64,10 +58,7 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
                 if let Some(last_return_pos) = query.rfind("RETURN") {
                     if let Some(match_after_return) = query[last_return_pos..].find("MATCH") {
                         if match_after_return > 0 {
-                            return Err(CypherGuardParsingError::invalid_clause_order(
-                                "after RETURN",
-                                "MATCH cannot come after RETURN clause"
-                            ));
+                            return Err(CypherGuardParsingError::match_after_return());
                         }
                     }
                     if let Some(where_after_return) = query[last_return_pos..].find("WHERE") {
@@ -80,18 +71,12 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
                     }
                     if let Some(with_after_return) = query[last_return_pos..].find("WITH") {
                         if with_after_return > 0 {
-                            return Err(CypherGuardParsingError::invalid_clause_order(
-                                "after RETURN",
-                                "WITH cannot come after RETURN clause"
-                            ));
+                            return Err(CypherGuardParsingError::with_after_return());
                         }
                     }
                     if let Some(unwind_after_return) = query[last_return_pos..].find("UNWIND") {
                         if unwind_after_return > 0 {
-                            return Err(CypherGuardParsingError::invalid_clause_order(
-                                "after RETURN",
-                                "UNWIND cannot come after RETURN clause"
-                            ));
+                            return Err(CypherGuardParsingError::unwind_after_return());
                         }
                     }
                 }
