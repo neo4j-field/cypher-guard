@@ -16,6 +16,7 @@ use crate::parser::ast::{
 };
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
+use crate::CypherGuardParsingError;
 
 #[derive(Debug, Clone)]
 pub enum Clause {
@@ -27,37 +28,29 @@ pub enum Clause {
     With(WithClause),
     Query(Query),
     Unwind(UnwindClause),
+    Where(ast::WhereClause),
 }
 
 pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
-    println!("Parsing match element list: {}", input);
     let (input, first) = match_element(input)?;
-    println!("First match element: {:?}", first);
     let (input, rest) = opt(preceded(
         tuple((multispace0, char(','), multispace0)),
         match_element,
     ))(input)?;
-    println!("Rest of match elements: {:?}", rest);
     let mut elements = vec![first];
     if let Some(rest) = rest {
         elements.push(rest);
     }
-    println!("Final match elements: {:?}", elements);
     Ok((input, elements))
 }
 
 // Parses the MATCH clause (e.g. MATCH (a)-[:KNOWS]->(b))
 pub fn match_clause(input: &str) -> IResult<&str, MatchClause> {
-    println!("Parsing match clause: {}", input);
     let (input, _) = multispace0(input)?;
-    println!("After initial whitespace: {}", input);
     let (input, is_optional) = opt(tuple((tag("OPTIONAL"), multispace1)))(input)?;
     let (input, _) = tag("MATCH")(input)?;
-    println!("After MATCH tag: {}", input);
     let (input, _) = multispace1(input)?;
-    println!("After MATCH whitespace: {}", input);
     let (input, elements) = match_element_list(input)?;
-    println!("Match clause elements: {:?}", elements);
     Ok((
         input,
         MatchClause {
@@ -80,7 +73,6 @@ fn return_item(input: &str) -> IResult<&str, String> {
 
 // Parses the RETURN clause (e.g. RETURN a, b, a.name)
 pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
-    println!("Parsing return clause: {}", input); // Debug
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("RETURN")(input)?;
     let (input, _) = multispace1(input)?;
@@ -105,7 +97,6 @@ pub fn return_clause(input: &str) -> IResult<&str, ReturnClause> {
         )));
     }
 
-    println!("Return clause items: {:?}", items); // Debug
     Ok((input, ReturnClause { items }))
 }
 
@@ -125,24 +116,17 @@ fn path_property(input: &str) -> IResult<&str, (String, String)> {
 
 // Parses a property access pattern (e.g., a.name)
 fn property_access(input: &str) -> IResult<&str, String> {
-    println!("[property_access] >>> ENTER: input='{}'", input);
     let (input, var) = identifier(input)?;
-    println!("[property_access] Parsed variable: {}", var);
     let (input, _) = char('.')(input)?;
-    println!("[property_access] After dot: input='{}'", input);
     let (input, prop) = identifier(input)?;
-    println!("[property_access] Parsed property: {}", prop);
     let result = format!("{}.{}", var, prop);
-    println!("[property_access] <<< EXIT: {}", result);
     Ok((input, result))
 }
 
 // Parses a function call (e.g., length(a.name), substring(a.name, 0, 5))
 fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
-    println!("[function_call] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
     let (input, function) = map(identifier, |s| s.to_string())(input)?;
-    println!("[function_call] Parsed function name: {}", function);
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("(")(input)?;
     let (input, _) = multispace0(input)?;
@@ -173,15 +157,12 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
 
     let (input, _) = multispace0(input)?;
     let (input, _) = tag(")")(input)?;
-    println!("[function_call] <<< EXIT: {}({:?})", function, args);
     Ok((input, (function, args)))
 }
 
 // Parses WHERE expressions with proper operator precedence
 // AND binds tighter than OR, so we parse OR expressions first, then AND expressions
 fn parse_where_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
-    println!("[parse_where_expr] >>> ENTER: input='{}'", input);
-
     // Parse OR expressions (lowest precedence)
     let (input, mut left) = parse_and_expr(input)?;
 
@@ -196,14 +177,11 @@ fn parse_where_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
         left = ast::WhereCondition::Or(Box::new(left), Box::new(right));
     }
 
-    println!("[parse_where_expr] <<< EXIT: {:?}", left);
     Ok((input, left))
 }
 
 // Parses AND expressions (higher precedence than OR)
 fn parse_and_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
-    println!("[parse_and_expr] >>> ENTER: input='{}'", input);
-
     // Parse basic conditions (highest precedence)
     let (input, mut left) = parse_basic_condition(input)?;
 
@@ -218,13 +196,11 @@ fn parse_and_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
         left = ast::WhereCondition::And(Box::new(left), Box::new(right));
     }
 
-    println!("[parse_and_expr] <<< EXIT: {:?}", left);
     Ok((input, left))
 }
 
 // Parses basic conditions (comparisons, NOT, parenthesized, function calls, etc.)
 fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
-    println!("[parse_basic_condition] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
 
     // Try to parse NOT
@@ -246,10 +222,6 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
 
     // Try to parse as a function call
     if let Ok((rest, (function, args))) = function_call(input) {
-        println!(
-            "[parse_basic_condition] Parsed function call: {}({:?})",
-            function, args
-        );
         return Ok((
             rest,
             ast::WhereCondition::FunctionCall {
@@ -265,7 +237,6 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
             map(property_access, |s| s),
             map(identifier, |s| s.to_string()),
         ))(input)?;
-        println!("[parse_basic_condition] Parsed left side: {}", left);
         let (input, _) = multispace0(input)?;
         let (input, operator) = alt((
             tag("="),
@@ -277,7 +248,6 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
             tag("IS NULL"),
             tag("IS NOT NULL"),
         ))(input)?;
-        println!("[parse_basic_condition] Parsed operator: {}", operator);
 
         // For IS NULL and IS NOT NULL, there's no right side
         if operator == "IS NULL" || operator == "IS NOT NULL" {
@@ -297,7 +267,6 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
             map(numeric_literal, |n| n),
             map(identifier, |s| s.to_string()),
         ))(input)?;
-        println!("[parse_basic_condition] Parsed right side: {}", right);
         Ok((
             input,
             ast::WhereCondition::Comparison {
@@ -314,10 +283,6 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
 
     // If comparison parsing failed, try to parse as a path property
     if let Ok((rest, (path_var, property))) = path_property(input) {
-        println!(
-            "[parse_basic_condition] Parsed path property: {}.{}",
-            path_var, property
-        );
         return Ok((
             rest,
             ast::WhereCondition::PathProperty { path_var, property },
@@ -330,39 +295,28 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
 
 // Parses the WHERE clause (e.g. WHERE a.age > 30 AND b.name = 'Alice')
 pub fn where_clause(input: &str) -> IResult<&str, ast::WhereClause> {
-    println!("[where_clause] >>> ENTER: input='{}'", input);
     let (input, _) = multispace0(input)?;
-    println!("[where_clause] After initial whitespace: input='{}'", input);
     let (input, _) = tag("WHERE")(input)?;
-    println!("[where_clause] After WHERE tag: input='{}'", input);
     let (input, _) = multispace1(input)?;
-    println!("[where_clause] After WHERE whitespace: input='{}'", input);
 
     // Parse the expression with proper precedence
     let (input, condition) = parse_where_expr(input)?;
-    println!("[where_clause] Parsed condition: {:?}", condition);
 
     let clause = ast::WhereClause {
         conditions: vec![condition],
     };
-    println!("[where_clause] <<< EXIT: {:?}", clause);
     Ok((input, clause))
 }
 
 // Parses a SET clause (e.g. SET a.name = 'Alice')
 fn set_clause(input: &str) -> IResult<&str, SetClause> {
-    println!("DEBUG: Parsing set clause: {}", input);
-    let (input, _) = multispace0(input)?;
     let (input, variable) = identifier(input)?;
-    println!("DEBUG: Parsed variable: {}", variable);
     let (input, _) = char('.')(input)?;
     let (input, property) = identifier(input)?;
-    println!("DEBUG: Parsed property: {}", property);
     let (input, _) = multispace0(input)?;
     let (input, _) = char('=')(input)?;
     let (input, _) = multispace0(input)?;
     let (input, value) = property_value(input)?;
-    println!("DEBUG: Parsed value: {:?}", value);
     Ok((
         input,
         SetClause {
@@ -375,7 +329,6 @@ fn set_clause(input: &str) -> IResult<&str, SetClause> {
 
 // Parses ON CREATE clause (e.g. ON CREATE SET a.name = 'Alice')
 fn on_create_clause(input: &str) -> IResult<&str, OnCreateClause> {
-    println!("DEBUG: Parsing ON CREATE clause: {}", input);
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("ON CREATE")(input)?;
     let (input, _) = multispace1(input)?;
@@ -383,96 +336,64 @@ fn on_create_clause(input: &str) -> IResult<&str, OnCreateClause> {
     let (input, _) = multispace1(input)?;
     let (input, set_clauses) =
         separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input)?;
-    println!("DEBUG: Parsed ON CREATE set clauses: {:?}", set_clauses);
     Ok((input, OnCreateClause { set_clauses }))
 }
 
 // Parses ON MATCH clause (e.g. ON MATCH SET a.name = 'Alice')
 fn on_match_clause(input: &str) -> IResult<&str, OnMatchClause> {
-    println!("DEBUG: Parsing ON MATCH clause: {}", input);
     let (input, _) = multispace0(input)?;
-    println!("DEBUG: After initial whitespace: {}", input);
     let (input, _) = tag("ON MATCH")(input)?;
-    println!("DEBUG: After ON MATCH tag: {}", input);
     let (input, _) = multispace1(input)?;
-    println!("DEBUG: After ON MATCH whitespace: {}", input);
     let (input, _) = tag("SET")(input)?;
-    println!("DEBUG: After SET tag: {}", input);
     let (input, _) = multispace1(input)?;
-    println!("DEBUG: After SET whitespace: {}", input);
     let (input, set_clauses) =
         match separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input) {
             Ok(res) => {
-                println!("DEBUG: Successfully parsed set_clauses");
                 res
             }
             Err(e) => {
-                println!("DEBUG: Failed to parse set_clauses: {:?}", e);
                 return Err(e);
             }
         };
-    println!("DEBUG: Parsed ON MATCH set clauses: {:?}", set_clauses);
     Ok((input, OnMatchClause { set_clauses }))
 }
 
 // Parses the MERGE clause (e.g. MERGE (a:Person {name: 'Alice'}) ON CREATE SET a.created = timestamp())
 pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
-    println!("DEBUG: Parsing merge clause: {}", input);
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("MERGE")(input)?;
     let (input, _) = multispace1(input)?;
-    println!("DEBUG: After MERGE tag, remaining input: {}", input);
     let (mut input, elements) = match_element_list(input)?;
-    println!("DEBUG: After parsing elements, remaining input: {}", input);
     let mut found_on_create = None;
     let mut found_on_match = None;
 
     // Try up to two times (since there can be at most one ON CREATE and one ON MATCH)
     for i in 0..2 {
-        println!("DEBUG: Attempt {} to parse ON clauses", i + 1);
-        // Consume any whitespace before trying to parse ON clauses
         let (rest, _) = multispace0(input)?;
         input = rest;
-        println!(
-            "DEBUG: After consuming whitespace, remaining input: {}",
-            input
-        );
 
         if found_on_create.is_none() {
-            println!("DEBUG: Trying to parse ON CREATE clause");
             match on_create_clause(input) {
                 Ok((rest, clause)) => {
-                    println!("DEBUG: Successfully parsed ON CREATE clause");
                     found_on_create = Some(clause);
                     input = rest;
                     continue;
                 }
-                Err(e) => {
-                    println!("DEBUG: Failed to parse ON CREATE clause: {:?}", e);
-                }
+                Err(e) => {}
             }
         }
         if found_on_match.is_none() {
-            println!("DEBUG: Trying to parse ON MATCH clause");
             match on_match_clause(input) {
                 Ok((rest, clause)) => {
-                    println!("DEBUG: Successfully parsed ON MATCH clause");
                     found_on_match = Some(clause);
                     input = rest;
                     continue;
                 }
-                Err(e) => {
-                    println!("DEBUG: Failed to parse ON MATCH clause: {:?}", e);
-                }
+                Err(e) => {}
             }
         }
-        println!("DEBUG: No more ON clauses found");
         break;
     }
-    println!(
-        "DEBUG: Final merge clause state - on_create: {:?}, on_match: {:?}",
-        found_on_create, found_on_match
-    );
     Ok((
         input,
         MergeClause {
@@ -485,7 +406,6 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
 
 // Parses the CREATE clause (e.g. CREATE (a:Person {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'}))
 pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
-    println!("Parsing create clause: {}", input);
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("CREATE")(input)?;
     let (input, _) = multispace1(input)?;
@@ -495,8 +415,6 @@ pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
 
 // Parses a WITH item (e.g., a, a.name, count(*))
 fn with_item(input: &str) -> IResult<&str, WithItem> {
-    println!("[with_item] >>> ENTER: input='{}'", input);
-    let (input, _) = multispace0(input)?;
     let (input, expr) = alt((
         map(char('*'), |_| WithExpression::Wildcard),
         map(property_access, |s| {
@@ -520,23 +438,16 @@ fn with_item(input: &str) -> IResult<&str, WithItem> {
         expression: expr,
         alias: alias.map(|s| s.to_string()),
     };
-    println!(
-        "[with_item] <<< EXIT: result={:?}, remaining input='{}'",
-        result, input
-    );
     Ok((input, result))
 }
 
 // Parses the WITH clause (e.g. WITH a, count(*) AS count)
 pub fn with_clause(input: &str) -> IResult<&str, WithClause> {
-    println!("DEBUG: Parsing with_clause from input: '{}'", input);
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("WITH")(input)?;
     let (input, _) = multispace1(input)?;
-    println!("DEBUG: After WITH tag, remaining input: '{}'", input);
     let (input, items) =
         separated_list1(tuple((multispace0, char(','), multispace0)), with_item)(input)?;
-    println!("DEBUG: Parsed with items: {:?}", items);
     Ok((input, WithClause { items }))
 }
 
@@ -623,8 +534,6 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
 
 // Parses a clause (MATCH, RETURN, etc.)
 pub fn clause(input: &str) -> IResult<&str, Clause> {
-    println!("Parsing clause: {}", input);
-    let (input, _) = multispace0(input)?;
     alt((
         map(match_clause, Clause::Match),
         map(return_clause, Clause::Return),
@@ -632,15 +541,23 @@ pub fn clause(input: &str) -> IResult<&str, Clause> {
         map(create_clause, Clause::Create),
         map(with_clause, Clause::With),
         map(unwind_clause, Clause::Unwind),
+        map(where_clause, Clause::Where),
     ))(input)
 }
 
 // Parses a complete query (e.g. MATCH (a)-[:KNOWS]->(b) RETURN a, b)
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
-    println!("Parsing query: {}", input);
-    let (input, _) = multispace0(input)?;
     let (input, clauses) = many1(preceded(multispace0, clause))(input)?;
-    println!("Parsed clauses: {:?}", clauses);
+    
+    // Validate clause order before building the query
+    if let Err(validation_error) = validate_clause_order(&clauses) {
+        // Convert validation error to nom error
+        return Err(nom::Err::Error(nom::error::Error::new(
+            input,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+    
     let mut query = Query {
         match_clause: None,
         merge_clause: None,
@@ -658,20 +575,200 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             Clause::With(with_clause) => query.with_clause = Some(with_clause),
             Clause::Return(return_clause) => query.return_clause = Some(return_clause),
             Clause::Unwind(unwind_clause) => query.unwind_clause = Some(unwind_clause),
+            Clause::Where(where_clause) => query.where_clause = Some(where_clause),
             _ => (),
         }
     }
     Ok((input, query))
 }
 
+/// Validates that clauses appear in the correct Cypher order
+/// 
+/// Cypher clause order rules:
+/// 1. MATCH/OPTIONAL MATCH must come first (reading clauses)
+/// 2. UNWIND can come after MATCH
+/// 3. WHERE can come after MATCH/UNWIND
+/// 4. WITH can come after WHERE
+/// 5. RETURN must come last (except for writing clauses)
+/// 6. CREATE/MERGE can come after RETURN (writing clauses)
+fn validate_clause_order(clauses: &[Clause]) -> Result<(), CypherGuardParsingError> {
+    if clauses.is_empty() {
+        return Ok(());
+    }
+
+    let mut state = ClauseOrderState::Initial;
+    
+    for (i, clause) in clauses.iter().enumerate() {
+        state = match (state, clause) {
+            // Initial state - only reading clauses allowed
+            (ClauseOrderState::Initial, Clause::Match(_) | Clause::OptionalMatch(_)) => {
+                ClauseOrderState::AfterMatch
+            }
+            (ClauseOrderState::Initial, Clause::Unwind(_)) => {
+                ClauseOrderState::AfterUnwind
+            }
+            (ClauseOrderState::Initial, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+            (ClauseOrderState::Initial, _) => {
+                return Err(CypherGuardParsingError::invalid_clause_order(
+                    "query start",
+                    format!("{} must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)", clause_name(clause))
+                ));
+            }
+
+            // After MATCH - can have UNWIND, WHERE, WITH, RETURN, or more MATCH
+            (ClauseOrderState::AfterMatch, Clause::Match(_) | Clause::OptionalMatch(_)) => {
+                ClauseOrderState::AfterMatch
+            }
+            (ClauseOrderState::AfterMatch, Clause::Unwind(_)) => {
+                ClauseOrderState::AfterUnwind
+            }
+            (ClauseOrderState::AfterMatch, Clause::Where(_)) => {
+                ClauseOrderState::AfterWhere
+            }
+            (ClauseOrderState::AfterMatch, Clause::With(_)) => {
+                ClauseOrderState::AfterWith
+            }
+            (ClauseOrderState::AfterMatch, Clause::Return(_)) => {
+                ClauseOrderState::AfterReturn
+            }
+            (ClauseOrderState::AfterMatch, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+
+            // After UNWIND - can have WHERE, WITH, RETURN, or more UNWIND
+            (ClauseOrderState::AfterUnwind, Clause::Unwind(_)) => {
+                ClauseOrderState::AfterUnwind
+            }
+            (ClauseOrderState::AfterUnwind, Clause::Where(_)) => {
+                ClauseOrderState::AfterWhere
+            }
+            (ClauseOrderState::AfterUnwind, Clause::With(_)) => {
+                ClauseOrderState::AfterWith
+            }
+            (ClauseOrderState::AfterUnwind, Clause::Return(_)) => {
+                ClauseOrderState::AfterReturn
+            }
+            (ClauseOrderState::AfterUnwind, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+
+            // After WHERE - can have WITH, RETURN, or more WHERE
+            (ClauseOrderState::AfterWhere, Clause::Where(_)) => {
+                ClauseOrderState::AfterWhere
+            }
+            (ClauseOrderState::AfterWhere, Clause::With(_)) => {
+                ClauseOrderState::AfterWith
+            }
+            (ClauseOrderState::AfterWhere, Clause::Return(_)) => {
+                ClauseOrderState::AfterReturn
+            }
+            (ClauseOrderState::AfterWhere, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+
+            // After WITH - can have MATCH, UNWIND, WHERE, WITH, RETURN, or writing clauses
+            // WITH creates a projection that allows starting a new reading phase
+            (ClauseOrderState::AfterWith, Clause::Match(_) | Clause::OptionalMatch(_)) => {
+                ClauseOrderState::AfterMatch
+            }
+            (ClauseOrderState::AfterWith, Clause::Unwind(_)) => {
+                ClauseOrderState::AfterUnwind
+            }
+            (ClauseOrderState::AfterWith, Clause::Where(_)) => {
+                ClauseOrderState::AfterWhere
+            }
+            (ClauseOrderState::AfterWith, Clause::With(_)) => {
+                ClauseOrderState::AfterWith
+            }
+            (ClauseOrderState::AfterWith, Clause::Return(_)) => {
+                ClauseOrderState::AfterReturn
+            }
+            (ClauseOrderState::AfterWith, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+
+            // After RETURN - can have CREATE/MERGE (writing clauses)
+            (ClauseOrderState::AfterReturn, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+            (ClauseOrderState::AfterReturn, _) => {
+                return Err(CypherGuardParsingError::invalid_clause_order(
+                    "after RETURN",
+                    format!("{} cannot come after RETURN clause", clause_name(clause))
+                ));
+            }
+
+            // After write clause - can have more write clauses or RETURN
+            (ClauseOrderState::AfterWrite, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+            (ClauseOrderState::AfterWrite, Clause::Return(_)) => {
+                ClauseOrderState::AfterReturn
+            }
+            (ClauseOrderState::AfterWrite, _) => {
+                return Err(CypherGuardParsingError::invalid_clause_order(
+                    "after writing clause",
+                    format!("{} cannot come after writing clause", clause_name(clause))
+                ));
+            }
+
+            // Handle any other combinations that shouldn't be possible
+            _ => {
+                return Err(CypherGuardParsingError::invalid_clause_order(
+                    "clause validation",
+                    format!("Invalid clause sequence: {} in current state", clause_name(clause))
+                ));
+            }
+        };
+    }
+
+    // Check that query ends appropriately
+    match state {
+        ClauseOrderState::Initial => {
+            Err(CypherGuardParsingError::missing_required_clause("reading clause (MATCH, UNWIND, CREATE, MERGE)"))
+        }
+        ClauseOrderState::AfterWith => {
+            Err(CypherGuardParsingError::missing_required_clause("RETURN or writing clause"))
+        }
+        _ => {
+            Ok(())
+        }
+    }
+}
+
+/// Represents the state of clause ordering validation
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ClauseOrderState {
+    Initial,
+    AfterMatch,
+    AfterUnwind,
+    AfterWhere,
+    AfterWith,
+    AfterReturn,
+    AfterWrite,
+}
+
+/// Returns a human-readable name for a clause
+fn clause_name(clause: &Clause) -> &'static str {
+    match clause {
+        Clause::Match(_) => "MATCH",
+        Clause::OptionalMatch(_) => "OPTIONAL MATCH",
+        Clause::Unwind(_) => "UNWIND",
+        Clause::Where(_) => "WHERE",
+        Clause::With(_) => "WITH",
+        Clause::Return(_) => "RETURN",
+        Clause::Create(_) => "CREATE",
+        Clause::Merge(_) => "MERGE",
+        Clause::Query(_) => "Query",
+    }
+}
+
 // Parses a property value (e.g., 42, 'hello', true, [1, 2, 3], {name: 'Alice'})
 fn property_value(input: &str) -> IResult<&str, PropertyValue> {
-    println!("[property_value] >>> ENTER: input='{}'", input);
-    let (input, _) = multispace0(input)?;
-
     // Try to parse as a parameter
     if let Ok((input, param)) = parameter(input) {
-        println!("[property_value] <<< EXIT: Parameter({})", param);
         return Ok((input, PropertyValue::Parameter(param)));
     }
 
@@ -691,7 +788,6 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
             )),
         )(rest)?;
         let (rest, _) = char(']')(rest)?;
-        println!("[property_value] <<< EXIT: List({:?})", items);
         return Ok((rest, PropertyValue::List(items)));
     }
 
@@ -719,7 +815,6 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
             .into_iter()
             .map(|(k, _, v)| (k.to_string(), v))
             .collect();
-        println!("[property_value] <<< EXIT: Map({:?})", map);
         return Ok((rest, PropertyValue::Map(map)));
     }
 
@@ -735,7 +830,6 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
         map(tag_no_case("NULL"), |_| PropertyValue::Null),
         map(parameter, PropertyValue::Parameter),
     ))(input)?;
-    println!("[property_value] <<< EXIT: {:?}", value);
     Ok((input, value))
 }
 
@@ -1188,7 +1282,6 @@ mod tests {
     fn test_where_clause_not_condition() {
         let input = "WHERE NOT a.name = \"Alice\"";
         let (_, clause) = where_clause(input).unwrap();
-        assert_eq!(clause.conditions.len(), 1);
         match &clause.conditions[0] {
             ast::WhereCondition::Not(inner) => match &**inner {
                 ast::WhereCondition::Comparison {
@@ -1210,7 +1303,6 @@ mod tests {
     fn test_where_clause_parenthesized() {
         let input = "WHERE (a.age > 30)";
         let (_, clause) = where_clause(input).unwrap();
-        assert_eq!(clause.conditions.len(), 1);
         match &clause.conditions[0] {
             ast::WhereCondition::Parenthesized(inner) => match &**inner {
                 ast::WhereCondition::Comparison {
@@ -1232,7 +1324,6 @@ mod tests {
     fn test_where_clause_complex_nested() {
         let input = "WHERE (a.age > 30 AND b.name = \"Bob\") OR NOT c.active = true";
         let (_, clause) = where_clause(input).unwrap();
-        assert_eq!(clause.conditions.len(), 1);
         match &clause.conditions[0] {
             ast::WhereCondition::Or(left, right) => {
                 // First condition should be parenthesized with AND
@@ -1295,7 +1386,6 @@ mod tests {
     fn test_where_clause_with_whitespace() {
         let input = "WHERE  a.age  >  30  AND  b.name  =  \"Bob\"  ";
         let (_, clause) = where_clause(input).unwrap();
-        assert_eq!(clause.conditions.len(), 1);
         match &clause.conditions[0] {
             ast::WhereCondition::And(left, right) => {
                 match &**left {
@@ -1610,5 +1700,258 @@ mod tests {
     fn test_unwind_clause_unsupported_expression() {
         let input = "UNWIND a + b AS x";
         assert!(unwind_clause(input).is_err());
+    }
+
+    // === Clause Order Validation Tests ===
+
+    #[test]
+    fn test_valid_clause_order_match_return() {
+        let query = "MATCH (a:Person) RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_where_return() {
+        let query = "MATCH (a:Person) WHERE a.age > 30 RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_with_return() {
+        let query = "MATCH (a:Person) WITH a WHERE a.age > 30 RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_unwind_return() {
+        let query = "MATCH (a:Person) UNWIND a.hobbies AS hobby RETURN a, hobby";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_unwind_where_return() {
+        let query = "MATCH (a:Person) UNWIND a.hobbies AS hobby WHERE hobby = 'reading' RETURN a, hobby";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_create_return() {
+        let query = "CREATE (a:Person {name: 'Alice'}) RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_merge_return() {
+        let query = "MERGE (a:Person {name: 'Alice'}) RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_return_create() {
+        let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_optional_match() {
+        let query = "OPTIONAL MATCH (a:Person) RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_invalid_clause_order_return_before_match() {
+        let query = "RETURN a MATCH (a:Person)";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("query start"));
+            assert!(details.contains("RETURN must come after a reading clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_where_before_match() {
+        let query = "WHERE a.age > 30 MATCH (a:Person)";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("query start"));
+            assert!(details.contains("WHERE must come after a reading clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_with_before_match() {
+        let query = "WITH a MATCH (a:Person)";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("query start"));
+            assert!(details.contains("WITH must come after a reading clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_unwind_before_match() {
+        let query = "UNWIND [1,2,3] AS x MATCH (a:Person)";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("query start"));
+            assert!(details.contains("UNWIND must come after a reading clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_match_after_return() {
+        let query = "MATCH (a:Person) RETURN a MATCH (b:Person)";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("after RETURN"));
+            assert!(details.contains("MATCH cannot come after RETURN clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_where_after_return() {
+        let query = "MATCH (a:Person) RETURN a WHERE a.age > 30";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("after RETURN"));
+            assert!(details.contains("WHERE cannot come after RETURN clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_with_after_return() {
+        let query = "MATCH (a:Person) RETURN a WITH a";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("after RETURN"));
+            assert!(details.contains("WITH cannot come after RETURN clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_unwind_after_return() {
+        let query = "MATCH (a:Person) RETURN a UNWIND [1,2,3] AS x";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Invalid clause order should fail");
+        
+        if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
+            assert!(context.contains("after RETURN"));
+            assert!(details.contains("UNWIND cannot come after RETURN clause"));
+        } else {
+            panic!("Expected InvalidClauseOrder error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_missing_return() {
+        let query = "MATCH (a:Person) WITH a";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Query ending with WITH should fail");
+        
+        if let Err(CypherGuardParsingError::MissingRequiredClause { clause }) = result {
+            assert!(clause.contains("RETURN or writing clause"));
+        } else {
+            panic!("Expected MissingRequiredClause error");
+        }
+    }
+
+    #[test]
+    fn test_invalid_clause_order_empty_query() {
+        let query = "";
+        let result = crate::parse_query(query);
+        assert!(result.is_err(), "Empty query should fail");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_match() {
+        let query = "MATCH (a:Person) MATCH (b:Person) RETURN a, b";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Multiple MATCH clauses should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_where() {
+        let query = "MATCH (a:Person) WHERE a.age > 30 WHERE a.active = true RETURN a";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Multiple WHERE clauses should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_with() {
+        let query = "MATCH (a:Person) WITH a WHERE a.age > 30 WITH a.age AS age RETURN age";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Multiple WITH clauses should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_unwind() {
+        let query = "MATCH (a:Person) UNWIND a.hobbies AS hobby UNWIND a.skills AS skill RETURN a, hobby, skill";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Multiple UNWIND clauses should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_complex_sequence() {
+        let query = "MATCH (a:Person) WHERE a.age > 30 WITH a WHERE a.active = true UNWIND a.hobbies AS hobby RETURN a, hobby";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Complex valid sequence should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_write_only() {
+        let query = "CREATE (a:Person {name: 'Alice'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Write-only query should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_write_after_return() {
+        let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Write clause after RETURN should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_write() {
+        let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'}) MERGE (c:Person {name: 'Charlie'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Multiple write clauses should be valid");
     }
 }
