@@ -249,44 +249,38 @@ pub enum CypherGuardParsingError {
     InvalidClauseOrder { context: String, details: String },
 
     // Specific clause order error variants
-    #[error("RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and UNION")]
-    ReturnBeforeOtherClauses,
+    #[error("RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and writing clauses (found at line {line}, column {column})")]
+    ReturnBeforeOtherClauses { line: usize, column: usize },
 
-    #[error("MATCH clause cannot appear after RETURN clause")]
-    MatchAfterReturn,
+    #[error("MATCH clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    MatchAfterReturn { line: usize, column: usize },
 
-    #[error("CREATE clause cannot appear after RETURN clause")]
-    CreateAfterReturn,
+    #[error("CREATE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    CreateAfterReturn { line: usize, column: usize },
 
-    #[error("MERGE clause cannot appear after RETURN clause")]
-    MergeAfterReturn,
+    #[error("MERGE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    MergeAfterReturn { line: usize, column: usize },
 
-    #[error("DELETE clause cannot appear after RETURN clause")]
-    DeleteAfterReturn,
+    #[error("DELETE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    DeleteAfterReturn { line: usize, column: usize },
 
-    #[error("SET clause cannot appear after RETURN clause")]
-    SetAfterReturn,
+    #[error("SET clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    SetAfterReturn { line: usize, column: usize },
 
-    #[error("REMOVE clause cannot appear after RETURN clause")]
-    RemoveAfterReturn,
+    #[error("WHERE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    WhereAfterReturn { line: usize, column: usize },
 
-    #[error("FOREACH clause cannot appear after RETURN clause")]
-    ForeachAfterReturn,
+    #[error("WITH clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    WithAfterReturn { line: usize, column: usize },
 
-    #[error("CALL clause cannot appear after RETURN clause")]
-    CallAfterReturn,
+    #[error("UNWIND clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    UnwindAfterReturn { line: usize, column: usize },
 
-    #[error("LOAD CSV clause cannot appear after RETURN clause")]
-    LoadCsvAfterReturn,
+    #[error("WHERE clause must come after MATCH, UNWIND, or WITH clause (found at line {line}, column {column})")]
+    WhereBeforeMatch { line: usize, column: usize },
 
-    #[error("UNWIND clause cannot appear after RETURN clause")]
-    UnwindAfterReturn,
-
-    #[error("WITH clause cannot appear after RETURN clause")]
-    WithAfterReturn,
-
-    #[error("WHERE clause must come after MATCH, OPTIONAL MATCH, or WITH clause")]
-    WhereBeforeMatch,
+    #[error("RETURN clause cannot appear after another RETURN clause (found at line {line}, column {column})")]
+    ReturnAfterReturn { line: usize, column: usize },
 
     #[error("ORDER BY clause must come after RETURN or WITH clause")]
     OrderByBeforeReturn,
@@ -358,55 +352,91 @@ impl CypherGuardParsingError {
 
     // Specific clause order error helper methods
     pub fn return_before_other_clauses() -> Self {
-        Self::ReturnBeforeOtherClauses
+        Self::ReturnBeforeOtherClauses { line: 0, column: 0 }
+    }
+
+    pub fn return_before_other_clauses_at(line: usize, column: usize) -> Self {
+        Self::ReturnBeforeOtherClauses { line, column }
     }
 
     pub fn match_after_return() -> Self {
-        Self::MatchAfterReturn
+        Self::MatchAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn match_after_return_at(line: usize, column: usize) -> Self {
+        Self::MatchAfterReturn { line, column }
     }
 
     pub fn create_after_return() -> Self {
-        Self::CreateAfterReturn
+        Self::CreateAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn create_after_return_at(line: usize, column: usize) -> Self {
+        Self::CreateAfterReturn { line, column }
     }
 
     pub fn merge_after_return() -> Self {
-        Self::MergeAfterReturn
+        Self::MergeAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn merge_after_return_at(line: usize, column: usize) -> Self {
+        Self::MergeAfterReturn { line, column }
     }
 
     pub fn delete_after_return() -> Self {
-        Self::DeleteAfterReturn
+        Self::DeleteAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn delete_after_return_at(line: usize, column: usize) -> Self {
+        Self::DeleteAfterReturn { line, column }
     }
 
     pub fn set_after_return() -> Self {
-        Self::SetAfterReturn
+        Self::SetAfterReturn { line: 0, column: 0 }
     }
 
-    pub fn remove_after_return() -> Self {
-        Self::RemoveAfterReturn
+    pub fn set_after_return_at(line: usize, column: usize) -> Self {
+        Self::SetAfterReturn { line, column }
     }
 
-    pub fn foreach_after_return() -> Self {
-        Self::ForeachAfterReturn
+    pub fn where_after_return() -> Self {
+        Self::WhereAfterReturn { line: 0, column: 0 }
     }
 
-    pub fn call_after_return() -> Self {
-        Self::CallAfterReturn
-    }
-
-    pub fn load_csv_after_return() -> Self {
-        Self::LoadCsvAfterReturn
-    }
-
-    pub fn unwind_after_return() -> Self {
-        Self::UnwindAfterReturn
+    pub fn where_after_return_at(line: usize, column: usize) -> Self {
+        Self::WhereAfterReturn { line, column }
     }
 
     pub fn with_after_return() -> Self {
-        Self::WithAfterReturn
+        Self::WithAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn with_after_return_at(line: usize, column: usize) -> Self {
+        Self::WithAfterReturn { line, column }
+    }
+
+    pub fn unwind_after_return() -> Self {
+        Self::UnwindAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn unwind_after_return_at(line: usize, column: usize) -> Self {
+        Self::UnwindAfterReturn { line, column }
     }
 
     pub fn where_before_match() -> Self {
-        Self::WhereBeforeMatch
+        Self::WhereBeforeMatch { line: 0, column: 0 }
+    }
+
+    pub fn where_before_match_at(line: usize, column: usize) -> Self {
+        Self::WhereBeforeMatch { line, column }
+    }
+
+    pub fn return_after_return() -> Self {
+        Self::ReturnAfterReturn { line: 0, column: 0 }
+    }
+
+    pub fn return_after_return_at(line: usize, column: usize) -> Self {
+        Self::ReturnAfterReturn { line, column }
     }
 
     pub fn order_by_before_return() -> Self {
@@ -499,67 +529,57 @@ impl CypherGuardParsingError {
     // Specific clause order error query methods
     /// Returns true if this is a ReturnBeforeOtherClauses error
     pub fn is_return_before_other_clauses(&self) -> bool {
-        matches!(self, Self::ReturnBeforeOtherClauses)
+        matches!(self, Self::ReturnBeforeOtherClauses { .. })
     }
 
     /// Returns true if this is a MatchAfterReturn error
     pub fn is_match_after_return(&self) -> bool {
-        matches!(self, Self::MatchAfterReturn)
+        matches!(self, Self::MatchAfterReturn { .. })
     }
 
     /// Returns true if this is a CreateAfterReturn error
     pub fn is_create_after_return(&self) -> bool {
-        matches!(self, Self::CreateAfterReturn)
+        matches!(self, Self::CreateAfterReturn { .. })
     }
 
     /// Returns true if this is a MergeAfterReturn error
     pub fn is_merge_after_return(&self) -> bool {
-        matches!(self, Self::MergeAfterReturn)
+        matches!(self, Self::MergeAfterReturn { .. })
     }
 
     /// Returns true if this is a DeleteAfterReturn error
     pub fn is_delete_after_return(&self) -> bool {
-        matches!(self, Self::DeleteAfterReturn)
+        matches!(self, Self::DeleteAfterReturn { .. })
     }
 
     /// Returns true if this is a SetAfterReturn error
     pub fn is_set_after_return(&self) -> bool {
-        matches!(self, Self::SetAfterReturn)
+        matches!(self, Self::SetAfterReturn { .. })
     }
 
-    /// Returns true if this is a RemoveAfterReturn error
-    pub fn is_remove_after_return(&self) -> bool {
-        matches!(self, Self::RemoveAfterReturn)
-    }
-
-    /// Returns true if this is a ForeachAfterReturn error
-    pub fn is_foreach_after_return(&self) -> bool {
-        matches!(self, Self::ForeachAfterReturn)
-    }
-
-    /// Returns true if this is a CallAfterReturn error
-    pub fn is_call_after_return(&self) -> bool {
-        matches!(self, Self::CallAfterReturn)
-    }
-
-    /// Returns true if this is a LoadCsvAfterReturn error
-    pub fn is_load_csv_after_return(&self) -> bool {
-        matches!(self, Self::LoadCsvAfterReturn)
-    }
-
-    /// Returns true if this is an UnwindAfterReturn error
-    pub fn is_unwind_after_return(&self) -> bool {
-        matches!(self, Self::UnwindAfterReturn)
+    /// Returns true if this is a WhereAfterReturn error
+    pub fn is_where_after_return(&self) -> bool {
+        matches!(self, Self::WhereAfterReturn { .. })
     }
 
     /// Returns true if this is a WithAfterReturn error
     pub fn is_with_after_return(&self) -> bool {
-        matches!(self, Self::WithAfterReturn)
+        matches!(self, Self::WithAfterReturn { .. })
+    }
+
+    /// Returns true if this is an UnwindAfterReturn error
+    pub fn is_unwind_after_return(&self) -> bool {
+        matches!(self, Self::UnwindAfterReturn { .. })
     }
 
     /// Returns true if this is a WhereBeforeMatch error
     pub fn is_where_before_match(&self) -> bool {
-        matches!(self, Self::WhereBeforeMatch)
+        matches!(self, Self::WhereBeforeMatch { .. })
+    }
+
+    /// Returns true if this is a ReturnAfterReturn error
+    pub fn is_return_after_return(&self) -> bool {
+        matches!(self, Self::ReturnAfterReturn { .. })
     }
 
     /// Returns true if this is an OrderByBeforeReturn error
@@ -582,22 +602,20 @@ impl CypherGuardParsingError {
         matches!(
             self,
             Self::InvalidClauseOrder { .. }
-                | Self::ReturnBeforeOtherClauses
-                | Self::MatchAfterReturn
-                | Self::CreateAfterReturn
-                | Self::MergeAfterReturn
-                | Self::DeleteAfterReturn
-                | Self::SetAfterReturn
-                | Self::RemoveAfterReturn
-                | Self::ForeachAfterReturn
-                | Self::CallAfterReturn
-                | Self::LoadCsvAfterReturn
-                | Self::UnwindAfterReturn
-                | Self::WithAfterReturn
-                | Self::WhereBeforeMatch
+                | Self::ReturnBeforeOtherClauses { .. }
+                | Self::MatchAfterReturn { .. }
+                | Self::CreateAfterReturn { .. }
+                | Self::MergeAfterReturn { .. }
+                | Self::DeleteAfterReturn { .. }
+                | Self::SetAfterReturn { .. }
+                | Self::WhereAfterReturn { .. }
+                | Self::WithAfterReturn { .. }
+                | Self::UnwindAfterReturn { .. }
+                | Self::WhereBeforeMatch { .. }
                 | Self::OrderByBeforeReturn
                 | Self::SkipBeforeReturn
                 | Self::LimitBeforeReturn
+                | Self::ReturnAfterReturn { .. }
         )
     }
 }
@@ -1287,106 +1305,178 @@ mod tests {
         let return_before = CypherGuardParsingError::return_before_other_clauses();
         assert_eq!(
             return_before.to_string(),
-            "RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and UNION"
+            "RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and writing clauses (found at line 0, column 0)"
         );
         assert!(return_before.is_return_before_other_clauses());
         assert!(return_before.is_clause_order_error());
 
+        let return_before_at = CypherGuardParsingError::return_before_other_clauses_at(1, 2);
+        assert_eq!(
+            return_before_at.to_string(),
+            "RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and writing clauses (found at line 1, column 2)"
+        );
+        assert!(return_before_at.is_return_before_other_clauses());
+        assert!(return_before_at.is_clause_order_error());
+
         let match_after = CypherGuardParsingError::match_after_return();
         assert_eq!(
             match_after.to_string(),
-            "MATCH clause cannot appear after RETURN clause"
+            "MATCH clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(match_after.is_match_after_return());
         assert!(match_after.is_clause_order_error());
 
+        let match_after_at = CypherGuardParsingError::match_after_return_at(3, 4);
+        assert_eq!(
+            match_after_at.to_string(),
+            "MATCH clause cannot come after RETURN clause (found at line 3, column 4)"
+        );
+        assert!(match_after_at.is_match_after_return());
+        assert!(match_after_at.is_clause_order_error());
+
         let create_after = CypherGuardParsingError::create_after_return();
         assert_eq!(
             create_after.to_string(),
-            "CREATE clause cannot appear after RETURN clause"
+            "CREATE clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(create_after.is_create_after_return());
         assert!(create_after.is_clause_order_error());
 
+        let create_after_at = CypherGuardParsingError::create_after_return_at(5, 6);
+        assert_eq!(
+            create_after_at.to_string(),
+            "CREATE clause cannot come after RETURN clause (found at line 5, column 6)"
+        );
+        assert!(create_after_at.is_create_after_return());
+        assert!(create_after_at.is_clause_order_error());
+
         let merge_after = CypherGuardParsingError::merge_after_return();
         assert_eq!(
             merge_after.to_string(),
-            "MERGE clause cannot appear after RETURN clause"
+            "MERGE clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(merge_after.is_merge_after_return());
         assert!(merge_after.is_clause_order_error());
 
+        let merge_after_at = CypherGuardParsingError::merge_after_return_at(7, 8);
+        assert_eq!(
+            merge_after_at.to_string(),
+            "MERGE clause cannot come after RETURN clause (found at line 7, column 8)"
+        );
+        assert!(merge_after_at.is_merge_after_return());
+        assert!(merge_after_at.is_clause_order_error());
+
         let delete_after = CypherGuardParsingError::delete_after_return();
         assert_eq!(
             delete_after.to_string(),
-            "DELETE clause cannot appear after RETURN clause"
+            "DELETE clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(delete_after.is_delete_after_return());
         assert!(delete_after.is_clause_order_error());
 
+        let delete_after_at = CypherGuardParsingError::delete_after_return_at(9, 10);
+        assert_eq!(
+            delete_after_at.to_string(),
+            "DELETE clause cannot come after RETURN clause (found at line 9, column 10)"
+        );
+        assert!(delete_after_at.is_delete_after_return());
+        assert!(delete_after_at.is_clause_order_error());
+
         let set_after = CypherGuardParsingError::set_after_return();
         assert_eq!(
             set_after.to_string(),
-            "SET clause cannot appear after RETURN clause"
+            "SET clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(set_after.is_set_after_return());
         assert!(set_after.is_clause_order_error());
 
-        let remove_after = CypherGuardParsingError::remove_after_return();
+        let set_after_at = CypherGuardParsingError::set_after_return_at(11, 12);
         assert_eq!(
-            remove_after.to_string(),
-            "REMOVE clause cannot appear after RETURN clause"
+            set_after_at.to_string(),
+            "SET clause cannot come after RETURN clause (found at line 11, column 12)"
         );
-        assert!(remove_after.is_remove_after_return());
-        assert!(remove_after.is_clause_order_error());
+        assert!(set_after_at.is_set_after_return());
+        assert!(set_after_at.is_clause_order_error());
 
-        let foreach_after = CypherGuardParsingError::foreach_after_return();
+        let where_after = CypherGuardParsingError::where_after_return();
         assert_eq!(
-            foreach_after.to_string(),
-            "FOREACH clause cannot appear after RETURN clause"
+            where_after.to_string(),
+            "WHERE clause cannot come after RETURN clause (found at line 0, column 0)"
         );
-        assert!(foreach_after.is_foreach_after_return());
-        assert!(foreach_after.is_clause_order_error());
+        assert!(where_after.is_where_after_return());
+        assert!(where_after.is_clause_order_error());
 
-        let call_after = CypherGuardParsingError::call_after_return();
+        let where_after_at = CypherGuardParsingError::where_after_return_at(13, 14);
         assert_eq!(
-            call_after.to_string(),
-            "CALL clause cannot appear after RETURN clause"
+            where_after_at.to_string(),
+            "WHERE clause cannot come after RETURN clause (found at line 13, column 14)"
         );
-        assert!(call_after.is_call_after_return());
-        assert!(call_after.is_clause_order_error());
-
-        let load_csv_after = CypherGuardParsingError::load_csv_after_return();
-        assert_eq!(
-            load_csv_after.to_string(),
-            "LOAD CSV clause cannot appear after RETURN clause"
-        );
-        assert!(load_csv_after.is_load_csv_after_return());
-        assert!(load_csv_after.is_clause_order_error());
-
-        let unwind_after = CypherGuardParsingError::unwind_after_return();
-        assert_eq!(
-            unwind_after.to_string(),
-            "UNWIND clause cannot appear after RETURN clause"
-        );
-        assert!(unwind_after.is_unwind_after_return());
-        assert!(unwind_after.is_clause_order_error());
+        assert!(where_after_at.is_where_after_return());
+        assert!(where_after_at.is_clause_order_error());
 
         let with_after = CypherGuardParsingError::with_after_return();
         assert_eq!(
             with_after.to_string(),
-            "WITH clause cannot appear after RETURN clause"
+            "WITH clause cannot come after RETURN clause (found at line 0, column 0)"
         );
         assert!(with_after.is_with_after_return());
         assert!(with_after.is_clause_order_error());
 
+        let with_after_at = CypherGuardParsingError::with_after_return_at(15, 16);
+        assert_eq!(
+            with_after_at.to_string(),
+            "WITH clause cannot come after RETURN clause (found at line 15, column 16)"
+        );
+        assert!(with_after_at.is_with_after_return());
+        assert!(with_after_at.is_clause_order_error());
+
+        let unwind_after = CypherGuardParsingError::unwind_after_return();
+        assert_eq!(
+            unwind_after.to_string(),
+            "UNWIND clause cannot come after RETURN clause (found at line 0, column 0)"
+        );
+        assert!(unwind_after.is_unwind_after_return());
+        assert!(unwind_after.is_clause_order_error());
+
+        let unwind_after_at = CypherGuardParsingError::unwind_after_return_at(17, 18);
+        assert_eq!(
+            unwind_after_at.to_string(),
+            "UNWIND clause cannot come after RETURN clause (found at line 17, column 18)"
+        );
+        assert!(unwind_after_at.is_unwind_after_return());
+        assert!(unwind_after_at.is_clause_order_error());
+
         let where_before = CypherGuardParsingError::where_before_match();
         assert_eq!(
             where_before.to_string(),
-            "WHERE clause must come after MATCH, OPTIONAL MATCH, or WITH clause"
+            "WHERE clause must come after MATCH, UNWIND, or WITH clause (found at line 0, column 0)"
         );
         assert!(where_before.is_where_before_match());
         assert!(where_before.is_clause_order_error());
+
+        let where_before_at = CypherGuardParsingError::where_before_match_at(19, 20);
+        assert_eq!(
+            where_before_at.to_string(),
+            "WHERE clause must come after MATCH, UNWIND, or WITH clause (found at line 19, column 20)"
+        );
+        assert!(where_before_at.is_where_before_match());
+        assert!(where_before_at.is_clause_order_error());
+
+        let return_after = CypherGuardParsingError::return_after_return();
+        assert_eq!(
+            return_after.to_string(),
+            "RETURN clause cannot appear after another RETURN clause (found at line 0, column 0)"
+        );
+        assert!(return_after.is_return_after_return());
+        assert!(return_after.is_clause_order_error());
+
+        let return_after_at = CypherGuardParsingError::return_after_return_at(21, 22);
+        assert_eq!(
+            return_after_at.to_string(),
+            "RETURN clause cannot appear after another RETURN clause (found at line 21, column 22)"
+        );
+        assert!(return_after_at.is_return_after_return());
+        assert!(return_after_at.is_clause_order_error());
 
         let order_by_before = CypherGuardParsingError::order_by_before_return();
         assert_eq!(

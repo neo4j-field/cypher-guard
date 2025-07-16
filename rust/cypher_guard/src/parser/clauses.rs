@@ -17,6 +17,7 @@ use crate::parser::ast::{
 use crate::parser::patterns::*;
 use crate::parser::utils::{identifier, string_literal};
 use crate::CypherGuardParsingError;
+use crate::parser::span::{Spanned, offset_to_line_column};
 
 #[derive(Debug, Clone)]
 pub enum Clause {
@@ -532,32 +533,59 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
     )))
 }
 
-// Parses a clause (MATCH, RETURN, etc.)
-pub fn clause(input: &str) -> IResult<&str, Clause> {
+// Parses a clause (MATCH, RETURN, etc.) and returns its span
+pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
+    let full_input = input;
+    
+    // Helper to compute byte offset from input slice
+    fn offset(full: &str, part: &str) -> usize {
+        part.as_ptr() as usize - full.as_ptr() as usize
+    }
+
     alt((
-        map(match_clause, Clause::Match),
-        map(return_clause, Clause::Return),
-        map(merge_clause, Clause::Merge),
-        map(create_clause, Clause::Create),
-        map(with_clause, Clause::With),
-        map(unwind_clause, Clause::Unwind),
-        map(where_clause, Clause::Where),
+        map(match_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Match(c), start)
+        }),
+        map(return_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Return(c), start)
+        }),
+        map(merge_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Merge(c), start)
+        }),
+        map(create_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Create(c), start)
+        }),
+        map(with_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::With(c), start)
+        }),
+        map(unwind_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Unwind(c), start)
+        }),
+        map(where_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Where(c), start)
+        }),
     ))(input)
 }
 
 // Parses a complete query (e.g. MATCH (a)-[:KNOWS]->(b) RETURN a, b)
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
-    let (input, clauses) = many1(preceded(multispace0, clause))(input)?;
-    
+    let original_input = input;
+    let (input, spanned_clauses) = many1(preceded(multispace0, clause))(input)?;
     // Validate clause order before building the query
-    if let Err(validation_error) = validate_clause_order(&clauses) {
+    if let Err(validation_error) = validate_clause_order(&spanned_clauses, original_input) {
         // Convert validation error to nom error
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
         )));
     }
-    
     let mut query = Query {
         match_clause: None,
         merge_clause: None,
@@ -567,7 +595,8 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         return_clause: None,
         unwind_clause: None,
     };
-    for clause in clauses {
+    for spanned in spanned_clauses {
+        let clause = spanned.value;
         match clause {
             Clause::Match(match_clause) => query.match_clause = Some(match_clause),
             Clause::Merge(merge_clause) => query.merge_clause = Some(merge_clause),
@@ -591,14 +620,17 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
 /// 4. WITH can come after WHERE
 /// 5. RETURN must come last (except for writing clauses)
 /// 6. CREATE/MERGE can come after RETURN (writing clauses)
-fn validate_clause_order(clauses: &[Clause]) -> Result<(), CypherGuardParsingError> {
+fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Result<(), CypherGuardParsingError> {
     if clauses.is_empty() {
         return Ok(());
     }
 
     let mut state = ClauseOrderState::Initial;
     
-    for (i, clause) in clauses.iter().enumerate() {
+    for (i, spanned_clause) in clauses.iter().enumerate() {
+        let clause = &spanned_clause.value;
+        let (line, column) = offset_to_line_column(full_input, spanned_clause.start);
+        
         state = match (state, clause) {
             // Initial state - only reading clauses allowed
             (ClauseOrderState::Initial, Clause::Match(_) | Clause::OptionalMatch(_)) => {
@@ -692,6 +724,21 @@ fn validate_clause_order(clauses: &[Clause]) -> Result<(), CypherGuardParsingErr
             // After RETURN - can have CREATE/MERGE (writing clauses)
             (ClauseOrderState::AfterReturn, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
+            }
+            (ClauseOrderState::AfterReturn, Clause::Return(_)) => {
+                return Err(CypherGuardParsingError::return_after_return_at(line, column));
+            }
+            (ClauseOrderState::AfterReturn, Clause::Match(_) | Clause::OptionalMatch(_)) => {
+                return Err(CypherGuardParsingError::match_after_return_at(line, column));
+            }
+            (ClauseOrderState::AfterReturn, Clause::Where(_)) => {
+                return Err(CypherGuardParsingError::where_after_return_at(line, column));
+            }
+            (ClauseOrderState::AfterReturn, Clause::With(_)) => {
+                return Err(CypherGuardParsingError::with_after_return_at(line, column));
+            }
+            (ClauseOrderState::AfterReturn, Clause::Unwind(_)) => {
+                return Err(CypherGuardParsingError::unwind_after_return_at(line, column));
             }
             (ClauseOrderState::AfterReturn, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
@@ -1773,7 +1820,7 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::ReturnBeforeOtherClauses) = result {
+        if let Err(CypherGuardParsingError::ReturnBeforeOtherClauses { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
             panic!("Expected ReturnBeforeOtherClauses error");
@@ -1786,7 +1833,7 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::WhereBeforeMatch) = result {
+        if let Err(CypherGuardParsingError::WhereBeforeMatch { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
             panic!("Expected WhereBeforeMatch error");
@@ -1827,7 +1874,7 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::MatchAfterReturn) = result {
+        if let Err(CypherGuardParsingError::MatchAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
             panic!("Expected MatchAfterReturn error");
@@ -1854,7 +1901,7 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::WithAfterReturn) = result {
+        if let Err(CypherGuardParsingError::WithAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
             panic!("Expected WithAfterReturn error");
@@ -1867,7 +1914,7 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
         
-        if let Err(CypherGuardParsingError::UnwindAfterReturn) = result {
+        if let Err(CypherGuardParsingError::UnwindAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
             panic!("Expected UnwindAfterReturn error");
