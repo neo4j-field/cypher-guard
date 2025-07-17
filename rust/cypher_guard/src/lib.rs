@@ -4,8 +4,8 @@ pub mod parser {
     pub mod clauses;
     pub mod components;
     pub mod patterns;
-    pub mod utils;
     pub mod span;
+    pub mod utils;
 }
 mod schema;
 mod validation;
@@ -37,22 +37,34 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
             if e.code == nom::error::ErrorKind::Tag {
                 // Try to reconstruct the validation error based on the input
                 // This is a bit hacky but works for our specific case
-                if query.contains("RETURN") && query.contains("MATCH") && query.find("RETURN").unwrap() < query.find("MATCH").unwrap() {
+                if query.contains("RETURN")
+                    && query.contains("MATCH")
+                    && query.find("RETURN").unwrap() < query.find("MATCH").unwrap()
+                {
                     return Err(CypherGuardParsingError::return_before_other_clauses());
                 }
-                if query.contains("WHERE") && query.contains("MATCH") && query.find("WHERE").unwrap() < query.find("MATCH").unwrap() {
+                if query.contains("WHERE")
+                    && query.contains("MATCH")
+                    && query.find("WHERE").unwrap() < query.find("MATCH").unwrap()
+                {
                     return Err(CypherGuardParsingError::where_before_match());
                 }
-                if query.contains("WITH") && query.contains("MATCH") && query.find("WITH").unwrap() < query.find("MATCH").unwrap() {
+                if query.contains("WITH")
+                    && query.contains("MATCH")
+                    && query.find("WITH").unwrap() < query.find("MATCH").unwrap()
+                {
                     return Err(CypherGuardParsingError::invalid_clause_order(
                         "query start",
-                        "WITH must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)"
+                        "WITH must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)",
                     ));
                 }
-                if query.contains("UNWIND") && query.contains("MATCH") && query.find("UNWIND").unwrap() < query.find("MATCH").unwrap() {
+                if query.contains("UNWIND")
+                    && query.contains("MATCH")
+                    && query.find("UNWIND").unwrap() < query.find("MATCH").unwrap()
+                {
                     return Err(CypherGuardParsingError::invalid_clause_order(
                         "query start",
-                        "UNWIND must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)"
+                        "UNWIND must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)",
                     ));
                 }
                 // Check for clauses after RETURN - need to find the last occurrence of RETURN
@@ -66,7 +78,7 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
                         if where_after_return > 0 {
                             return Err(CypherGuardParsingError::invalid_clause_order(
                                 "after RETURN",
-                                "WHERE cannot come after RETURN clause"
+                                "WHERE cannot come after RETURN clause",
                             ));
                         }
                     }
@@ -81,8 +93,14 @@ pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsing
                         }
                     }
                 }
-                if query.contains("MATCH") && query.contains("WITH") && !query.contains("RETURN") && query.find("WITH").unwrap() > query.find("MATCH").unwrap() {
-                    return Err(CypherGuardParsingError::missing_required_clause("RETURN or writing clause"));
+                if query.contains("MATCH")
+                    && query.contains("WITH")
+                    && !query.contains("RETURN")
+                    && query.find("WITH").unwrap() > query.find("MATCH").unwrap()
+                {
+                    return Err(CypherGuardParsingError::missing_required_clause(
+                        "RETURN or writing clause",
+                    ));
                 }
             }
             Err(convert_nom_error(nom::Err::Error(e), "query", query))

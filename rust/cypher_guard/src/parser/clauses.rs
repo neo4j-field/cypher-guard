@@ -15,9 +15,9 @@ use crate::parser::ast::{
     WithExpression, WithItem,
 };
 use crate::parser::patterns::*;
+use crate::parser::span::{offset_to_line_column, Spanned};
 use crate::parser::utils::{identifier, string_literal};
 use crate::CypherGuardParsingError;
-use crate::parser::span::{Spanned, offset_to_line_column};
 
 #[derive(Debug, Clone)]
 pub enum Clause {
@@ -349,9 +349,7 @@ fn on_match_clause(input: &str) -> IResult<&str, OnMatchClause> {
     let (input, _) = multispace1(input)?;
     let (input, set_clauses) =
         match separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input) {
-            Ok(res) => {
-                res
-            }
+            Ok(res) => res,
             Err(e) => {
                 return Err(e);
             }
@@ -536,7 +534,7 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
 // Parses a clause (MATCH, RETURN, etc.) and returns its span
 pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
     let full_input = input;
-    
+
     // Helper to compute byte offset from input slice
     fn offset(full: &str, part: &str) -> usize {
         part.as_ptr() as usize - full.as_ptr() as usize
@@ -612,7 +610,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
 }
 
 /// Validates that clauses appear in the correct Cypher order
-/// 
+///
 /// Cypher clause order rules:
 /// 1. MATCH/OPTIONAL MATCH must come first (reading clauses)
 /// 2. UNWIND can come after MATCH
@@ -620,32 +618,36 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
 /// 4. WITH can come after WHERE
 /// 5. RETURN must come last (except for writing clauses)
 /// 6. CREATE/MERGE can come after RETURN (writing clauses)
-fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Result<(), CypherGuardParsingError> {
+fn validate_clause_order(
+    clauses: &[Spanned<Clause>],
+    full_input: &str,
+) -> Result<(), CypherGuardParsingError> {
     if clauses.is_empty() {
         return Ok(());
     }
 
     let mut state = ClauseOrderState::Initial;
-    
+
     for (i, spanned_clause) in clauses.iter().enumerate() {
         let clause = &spanned_clause.value;
         let (line, column) = offset_to_line_column(full_input, spanned_clause.start);
-        
+
         state = match (state, clause) {
             // Initial state - only reading clauses allowed
             (ClauseOrderState::Initial, Clause::Match(_) | Clause::OptionalMatch(_)) => {
                 ClauseOrderState::AfterMatch
             }
-            (ClauseOrderState::Initial, Clause::Unwind(_)) => {
-                ClauseOrderState::AfterUnwind
-            }
+            (ClauseOrderState::Initial, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
             (ClauseOrderState::Initial, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
             (ClauseOrderState::Initial, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "query start",
-                    format!("{} must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)", clause_name(clause))
+                    format!(
+                        "{} must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)",
+                        clause_name(clause)
+                    ),
                 ));
             }
 
@@ -653,49 +655,27 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
             (ClauseOrderState::AfterMatch, Clause::Match(_) | Clause::OptionalMatch(_)) => {
                 ClauseOrderState::AfterMatch
             }
-            (ClauseOrderState::AfterMatch, Clause::Unwind(_)) => {
-                ClauseOrderState::AfterUnwind
-            }
-            (ClauseOrderState::AfterMatch, Clause::Where(_)) => {
-                ClauseOrderState::AfterWhere
-            }
-            (ClauseOrderState::AfterMatch, Clause::With(_)) => {
-                ClauseOrderState::AfterWith
-            }
-            (ClauseOrderState::AfterMatch, Clause::Return(_)) => {
-                ClauseOrderState::AfterReturn
-            }
+            (ClauseOrderState::AfterMatch, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
+            (ClauseOrderState::AfterMatch, Clause::Where(_)) => ClauseOrderState::AfterWhere,
+            (ClauseOrderState::AfterMatch, Clause::With(_)) => ClauseOrderState::AfterWith,
+            (ClauseOrderState::AfterMatch, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterMatch, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
 
             // After UNWIND - can have WHERE, WITH, RETURN, or more UNWIND
-            (ClauseOrderState::AfterUnwind, Clause::Unwind(_)) => {
-                ClauseOrderState::AfterUnwind
-            }
-            (ClauseOrderState::AfterUnwind, Clause::Where(_)) => {
-                ClauseOrderState::AfterWhere
-            }
-            (ClauseOrderState::AfterUnwind, Clause::With(_)) => {
-                ClauseOrderState::AfterWith
-            }
-            (ClauseOrderState::AfterUnwind, Clause::Return(_)) => {
-                ClauseOrderState::AfterReturn
-            }
+            (ClauseOrderState::AfterUnwind, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
+            (ClauseOrderState::AfterUnwind, Clause::Where(_)) => ClauseOrderState::AfterWhere,
+            (ClauseOrderState::AfterUnwind, Clause::With(_)) => ClauseOrderState::AfterWith,
+            (ClauseOrderState::AfterUnwind, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterUnwind, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
 
             // After WHERE - can have WITH, RETURN, or more WHERE
-            (ClauseOrderState::AfterWhere, Clause::Where(_)) => {
-                ClauseOrderState::AfterWhere
-            }
-            (ClauseOrderState::AfterWhere, Clause::With(_)) => {
-                ClauseOrderState::AfterWith
-            }
-            (ClauseOrderState::AfterWhere, Clause::Return(_)) => {
-                ClauseOrderState::AfterReturn
-            }
+            (ClauseOrderState::AfterWhere, Clause::Where(_)) => ClauseOrderState::AfterWhere,
+            (ClauseOrderState::AfterWhere, Clause::With(_)) => ClauseOrderState::AfterWith,
+            (ClauseOrderState::AfterWhere, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterWhere, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
@@ -705,18 +685,10 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
             (ClauseOrderState::AfterWith, Clause::Match(_) | Clause::OptionalMatch(_)) => {
                 ClauseOrderState::AfterMatch
             }
-            (ClauseOrderState::AfterWith, Clause::Unwind(_)) => {
-                ClauseOrderState::AfterUnwind
-            }
-            (ClauseOrderState::AfterWith, Clause::Where(_)) => {
-                ClauseOrderState::AfterWhere
-            }
-            (ClauseOrderState::AfterWith, Clause::With(_)) => {
-                ClauseOrderState::AfterWith
-            }
-            (ClauseOrderState::AfterWith, Clause::Return(_)) => {
-                ClauseOrderState::AfterReturn
-            }
+            (ClauseOrderState::AfterWith, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
+            (ClauseOrderState::AfterWith, Clause::Where(_)) => ClauseOrderState::AfterWhere,
+            (ClauseOrderState::AfterWith, Clause::With(_)) => ClauseOrderState::AfterWith,
+            (ClauseOrderState::AfterWith, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterWith, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
@@ -726,7 +698,9 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
                 ClauseOrderState::AfterWrite
             }
             (ClauseOrderState::AfterReturn, Clause::Return(_)) => {
-                return Err(CypherGuardParsingError::return_after_return_at(line, column));
+                return Err(CypherGuardParsingError::return_after_return_at(
+                    line, column,
+                ));
             }
             (ClauseOrderState::AfterReturn, Clause::Match(_) | Clause::OptionalMatch(_)) => {
                 return Err(CypherGuardParsingError::match_after_return_at(line, column));
@@ -738,12 +712,14 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
                 return Err(CypherGuardParsingError::with_after_return_at(line, column));
             }
             (ClauseOrderState::AfterReturn, Clause::Unwind(_)) => {
-                return Err(CypherGuardParsingError::unwind_after_return_at(line, column));
+                return Err(CypherGuardParsingError::unwind_after_return_at(
+                    line, column,
+                ));
             }
             (ClauseOrderState::AfterReturn, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "after RETURN",
-                    format!("{} cannot come after RETURN clause", clause_name(clause))
+                    format!("{} cannot come after RETURN clause", clause_name(clause)),
                 ));
             }
 
@@ -751,13 +727,11 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
             (ClauseOrderState::AfterWrite, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
-            (ClauseOrderState::AfterWrite, Clause::Return(_)) => {
-                ClauseOrderState::AfterReturn
-            }
+            (ClauseOrderState::AfterWrite, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterWrite, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "after writing clause",
-                    format!("{} cannot come after writing clause", clause_name(clause))
+                    format!("{} cannot come after writing clause", clause_name(clause)),
                 ));
             }
 
@@ -765,7 +739,10 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
             _ => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "clause validation",
-                    format!("Invalid clause sequence: {} in current state", clause_name(clause))
+                    format!(
+                        "Invalid clause sequence: {} in current state",
+                        clause_name(clause)
+                    ),
                 ));
             }
         };
@@ -773,15 +750,13 @@ fn validate_clause_order(clauses: &[Spanned<Clause>], full_input: &str) -> Resul
 
     // Check that query ends appropriately
     match state {
-        ClauseOrderState::Initial => {
-            Err(CypherGuardParsingError::missing_required_clause("reading clause (MATCH, UNWIND, CREATE, MERGE)"))
-        }
-        ClauseOrderState::AfterWith => {
-            Err(CypherGuardParsingError::missing_required_clause("RETURN or writing clause"))
-        }
-        _ => {
-            Ok(())
-        }
+        ClauseOrderState::Initial => Err(CypherGuardParsingError::missing_required_clause(
+            "reading clause (MATCH, UNWIND, CREATE, MERGE)",
+        )),
+        ClauseOrderState::AfterWith => Err(CypherGuardParsingError::missing_required_clause(
+            "RETURN or writing clause",
+        )),
+        _ => Ok(()),
     }
 }
 
@@ -1781,7 +1756,8 @@ mod tests {
 
     #[test]
     fn test_valid_clause_order_match_unwind_where_return() {
-        let query = "MATCH (a:Person) UNWIND a.hobbies AS hobby WHERE hobby = 'reading' RETURN a, hobby";
+        let query =
+            "MATCH (a:Person) UNWIND a.hobbies AS hobby WHERE hobby = 'reading' RETURN a, hobby";
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Valid query should parse successfully");
     }
@@ -1819,8 +1795,10 @@ mod tests {
         let query = "RETURN a MATCH (a:Person)";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
-        if let Err(CypherGuardParsingError::ReturnBeforeOtherClauses { line: _, column: _ }) = result {
+
+        if let Err(CypherGuardParsingError::ReturnBeforeOtherClauses { line: _, column: _ }) =
+            result
+        {
             // Expected specific error variant
         } else {
             panic!("Expected ReturnBeforeOtherClauses error");
@@ -1832,7 +1810,7 @@ mod tests {
         let query = "WHERE a.age > 30 MATCH (a:Person)";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::WhereBeforeMatch { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
@@ -1845,7 +1823,7 @@ mod tests {
         let query = "WITH a MATCH (a:Person)";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
             assert!(context.contains("query start"));
             assert!(details.contains("WITH must come after a reading clause"));
@@ -1859,7 +1837,7 @@ mod tests {
         let query = "UNWIND [1,2,3] AS x MATCH (a:Person)";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
             assert!(context.contains("query start"));
             assert!(details.contains("UNWIND must come after a reading clause"));
@@ -1873,7 +1851,7 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a MATCH (b:Person)";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::MatchAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
@@ -1886,7 +1864,7 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a WHERE a.age > 30";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::InvalidClauseOrder { context, details }) = result {
             assert!(context.contains("after RETURN"));
             assert!(details.contains("WHERE cannot come after RETURN clause"));
@@ -1900,7 +1878,7 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a WITH a";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::WithAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
@@ -1913,7 +1891,7 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a UNWIND [1,2,3] AS x";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Invalid clause order should fail");
-        
+
         if let Err(CypherGuardParsingError::UnwindAfterReturn { line: _, column: _ }) = result {
             // Expected specific error variant
         } else {
@@ -1926,7 +1904,7 @@ mod tests {
         let query = "MATCH (a:Person) WITH a";
         let result = crate::parse_query(query);
         assert!(result.is_err(), "Query ending with WITH should fail");
-        
+
         if let Err(CypherGuardParsingError::MissingRequiredClause { clause }) = result {
             assert!(clause.contains("RETURN or writing clause"));
         } else {
@@ -1973,7 +1951,10 @@ mod tests {
     fn test_valid_clause_order_complex_sequence() {
         let query = "MATCH (a:Person) WHERE a.age > 30 WITH a WHERE a.active = true UNWIND a.hobbies AS hobby RETURN a, hobby";
         let result = crate::parse_query(query);
-        assert!(result.is_ok(), "Complex valid sequence should parse successfully");
+        assert!(
+            result.is_ok(),
+            "Complex valid sequence should parse successfully"
+        );
     }
 
     #[test]

@@ -11,11 +11,11 @@ impl<T> Spanned<T> {
 }
 
 /// Convert a byte offset to line and column numbers
-/// 
+///
 /// # Arguments
 /// * `input` - The full input string
 /// * `byte_offset` - The byte offset to convert
-/// 
+///
 /// # Returns
 /// A tuple of (line, column) where both are 1-indexed
 pub fn offset_to_line_column(input: &str, byte_offset: usize) -> (usize, usize) {
@@ -40,12 +40,12 @@ pub fn offset_to_line_column(input: &str, byte_offset: usize) -> (usize, usize) 
     let mut line = 1;
     let mut column = 1;
     let mut idx = 0;
-    
+
     for ch in input.chars() {
         let ch_len = ch.len_utf8();
         let start_idx = idx;
         let end_idx = idx + ch_len;
-        
+
         // Check if the offset is within this character's byte range
         if byte_offset >= start_idx && byte_offset < end_idx {
             if ch == '\n' && byte_offset == start_idx {
@@ -54,7 +54,7 @@ pub fn offset_to_line_column(input: &str, byte_offset: usize) -> (usize, usize) 
                 return (line, column);
             }
         }
-        
+
         // Update for next iteration
         idx += ch_len;
         if ch == '\n' {
@@ -64,7 +64,7 @@ pub fn offset_to_line_column(input: &str, byte_offset: usize) -> (usize, usize) 
             column += 1;
         }
     }
-    
+
     (line, column)
 }
 
@@ -87,19 +87,19 @@ mod tests {
         println!("Input: {:?}", input);
         println!("Input length: {}", input.len());
         println!("Input bytes: {:?}", input.as_bytes());
-        
+
         assert_eq!(offset_to_line_column(input, 0), (1, 1)); // 'M'
         assert_eq!(offset_to_line_column(input, 5), (1, 6)); // 'H'
         assert_eq!(offset_to_line_column(input, 10), (1, 11)); // ' '
-        
+
         let result = offset_to_line_column(input, 15);
         println!("offset_to_line_column(input, 15) = {:?}", result);
         assert_eq!(result, (1, 16)); // ')'
-        
+
         let result = offset_to_line_column(input, 16);
         println!("offset_to_line_column(input, 16) = {:?}", result);
         assert_eq!(result, (2, 1)); // 'W'
-        
+
         assert_eq!(offset_to_line_column(input, 30), (2, 14)); // '>'
         assert_eq!(offset_to_line_column(input, 32), (2, 16)); // '0'
         assert_eq!(offset_to_line_column(input, 38), (3, 5)); // 'U'
@@ -118,4 +118,4 @@ mod tests {
         let input = "MATCH (a:Person)";
         assert_eq!(offset_to_line_column(input, 100), (1, 17)); // Last character
     }
-} 
+}

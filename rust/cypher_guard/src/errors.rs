@@ -252,28 +252,40 @@ pub enum CypherGuardParsingError {
     #[error("RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and writing clauses (found at line {line}, column {column})")]
     ReturnBeforeOtherClauses { line: usize, column: usize },
 
-    #[error("MATCH clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "MATCH clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     MatchAfterReturn { line: usize, column: usize },
 
-    #[error("CREATE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "CREATE clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     CreateAfterReturn { line: usize, column: usize },
 
-    #[error("MERGE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "MERGE clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     MergeAfterReturn { line: usize, column: usize },
 
-    #[error("DELETE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "DELETE clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     DeleteAfterReturn { line: usize, column: usize },
 
     #[error("SET clause cannot come after RETURN clause (found at line {line}, column {column})")]
     SetAfterReturn { line: usize, column: usize },
 
-    #[error("WHERE clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "WHERE clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     WhereAfterReturn { line: usize, column: usize },
 
     #[error("WITH clause cannot come after RETURN clause (found at line {line}, column {column})")]
     WithAfterReturn { line: usize, column: usize },
 
-    #[error("UNWIND clause cannot come after RETURN clause (found at line {line}, column {column})")]
+    #[error(
+        "UNWIND clause cannot come after RETURN clause (found at line {line}, column {column})"
+    )]
     UnwindAfterReturn { line: usize, column: usize },
 
     #[error("WHERE clause must come after MATCH, UNWIND, or WITH clause (found at line {line}, column {column})")]
