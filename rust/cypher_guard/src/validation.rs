@@ -87,50 +87,50 @@ impl QueryElements {
 pub fn extract_query_elements(query: &Query) -> QueryElements {
     let mut elements = QueryElements::new();
 
-    // Extract from MATCH clause
-    if let Some(match_clause) = &query.match_clause {
+    // Extract from MATCH clauses
+    for match_clause in &query.match_clauses {
         for element in &match_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from MERGE clause
-    if let Some(merge_clause) = &query.merge_clause {
+    // Extract from MERGE clauses
+    for merge_clause in &query.merge_clauses {
         for element in &merge_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from CREATE clause
-    if let Some(create_clause) = &query.create_clause {
+    // Extract from CREATE clauses
+    for create_clause in &query.create_clauses {
         for element in &create_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from WHERE clause
-    if let Some(where_clause) = &query.where_clause {
+    // Extract from WHERE clauses
+    for where_clause in &query.where_clauses {
         for condition in &where_clause.conditions {
             extract_from_where_condition(condition, &mut elements);
         }
     }
 
-    // Extract from RETURN clause
-    if let Some(return_clause) = &query.return_clause {
+    // Extract from RETURN clauses
+    for return_clause in &query.return_clauses {
         for item in &return_clause.items {
             extract_from_return_item(item, &mut elements);
         }
     }
 
-    // Extract from WITH clause
-    if let Some(with_clause) = &query.with_clause {
+    // Extract from WITH clauses
+    for with_clause in &query.with_clauses {
         for item in &with_clause.items {
             extract_from_with_item(item, &mut elements);
         }
     }
 
-    // Extract from UNWIND clause
-    if let Some(unwind_clause) = &query.unwind_clause {
+    // Extract from UNWIND clauses
+    for unwind_clause in &query.unwind_clauses {
         elements.add_variable(unwind_clause.variable.clone());
         // Optionally, could track type info here in the future
     }
@@ -441,16 +441,20 @@ pub fn validate_query(
     let mut errors = Vec::new();
 
     // Basic UNWIND validation: check type of UNWIND expression
-    if let Some(unwind_clause) = &query.unwind_clause {
+    for unwind_clause in &query.unwind_clauses {
         use crate::parser::ast::UnwindExpression;
         match &unwind_clause.expression {
-            UnwindExpression::List(_) => {}
-            UnwindExpression::Parameter(_) => {}
-            other => {
-                errors.push(CypherGuardValidationError::type_mismatch(
-                    "list or parameter",
-                    format!("{:?}", other),
-                ));
+            UnwindExpression::List(_) => {
+                // Lists are always valid for UNWIND
+            }
+            UnwindExpression::Identifier(_) => {
+                // Identifiers are valid (they should be variables)
+            }
+            UnwindExpression::FunctionCall { .. } => {
+                // Function calls are valid
+            }
+            UnwindExpression::Parameter(_) => {
+                // Parameters are valid
             }
         }
     }
@@ -507,7 +511,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_basic() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -517,13 +521,14 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
@@ -537,7 +542,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_where() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -547,19 +552,20 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: Some(WhereClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![WhereClause {
                 conditions: vec![WhereCondition::Comparison {
                     left: "a.age".to_string(),
                     operator: ">".to_string(),
                     right: "18".to_string(),
                 }],
-            }),
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
@@ -578,7 +584,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_return() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -588,15 +594,16 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: Some(ReturnClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![ReturnClause {
                 items: vec!["a.name".to_string(), "a.age".to_string()],
-            }),
-            unwind_clause: None,
+            }],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
@@ -616,7 +623,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_with() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -626,10 +633,10 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: Some(WithClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![WithClause {
                 items: vec![WithItem {
                     expression: WithExpression::PropertyAccess {
                         variable: "a".to_string(),
@@ -637,10 +644,11 @@ mod tests {
                     },
                     alias: Some("person_name".to_string()),
                 }],
-            }),
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
@@ -659,19 +667,20 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_unwind() {
         let query = Query {
-            match_clause: None,
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: Some(UnwindClause {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![UnwindClause {
                 expression: UnwindExpression::List(vec![
                     PropertyValue::Number(1),
                     PropertyValue::Number(2),
                 ]),
                 variable: "x".to_string(),
-            }),
+            }],
+            call_clauses: vec![],
         };
         let elements = extract_query_elements(&query);
         assert!(elements.undefined_variables.contains("x"));
@@ -916,38 +925,37 @@ mod tests {
     #[test]
     fn test_validate_unwind_expression_type() {
         let mut query = Query {
-            match_clause: None,
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: Some(UnwindClause {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![UnwindClause {
                 expression: UnwindExpression::Identifier("foo".to_string()),
                 variable: "x".to_string(),
-            }),
+            }],
+            call_clauses: vec![],
         };
         let elements = QueryElements::new();
         let schema = DbSchema::new();
         let errors = validate_query(&query, &elements, &schema);
-        assert!(!errors.is_empty());
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, CypherGuardValidationError::TypeMismatch { .. })));
+        // All UNWIND expression types are now considered valid
+        assert!(errors.is_empty());
 
         // Valid: list
-        query.unwind_clause = Some(UnwindClause {
+        query.unwind_clauses = vec![UnwindClause {
             expression: UnwindExpression::List(vec![PropertyValue::Number(1)]),
             variable: "x".to_string(),
-        });
+        }];
         let errors = validate_query(&query, &elements, &schema);
         assert!(errors.is_empty());
 
         // Valid: parameter
-        query.unwind_clause = Some(UnwindClause {
+        query.unwind_clauses = vec![UnwindClause {
             expression: UnwindExpression::Parameter("foo".to_string()),
             variable: "x".to_string(),
-        });
+        }];
         let errors = validate_query(&query, &elements, &schema);
         assert!(errors.is_empty());
     }

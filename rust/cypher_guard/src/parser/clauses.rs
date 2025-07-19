@@ -2,9 +2,9 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case},
     character::complete::{char, digit1, multispace0, multispace1},
-    combinator::{map, opt, recognize},
+    combinator::{map, opt, recognize, peek},
     multi::{many0, many1, separated_list0, separated_list1},
-    sequence::{preceded, tuple},
+    sequence::{delimited, preceded, tuple},
     IResult,
 };
 
@@ -30,19 +30,49 @@ pub enum Clause {
     Query(Query),
     Unwind(UnwindClause),
     Where(ast::WhereClause),
+    Call(ast::CallClause),
 }
 
+// Helper: lookahead for clause boundary
+fn clause_boundary(input: &str) -> IResult<&str, &str> {
+    // List of clause keywords that indicate a new clause
+    alt((
+        tag_no_case("RETURN"),
+        tag_no_case("WITH"),
+        tag_no_case("CALL"),
+        tag_no_case("UNWIND"),
+        tag_no_case("MERGE"),
+        tag_no_case("CREATE"),
+        tag_no_case("OPTIONAL MATCH"),
+        tag_no_case("MATCH"),
+        tag_no_case("WHERE"),
+    ))(input)
+}
+
+// Parses a comma-separated list of match elements, stopping at clause boundaries
 pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
-    let (input, first) = match_element(input)?;
-    let (input, rest) = opt(preceded(
-        tuple((multispace0, char(','), multispace0)),
-        match_element,
-    ))(input)?;
-    let mut elements = vec![first];
-    if let Some(rest) = rest {
-        elements.push(rest);
+    let mut elements = Vec::new();
+    let mut rest = input;
+    // Parse at least one element
+    let (input, first) = match_element(rest)?;
+    elements.push(first);
+    rest = input;
+    loop {
+        // Lookahead: stop if next token is a clause boundary
+        if peek(clause_boundary)(rest).is_ok() {
+            break;
+        }
+        // Try to parse a comma and another element
+        let comma_res = opt(preceded(tuple((multispace0, char(','), multispace0)), match_element))(rest);
+        match comma_res {
+            Ok((next_input, Some(elem))) => {
+                elements.push(elem);
+                rest = next_input;
+            }
+            _ => break,
+        }
     }
-    Ok((input, elements))
+    Ok((rest, elements))
 }
 
 // Parses the MATCH clause (e.g. MATCH (a)-[:KNOWS]->(b))
@@ -61,12 +91,33 @@ pub fn match_clause(input: &str) -> IResult<&str, MatchClause> {
     ))
 }
 
-// Parses a return item: either an identifier or a dotted property access (e.g., a, a.name)
+// Parses a return item: either an identifier, dotted property access, function call, or expression with AS alias
 fn return_item(input: &str) -> IResult<&str, String> {
+    // Try to parse as a function call first
+    if let Ok((rest, (function, args))) = function_call(input) {
+        let function_call_str = format!("{}({})", function, args.join(", "));
+        
+        // Check for AS alias
+        let (rest, alias) = opt(preceded(
+            tuple((multispace0, tag("AS"), multispace1)),
+            identifier,
+        ))(rest)?;
+        
+        if let Some(alias_name) = alias {
+            let result = format!("{}({}) AS {}", function, args.join(", "), alias_name);
+            return Ok((rest, result));
+        } else {
+            return Ok((rest, function_call_str));
+        }
+    }
+    
+    // Try to parse as a simple identifier or property access
     let (input, first) = identifier(input)?;
     let (input, rest) = opt(preceded(char('.'), identifier))(input)?;
+    
     if let Some(prop) = rest {
-        Ok((input, format!("{}.{}", first, prop)))
+        let result = format!("{}.{}", first, prop);
+        Ok((input, result))
     } else {
         Ok((input, first.to_string()))
     }
@@ -367,7 +418,7 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
     let mut found_on_match = None;
 
     // Try up to two times (since there can be at most one ON CREATE and one ON MATCH)
-    for i in 0..2 {
+    for _i in 0..2 {
         let (rest, _) = multispace0(input)?;
         input = rest;
 
@@ -378,7 +429,7 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
                     input = rest;
                     continue;
                 }
-                Err(e) => {}
+                Err(_e) => {}
             }
         }
         if found_on_match.is_none() {
@@ -388,7 +439,7 @@ pub fn merge_clause(input: &str) -> IResult<&str, MergeClause> {
                     input = rest;
                     continue;
                 }
-                Err(e) => {}
+                Err(_e) => {}
             }
         }
         break;
@@ -448,6 +499,48 @@ pub fn with_clause(input: &str) -> IResult<&str, WithClause> {
     let (input, items) =
         separated_list1(tuple((multispace0, char(','), multispace0)), with_item)(input)?;
     Ok((input, WithClause { items }))
+}
+
+// Parses a CALL clause (e.g., CALL { MATCH (a) RETURN a } or CALL db.labels())
+pub fn call_clause(input: &str) -> IResult<&str, ast::CallClause> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("CALL")(input)?;
+    let (input, _) = multispace1(input)?;
+    
+    // Try to parse as a subquery first: CALL { ... }
+    if let Ok((rest, subquery)) = delimited(
+        tuple((multispace0, char('{'), multispace0)),
+        parse_query,
+        tuple((multispace0, char('}'), multispace0)),
+    )(input) {
+        return Ok((rest, ast::CallClause {
+            subquery: Some(subquery),
+            procedure: None,
+            yield_clause: None,
+        }));
+    }
+    
+    // Try to parse as a procedure call: CALL procedure()
+    let (input, procedure) = identifier(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, _) = char('(')(input)?;
+    let (input, _) = multispace0(input)?;
+    let (input, _) = char(')')(input)?;
+    
+    // Try to parse YIELD clause
+    let (input, yield_clause) = opt(preceded(
+        tuple((multispace0, tag("YIELD"), multispace1)),
+        separated_list1(
+            tuple((multispace0, char(','), multispace0)),
+            map(identifier, |s| s.to_string()),
+        ),
+    ))(input)?;
+    
+    Ok((input, ast::CallClause {
+        subquery: None,
+        procedure: Some(procedure.to_string()),
+        yield_clause,
+    }))
 }
 
 // Parses a Cypher parameter (e.g., $param)
@@ -569,6 +662,10 @@ pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
             let start = offset(full_input, input);
             Spanned::new(Clause::Where(c), start)
         }),
+        map(call_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Call(c), start)
+        }),
     ))(input)
 }
 
@@ -576,36 +673,50 @@ pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
     let original_input = input;
     let (input, spanned_clauses) = many1(preceded(multispace0, clause))(input)?;
+    
     // Validate clause order before building the query
-    if let Err(validation_error) = validate_clause_order(&spanned_clauses, original_input) {
+    if let Err(_validation_error) = validate_clause_order(&spanned_clauses, original_input) {
         // Convert validation error to nom error
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Tag,
         )));
     }
+    
     let mut query = Query {
-        match_clause: None,
-        merge_clause: None,
-        create_clause: None,
-        with_clause: None,
-        where_clause: None,
-        return_clause: None,
-        unwind_clause: None,
+        match_clauses: Vec::new(),
+        merge_clauses: Vec::new(),
+        create_clauses: Vec::new(),
+        with_clauses: Vec::new(),
+        where_clauses: Vec::new(),
+        return_clauses: Vec::new(),
+        unwind_clauses: Vec::new(),
+        call_clauses: Vec::new(),
     };
-    for spanned in spanned_clauses {
-        let clause = spanned.value;
+    
+    // Collect all clauses by type
+    for spanned_clause in spanned_clauses.iter() {
+        let clause = &spanned_clause.value;
         match clause {
-            Clause::Match(match_clause) => query.match_clause = Some(match_clause),
-            Clause::Merge(merge_clause) => query.merge_clause = Some(merge_clause),
-            Clause::Create(create_clause) => query.create_clause = Some(create_clause),
-            Clause::With(with_clause) => query.with_clause = Some(with_clause),
-            Clause::Return(return_clause) => query.return_clause = Some(return_clause),
-            Clause::Unwind(unwind_clause) => query.unwind_clause = Some(unwind_clause),
-            Clause::Where(where_clause) => query.where_clause = Some(where_clause),
-            _ => (),
+            Clause::Match(match_clause) => query.match_clauses.push(match_clause.clone()),
+            Clause::OptionalMatch(match_clause) => query.match_clauses.push(match_clause.clone()),
+            Clause::Merge(merge_clause) => query.merge_clauses.push(merge_clause.clone()),
+            Clause::Create(create_clause) => query.create_clauses.push(create_clause.clone()),
+            Clause::With(with_clause) => query.with_clauses.push(with_clause.clone()),
+            Clause::Where(where_clause) => query.where_clauses.push(where_clause.clone()),
+            Clause::Return(return_clause) => query.return_clauses.push(return_clause.clone()),
+            Clause::Unwind(unwind_clause) => query.unwind_clauses.push(unwind_clause.clone()),
+            Clause::Call(call_clause) => query.call_clauses.push(call_clause.clone()),
+            Clause::Query(_) => {
+                // Handle nested queries if needed
+                return Err(nom::Err::Error(nom::error::Error::new(
+                    input,
+                    nom::error::ErrorKind::Tag,
+                )));
+            }
         }
     }
+    
     Ok((input, query))
 }
 
@@ -627,11 +738,11 @@ fn validate_clause_order(
     }
 
     let mut state = ClauseOrderState::Initial;
-
-    for (i, spanned_clause) in clauses.iter().enumerate() {
+    
+    for spanned_clause in clauses.iter() {
         let clause = &spanned_clause.value;
         let (line, column) = offset_to_line_column(full_input, spanned_clause.start);
-
+        
         state = match (state, clause) {
             // Initial state - only reading clauses allowed
             (ClauseOrderState::Initial, Clause::Match(_) | Clause::OptionalMatch(_)) => {
@@ -641,6 +752,7 @@ fn validate_clause_order(
             (ClauseOrderState::Initial, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
+            (ClauseOrderState::Initial, Clause::Call(_)) => ClauseOrderState::AfterCall,
             (ClauseOrderState::Initial, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "query start",
@@ -662,6 +774,7 @@ fn validate_clause_order(
             (ClauseOrderState::AfterMatch, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
+            (ClauseOrderState::AfterMatch, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After UNWIND - can have WHERE, WITH, RETURN, or more UNWIND
             (ClauseOrderState::AfterUnwind, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
@@ -671,6 +784,7 @@ fn validate_clause_order(
             (ClauseOrderState::AfterUnwind, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
+            (ClauseOrderState::AfterUnwind, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WHERE - can have WITH, RETURN, or more WHERE
             (ClauseOrderState::AfterWhere, Clause::Where(_)) => ClauseOrderState::AfterWhere,
@@ -679,6 +793,7 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWhere, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
+            (ClauseOrderState::AfterWhere, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WITH - can have MATCH, UNWIND, WHERE, WITH, RETURN, or writing clauses
             // WITH creates a projection that allows starting a new reading phase
@@ -692,6 +807,16 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWith, Clause::Create(_) | Clause::Merge(_)) => {
                 ClauseOrderState::AfterWrite
             }
+            (ClauseOrderState::AfterWith, Clause::Call(_)) => ClauseOrderState::AfterCall,
+
+            // After CALL - can have WHERE, WITH, RETURN, or writing clauses
+            (ClauseOrderState::AfterCall, Clause::Where(_)) => ClauseOrderState::AfterWhere,
+            (ClauseOrderState::AfterCall, Clause::With(_)) => ClauseOrderState::AfterWith,
+            (ClauseOrderState::AfterCall, Clause::Return(_)) => ClauseOrderState::AfterReturn,
+            (ClauseOrderState::AfterCall, Clause::Create(_) | Clause::Merge(_)) => {
+                ClauseOrderState::AfterWrite
+            }
+
 
             // After RETURN - can have CREATE/MERGE (writing clauses)
             (ClauseOrderState::AfterReturn, Clause::Create(_) | Clause::Merge(_)) => {
@@ -770,6 +895,7 @@ enum ClauseOrderState {
     AfterWith,
     AfterReturn,
     AfterWrite,
+    AfterCall,
 }
 
 /// Returns a human-readable name for a clause
@@ -784,6 +910,7 @@ fn clause_name(clause: &Clause) -> &'static str {
         Clause::Create(_) => "CREATE",
         Clause::Merge(_) => "MERGE",
         Clause::Query(_) => "Query",
+        Clause::Call(_) => "CALL",
     }
 }
 
@@ -1976,5 +2103,30 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'}) MERGE (c:Person {name: 'Charlie'})";
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Multiple write clauses should be valid");
+    }
+
+    #[test]
+    fn test_call_clause_subquery() {
+        let query = "CALL { MATCH (p:Person) RETURN count(p) AS count } RETURN count";
+        let result = crate::parse_query(query);
+        println!("AST: {:?}", result);
+        assert!(result.is_ok(), "CALL subquery should be valid");
+        
+        let ast = result.unwrap();
+        assert!(!ast.call_clauses.is_empty(), "Should have CALL clauses");
+        assert!(ast.call_clauses[0].subquery.is_some(), "Should have subquery");
+        assert!(ast.call_clauses[0].procedure.is_none(), "Should not have procedure");
+    }
+
+    #[test]
+    fn test_call_clause_parser_isolated() {
+        let input = "CALL { MATCH (p:Person) RETURN p }";
+        let result = call_clause(input);
+        assert!(result.is_ok(), "CALL clause parser should work in isolation");
+        
+        let (rest, clause) = result.unwrap();
+        assert!(clause.subquery.is_some(), "Should have subquery");
+        assert!(clause.procedure.is_none(), "Should not have procedure");
+        assert!(clause.yield_clause.is_none(), "Should not have YIELD clause");
     }
 }

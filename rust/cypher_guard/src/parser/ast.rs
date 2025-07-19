@@ -1,13 +1,14 @@
 // Root of the AST
 #[derive(Debug, PartialEq, Clone)]
 pub struct Query {
-    pub match_clause: Option<MatchClause>,
-    pub merge_clause: Option<MergeClause>,
-    pub create_clause: Option<CreateClause>,
-    pub with_clause: Option<WithClause>,
-    pub where_clause: Option<WhereClause>,
-    pub return_clause: Option<ReturnClause>,
-    pub unwind_clause: Option<UnwindClause>,
+    pub match_clauses: Vec<MatchClause>,
+    pub merge_clauses: Vec<MergeClause>,
+    pub create_clauses: Vec<CreateClause>,
+    pub with_clauses: Vec<WithClause>,
+    pub where_clauses: Vec<WhereClause>,
+    pub return_clauses: Vec<ReturnClause>,
+    pub unwind_clauses: Vec<UnwindClause>,
+    pub call_clauses: Vec<CallClause>,
 }
 
 // RETURN clause (simple)
@@ -255,4 +256,12 @@ pub enum UnwindExpression {
         args: Vec<PropertyValue>,
     },
     Parameter(String),
+}
+
+// CALL clause for subqueries and procedures
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallClause {
+    pub subquery: Option<Query>,  // For CALL { ... } subqueries
+    pub procedure: Option<String>, // For CALL procedure() calls
+    pub yield_clause: Option<Vec<String>>, // For YIELD clause
 }

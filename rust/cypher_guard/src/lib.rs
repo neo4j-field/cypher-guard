@@ -149,8 +149,8 @@ mod tests {
         assert!(result.is_ok());
 
         let ast = result.unwrap();
-        assert!(ast.match_clause.is_some());
-        assert!(ast.return_clause.is_some());
+        assert!(!ast.match_clauses.is_empty());
+        assert!(!ast.return_clauses.is_empty());
     }
 
     #[test]
