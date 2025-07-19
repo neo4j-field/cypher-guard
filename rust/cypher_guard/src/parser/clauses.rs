@@ -81,17 +81,21 @@ pub enum Clause {
 // Helper: lookahead for clause boundary
 fn clause_boundary(input: &str) -> IResult<&str, &str> {
     // List of clause keywords that indicate a new clause
-    alt((
-        tag_no_case("RETURN"),
-        tag_no_case("WITH"),
-        tag_no_case("CALL"),
-        tag_no_case("UNWIND"),
-        tag_no_case("MERGE"),
-        tag_no_case("CREATE"),
-        tag_no_case("OPTIONAL MATCH"),
-        tag_no_case("MATCH"),
-        tag_no_case("WHERE"),
-    ))(input)
+    // Must be preceded by whitespace to be considered a clause boundary
+    preceded(
+        multispace0,
+        alt((
+            tag_no_case("RETURN"),
+            tag_no_case("WITH"),
+            tag_no_case("CALL"),
+            tag_no_case("UNWIND"),
+            tag_no_case("MERGE"),
+            tag_no_case("CREATE"),
+            tag_no_case("OPTIONAL MATCH"),
+            tag_no_case("MATCH"),
+            tag_no_case("WHERE"),
+        )),
+    )(input)
 }
 
 // Parses a comma-separated list of match elements, stopping at clause boundaries
@@ -651,7 +655,7 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("UNWIND")(input)?;
     let (input, _) = multispace1(input)?;
-
+    
     // Try to parse a parameter
     if let Ok((input, param)) = parameter(input) {
         let (input, _) = multispace1(input)?;
@@ -693,6 +697,21 @@ pub fn unwind_clause(input: &str) -> IResult<&str, UnwindClause> {
             input,
             UnwindClause {
                 expression: UnwindExpression::FunctionCall { name, args },
+                variable: variable.to_string(),
+            },
+        ));
+    }
+
+    // Try to parse a property access (e.g., a.hobbies)
+    if let Ok((input, prop_access)) = property_access(input) {
+        let (input, _) = multispace1(input)?;
+        let (input, _) = tag("AS")(input)?;
+        let (input, _) = multispace1(input)?;
+        let (input, variable) = identifier(input)?;
+        return Ok((
+            input,
+            UnwindClause {
+                expression: UnwindExpression::Identifier(prop_access),
                 variable: variable.to_string(),
             },
         ));
