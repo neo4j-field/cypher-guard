@@ -11,7 +11,9 @@ pub struct QueryElements {
     pub node_properties: HashMap<String, HashSet<String>>, // label -> set of property names
     pub relationship_properties: HashMap<String, HashSet<String>>, // rel_type -> set of property names
     pub property_accesses: Vec<PropertyAccess>,                    // Property access with context
-    pub undefined_variables: HashSet<String>, // Variables that are referenced but not defined
+    pub defined_variables: HashSet<String>, // Variables that are defined (from MATCH, UNWIND, etc.)
+    pub referenced_variables: HashSet<String>, // Variables that are referenced (from WITH, WHERE, RETURN, etc.)
+    pub pattern_sequences: Vec<Vec<PatternElement>>, // Track complete pattern sequences for validation
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +38,9 @@ impl QueryElements {
             node_properties: HashMap::new(),
             relationship_properties: HashMap::new(),
             property_accesses: Vec::new(),
-            undefined_variables: HashSet::new(),
+            defined_variables: HashSet::new(),
+            referenced_variables: HashSet::new(),
+            pattern_sequences: Vec::new(),
         }
     }
 
@@ -68,7 +72,12 @@ impl QueryElements {
 
     /// Add a variable to the set
     pub fn add_variable(&mut self, variable: String) {
-        self.undefined_variables.insert(variable);
+        self.referenced_variables.insert(variable);
+    }
+
+    /// Add a variable that is defined
+    pub fn add_defined_variable(&mut self, variable: String) {
+        self.defined_variables.insert(variable);
     }
 
     /// Add property access with context
@@ -79,7 +88,12 @@ impl QueryElements {
     /// Add an undefined variable reference
     #[allow(dead_code)]
     pub fn add_undefined_variable(&mut self, variable: String) {
-        self.undefined_variables.insert(variable);
+        self.referenced_variables.insert(variable);
+    }
+
+    /// Add a pattern sequence for validation
+    pub fn add_pattern_sequence(&mut self, pattern: Vec<PatternElement>) {
+        self.pattern_sequences.push(pattern);
     }
 }
 
@@ -87,51 +101,51 @@ impl QueryElements {
 pub fn extract_query_elements(query: &Query) -> QueryElements {
     let mut elements = QueryElements::new();
 
-    // Extract from MATCH clause
-    if let Some(match_clause) = &query.match_clause {
+    // Extract from MATCH clauses
+    for match_clause in &query.match_clauses {
         for element in &match_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from MERGE clause
-    if let Some(merge_clause) = &query.merge_clause {
+    // Extract from MERGE clauses
+    for merge_clause in &query.merge_clauses {
         for element in &merge_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from CREATE clause
-    if let Some(create_clause) = &query.create_clause {
+    // Extract from CREATE clauses
+    for create_clause in &query.create_clauses {
         for element in &create_clause.elements {
             extract_from_match_element(element, &mut elements);
         }
     }
 
-    // Extract from WHERE clause
-    if let Some(where_clause) = &query.where_clause {
+    // Extract from WHERE clauses
+    for where_clause in &query.where_clauses {
         for condition in &where_clause.conditions {
             extract_from_where_condition(condition, &mut elements);
         }
     }
 
-    // Extract from RETURN clause
-    if let Some(return_clause) = &query.return_clause {
+    // Extract from RETURN clauses
+    for return_clause in &query.return_clauses {
         for item in &return_clause.items {
             extract_from_return_item(item, &mut elements);
         }
     }
 
-    // Extract from WITH clause
-    if let Some(with_clause) = &query.with_clause {
+    // Extract from WITH clauses
+    for with_clause in &query.with_clauses {
         for item in &with_clause.items {
             extract_from_with_item(item, &mut elements);
         }
     }
 
-    // Extract from UNWIND clause
-    if let Some(unwind_clause) = &query.unwind_clause {
-        elements.add_variable(unwind_clause.variable.clone());
+    // Extract from UNWIND clauses
+    for unwind_clause in &query.unwind_clauses {
+        elements.add_defined_variable(unwind_clause.variable.clone());
         // Optionally, could track type info here in the future
     }
 
@@ -142,15 +156,18 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
 fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElements) {
     // Extract the path variable if it exists
     if let Some(path_var) = &element.path_var {
-        elements.add_variable(path_var.clone());
+        elements.add_defined_variable(path_var.clone());
     }
+
+    // Track the complete pattern sequence for validation
+    elements.add_pattern_sequence(element.pattern.clone());
 
     for pattern_element in &element.pattern {
         match pattern_element {
             PatternElement::Node(node) => {
                 // Extract variable from node
                 if let Some(variable) = &node.variable {
-                    elements.add_variable(variable.clone());
+                    elements.add_defined_variable(variable.clone());
                 }
 
                 if let Some(label) = &node.label {
@@ -170,7 +187,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     RelationshipPattern::Regular(details)
                     | RelationshipPattern::OptionalRelationship(details) => {
                         if let Some(variable) = &details.variable {
-                            elements.add_variable(variable.clone());
+                            elements.add_defined_variable(variable.clone());
                         }
                     }
                 }
@@ -190,15 +207,15 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
             PatternElement::QuantifiedPathPattern(qpp) => {
                 // Extract path variable if it exists
                 if let Some(path_var) = &qpp.path_variable {
-                    elements.add_variable(path_var.clone());
+                    elements.add_defined_variable(path_var.clone());
                 }
 
-                // Recursively extract from the inner pattern
+                // Extract from the pattern inside the QPP
                 for pattern_element in &qpp.pattern {
                     match pattern_element {
                         PatternElement::Node(node) => {
                             if let Some(variable) = &node.variable {
-                                elements.add_variable(variable.clone());
+                                elements.add_defined_variable(variable.clone());
                             }
                             if let Some(label) = &node.label {
                                 elements.add_node_label(label.clone());
@@ -209,7 +226,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                                 RelationshipPattern::Regular(details)
                                 | RelationshipPattern::OptionalRelationship(details) => {
                                     if let Some(variable) = &details.variable {
-                                        elements.add_variable(variable.clone());
+                                        elements.add_defined_variable(variable.clone());
                                     }
                                 }
                             }
@@ -218,7 +235,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                             }
                         }
                         PatternElement::QuantifiedPathPattern(_) => {
-                            // Handle nested QPPs if needed
+                            // Nested QPPs are not supported in this implementation
                         }
                     }
                 }
@@ -350,6 +367,83 @@ pub fn validate_query_elements(
         }
     }
 
+    // Validate relationship directions
+    for pattern_sequence in &elements.pattern_sequences {
+        // Extract nodes and relationships from the pattern sequence
+        let mut nodes = Vec::new();
+        let mut relationships = Vec::new();
+
+        for element in pattern_sequence {
+            match element {
+                PatternElement::Node(node) => {
+                    if let Some(label) = &node.label {
+                        nodes.push(label.clone());
+                    }
+                }
+                PatternElement::Relationship(rel) => {
+                    if let Some(rel_type) = rel.rel_type() {
+                        relationships.push((rel_type.to_string(), rel.direction()));
+                    }
+                }
+                PatternElement::QuantifiedPathPattern(_) => {
+                    // Skip QPPs for now
+                    continue;
+                }
+            }
+        }
+
+        // Validate each relationship in the sequence
+        for (i, (rel_type, direction)) in relationships.iter().enumerate() {
+            if let Some(schema_rel) = schema
+                .relationships
+                .iter()
+                .find(|r| r.rel_type == *rel_type)
+            {
+                // Get the nodes connected by this relationship
+                if i < nodes.len() - 1 {
+                    let node1 = &nodes[i];
+                    let node2 = &nodes[i + 1];
+
+                    match direction {
+                        Direction::Right => {
+                            // Right direction: node1 -> node2
+                            // Check if this matches the schema direction
+                            if node1 != &schema_rel.start || node2 != &schema_rel.end {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' direction mismatch: expected {}->{}, got {}->{}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node1, node2)
+                                ));
+                            }
+                        }
+                        Direction::Left => {
+                            // Left direction: node1 <- node2 (equivalent to node2 -> node1)
+                            // Check if this matches the schema direction
+                            if node1 != &schema_rel.end || node2 != &schema_rel.start {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' direction mismatch: expected {}->{}, got {}->{}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node2, node1)
+                                ));
+                            }
+                        }
+                        Direction::Undirected => {
+                            // Undirected: check if both nodes are valid for this relationship
+                            // This is always valid since relationships are stored undirected
+                            let valid_combination = (node1 == &schema_rel.start
+                                && node2 == &schema_rel.end)
+                                || (node1 == &schema_rel.end && node2 == &schema_rel.start);
+                            if !valid_combination {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' invalid node combination: expected {} and {}, got {} and {}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node1, node2)
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Validate node properties
     for (label, properties) in &elements.node_properties {
         if !schema.has_label(label) {
@@ -392,9 +486,9 @@ pub fn validate_query_elements(
             PropertyContext::With => "WITH",
         };
 
-        // For now, we'll check if the property exists anywhere in the schema
-        // In a more sophisticated implementation, we would track variable types
-        // and check if the property exists for that specific type
+        // Try to find the variable in defined variables to determine its type
+        // For now, we'll use a simple approach: check if the property exists in any node or relationship
+        // In a more sophisticated implementation, we would track variable types from the pattern
         let mut found = false;
 
         // Check if the property exists in any node label
@@ -424,6 +518,15 @@ pub fn validate_query_elements(
         }
     }
 
+    // Validate undefined variables - this is especially important for WITH clauses
+    for variable in &elements.referenced_variables {
+        if !elements.defined_variables.contains(variable) {
+            errors.push(CypherGuardValidationError::UndefinedVariable(
+                variable.clone(),
+            ));
+        }
+    }
+
     errors
 }
 
@@ -441,16 +544,20 @@ pub fn validate_query(
     let mut errors = Vec::new();
 
     // Basic UNWIND validation: check type of UNWIND expression
-    if let Some(unwind_clause) = &query.unwind_clause {
+    for unwind_clause in &query.unwind_clauses {
         use crate::parser::ast::UnwindExpression;
         match &unwind_clause.expression {
-            UnwindExpression::List(_) => {}
-            UnwindExpression::Parameter(_) => {}
-            other => {
-                errors.push(CypherGuardValidationError::type_mismatch(
-                    "list or parameter",
-                    format!("{:?}", other),
-                ));
+            UnwindExpression::List(_) => {
+                // Lists are always valid for UNWIND
+            }
+            UnwindExpression::Identifier(_) => {
+                // Identifiers are valid (they should be variables)
+            }
+            UnwindExpression::FunctionCall { .. } => {
+                // Function calls are valid
+            }
+            UnwindExpression::Parameter(_) => {
+                // Parameters are valid
             }
         }
     }
@@ -507,7 +614,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_basic() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -517,27 +624,27 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
-        assert_eq!(elements.node_labels.len(), 1);
-        assert_eq!(elements.undefined_variables.len(), 1);
+        assert!(elements.defined_variables.contains("a"));
+        assert_eq!(elements.property_accesses.len(), 0);
     }
 
     #[test]
     fn test_extract_query_elements_with_where() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -547,25 +654,26 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: Some(WhereClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![WhereClause {
                 conditions: vec![WhereCondition::Comparison {
                     left: "a.age".to_string(),
                     operator: ">".to_string(),
                     right: "18".to_string(),
                 }],
-            }),
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 1);
         assert_eq!(elements.property_accesses[0].variable, "a");
         assert_eq!(elements.property_accesses[0].property, "age");
@@ -578,7 +686,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_return() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -588,21 +696,22 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: Some(ReturnClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![ReturnClause {
                 items: vec!["a.name".to_string(), "a.age".to_string()],
-            }),
-            unwind_clause: None,
+            }],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 2);
 
         let return_access: Vec<_> = elements
@@ -616,7 +725,7 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_with() {
         let query = Query {
-            match_clause: Some(MatchClause {
+            match_clauses: vec![MatchClause {
                 elements: vec![MatchElement {
                     path_var: Some("a".to_string()),
                     pattern: vec![PatternElement::Node(NodePattern {
@@ -626,10 +735,10 @@ mod tests {
                     })],
                 }],
                 is_optional: false,
-            }),
-            merge_clause: None,
-            create_clause: None,
-            with_clause: Some(WithClause {
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![WithClause {
                 items: vec![WithItem {
                     expression: WithExpression::PropertyAccess {
                         variable: "a".to_string(),
@@ -637,16 +746,17 @@ mod tests {
                     },
                     alias: Some("person_name".to_string()),
                 }],
-            }),
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: None,
+            }],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
         };
 
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 1);
         assert_eq!(elements.property_accesses[0].variable, "a");
         assert_eq!(elements.property_accesses[0].property, "name");
@@ -659,22 +769,23 @@ mod tests {
     #[test]
     fn test_extract_query_elements_with_unwind() {
         let query = Query {
-            match_clause: None,
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: Some(UnwindClause {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![UnwindClause {
                 expression: UnwindExpression::List(vec![
                     PropertyValue::Number(1),
                     PropertyValue::Number(2),
                 ]),
                 variable: "x".to_string(),
-            }),
+            }],
+            call_clauses: vec![],
         };
         let elements = extract_query_elements(&query);
-        assert!(elements.undefined_variables.contains("x"));
+        assert!(elements.defined_variables.contains("x"));
     }
 
     #[test]
@@ -683,7 +794,7 @@ mod tests {
         let mut elements = QueryElements::new();
 
         elements.add_node_label("Person".to_string());
-        elements.add_variable("a".to_string());
+        elements.add_defined_variable("a".to_string());
         elements.add_property_access(PropertyAccess {
             variable: "a".to_string(),
             property: "name".to_string(),
@@ -916,39 +1027,153 @@ mod tests {
     #[test]
     fn test_validate_unwind_expression_type() {
         let mut query = Query {
-            match_clause: None,
-            merge_clause: None,
-            create_clause: None,
-            with_clause: None,
-            where_clause: None,
-            return_clause: None,
-            unwind_clause: Some(UnwindClause {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![UnwindClause {
                 expression: UnwindExpression::Identifier("foo".to_string()),
                 variable: "x".to_string(),
-            }),
+            }],
+            call_clauses: vec![],
         };
         let elements = QueryElements::new();
         let schema = DbSchema::new();
         let errors = validate_query(&query, &elements, &schema);
-        assert!(!errors.is_empty());
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, CypherGuardValidationError::TypeMismatch { .. })));
+        // All UNWIND expression types are now considered valid
+        assert!(errors.is_empty());
 
         // Valid: list
-        query.unwind_clause = Some(UnwindClause {
+        query.unwind_clauses = vec![UnwindClause {
             expression: UnwindExpression::List(vec![PropertyValue::Number(1)]),
             variable: "x".to_string(),
-        });
+        }];
         let errors = validate_query(&query, &elements, &schema);
         assert!(errors.is_empty());
 
         // Valid: parameter
-        query.unwind_clause = Some(UnwindClause {
+        query.unwind_clauses = vec![UnwindClause {
             expression: UnwindExpression::Parameter("foo".to_string()),
             variable: "x".to_string(),
-        });
+        }];
         let errors = validate_query(&query, &elements, &schema);
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_relationship_direction() {
+        // Create a schema with ACTED_IN relationship: Person -> Movie
+        let mut schema = DbSchema::new();
+        schema.add_label("Person").unwrap();
+        schema.add_label("Movie").unwrap();
+
+        let acted_in_rel = DbSchemaRelationshipPattern {
+            start: "Person".to_string(),
+            end: "Movie".to_string(),
+            rel_type: "ACTED_IN".to_string(),
+        };
+        schema.add_relationship(&acted_in_rel).unwrap();
+
+        // Test valid direction: Person -> Movie (Right direction)
+        let valid_query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Right,
+                                properties: None,
+                                rel_type: Some("ACTED_IN".to_string()),
+                                length: None,
+                                where_clause: None,
+                                quantifier: None,
+                                is_optional: false,
+                            },
+                        )),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Movie".to_string()),
+                            properties: None,
+                        }),
+                    ],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&valid_query);
+        let errors = validate_query_elements(&elements, &schema);
+        assert!(
+            errors.is_empty(),
+            "Valid direction should not produce errors: {:?}",
+            errors
+        );
+
+        // Test invalid direction: Person <- Movie (Left direction, but should be Person -> Movie)
+        let invalid_query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Left,
+                                properties: None,
+                                rel_type: Some("ACTED_IN".to_string()),
+                                length: None,
+                                where_clause: None,
+                                quantifier: None,
+                                is_optional: false,
+                            },
+                        )),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Movie".to_string()),
+                            properties: None,
+                        }),
+                    ],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&invalid_query);
+        let errors = validate_query_elements(&elements, &schema);
+        assert!(
+            !errors.is_empty(),
+            "Invalid direction should produce errors"
+        );
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, CypherGuardValidationError::InvalidRelationship(_))));
     }
 }

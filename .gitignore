@@ -72,3 +72,9 @@ coverage.xml
 poetry.lock
 tasks/
 scripts/
+
+# Jupyter Notebooks
+_.ipynb
+
+# Python virtual environments (specific to this project)
+rust/python_bindings/.venv/

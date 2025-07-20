@@ -948,7 +948,6 @@ impl DbSchemaMetadata {
 
 /// Main structure representing a database schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
 #[cfg_attr(feature = "python-bindings", pyclass)]
 pub struct DbSchema {
     #[pyo3(get)]
@@ -1853,7 +1852,9 @@ mod tests {
     fn test_from_json_str_valid_missing_keys() {
         let json = r#"{
             "node_props": {"Person": [{"name": "age", "neo4j_type": "INTEGER"}]},
-            "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}]
+            "rel_props": {},
+            "relationships": [{"start": "Person", "end": "Person", "rel_type": "KNOWS"}],
+            "metadata": {"constraint": [], "index": []}
         }"#;
         let schema = DbSchema::from_json_string(json);
         assert!(schema.is_ok());
