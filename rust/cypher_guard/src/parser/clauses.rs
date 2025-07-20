@@ -388,8 +388,8 @@ fn on_match_clause(input: &str) -> IResult<&str, OnMatchClause> {
     let (input, set_clauses) =
         match separated_list1(tuple((multispace0, char(','), multispace0)), set_clause)(input) {
             Ok(res) => res,
-            Err(e) => {
-                return Err(e);
+            Err(_e) => {
+                return Err(_e);
             }
         };
     Ok((input, OnMatchClause { set_clauses }))
@@ -846,7 +846,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
                 clauses.push(spanned_clause);
                 rest = next_rest;
             }
-            Err(e) => {
+            Err(_e) => {
                 break;
             }
         }
