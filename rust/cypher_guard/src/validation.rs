@@ -13,6 +13,7 @@ pub struct QueryElements {
     pub property_accesses: Vec<PropertyAccess>,                    // Property access with context
     pub defined_variables: HashSet<String>, // Variables that are defined (from MATCH, UNWIND, etc.)
     pub referenced_variables: HashSet<String>, // Variables that are referenced (from WITH, WHERE, RETURN, etc.)
+    pub pattern_sequences: Vec<Vec<PatternElement>>, // Track complete pattern sequences for validation
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +40,7 @@ impl QueryElements {
             property_accesses: Vec::new(),
             defined_variables: HashSet::new(),
             referenced_variables: HashSet::new(),
+            pattern_sequences: Vec::new(),
         }
     }
 
@@ -87,6 +89,11 @@ impl QueryElements {
     #[allow(dead_code)]
     pub fn add_undefined_variable(&mut self, variable: String) {
         self.referenced_variables.insert(variable);
+    }
+
+    /// Add a pattern sequence for validation
+    pub fn add_pattern_sequence(&mut self, pattern: Vec<PatternElement>) {
+        self.pattern_sequences.push(pattern);
     }
 }
 
@@ -152,6 +159,9 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
         elements.add_defined_variable(path_var.clone());
     }
 
+    // Track the complete pattern sequence for validation
+    elements.add_pattern_sequence(element.pattern.clone());
+
     for pattern_element in &element.pattern {
         match pattern_element {
             PatternElement::Node(node) => {
@@ -200,7 +210,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     elements.add_defined_variable(path_var.clone());
                 }
 
-                // Recursively extract from the inner pattern
+                // Extract from the pattern inside the QPP
                 for pattern_element in &qpp.pattern {
                     match pattern_element {
                         PatternElement::Node(node) => {
@@ -225,7 +235,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                             }
                         }
                         PatternElement::QuantifiedPathPattern(_) => {
-                            // Handle nested QPPs if needed
+                            // Nested QPPs are not supported in this implementation
                         }
                     }
                 }
@@ -357,6 +367,78 @@ pub fn validate_query_elements(
         }
     }
 
+    // Validate relationship directions
+    for pattern_sequence in &elements.pattern_sequences {
+        // Extract nodes and relationships from the pattern sequence
+        let mut nodes = Vec::new();
+        let mut relationships = Vec::new();
+        
+        for element in pattern_sequence {
+            match element {
+                PatternElement::Node(node) => {
+                    if let Some(label) = &node.label {
+                        nodes.push(label.clone());
+                    }
+                }
+                PatternElement::Relationship(rel) => {
+                    if let Some(rel_type) = rel.rel_type() {
+                        relationships.push((rel_type.to_string(), rel.direction()));
+                    }
+                }
+                PatternElement::QuantifiedPathPattern(_) => {
+                    // Skip QPPs for now
+                    continue;
+                }
+            }
+        }
+        
+        // Validate each relationship in the sequence
+        for (i, (rel_type, direction)) in relationships.iter().enumerate() {
+            if let Some(schema_rel) = schema.relationships.iter().find(|r| r.rel_type == *rel_type) {
+                // Get the nodes connected by this relationship
+                if i < nodes.len() - 1 {
+                    let node1 = &nodes[i];
+                    let node2 = &nodes[i + 1];
+                    
+                    match direction {
+                        Direction::Right => {
+                            // Right direction: node1 -> node2
+                            // Check if this matches the schema direction
+                            if node1 != &schema_rel.start || node2 != &schema_rel.end {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' direction mismatch: expected {}->{}, got {}->{}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node1, node2)
+                                ));
+                            }
+                        }
+                        Direction::Left => {
+                            // Left direction: node1 <- node2 (equivalent to node2 -> node1)
+                            // Check if this matches the schema direction
+                            if node1 != &schema_rel.end || node2 != &schema_rel.start {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' direction mismatch: expected {}->{}, got {}->{}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node2, node1)
+                                ));
+                            }
+                        }
+                        Direction::Undirected => {
+                            // Undirected: check if both nodes are valid for this relationship
+                            // This is always valid since relationships are stored undirected
+                            let valid_combination = (node1 == &schema_rel.start && node2 == &schema_rel.end) ||
+                                                   (node1 == &schema_rel.end && node2 == &schema_rel.start);
+                            if !valid_combination {
+                                errors.push(CypherGuardValidationError::InvalidRelationship(
+                                    format!("Relationship '{}' invalid node combination: expected {} and {}, got {} and {}", 
+                                        rel_type, schema_rel.start, schema_rel.end, node1, node2)
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Validate node properties
     for (label, properties) in &elements.node_properties {
         if !schema.has_label(label) {
@@ -399,13 +481,13 @@ pub fn validate_query_elements(
             PropertyContext::With => "WITH",
         };
 
-        // For now, we'll check if the property exists anywhere in the schema
-        // In a more sophisticated implementation, we would track variable types
-        // and check if the property exists for that specific type
+        // Try to find the variable in defined variables to determine its type
+        // For now, we'll use a simple approach: check if the property exists in any node or relationship
+        // In a more sophisticated implementation, we would track variable types from the pattern
         let mut found = false;
 
         // Check if the property exists in any node label
-        for properties in schema.node_props.values() {
+        for (label, properties) in &schema.node_props {
             if properties.iter().any(|p| p.name == access.property) {
                 found = true;
                 break;
@@ -414,7 +496,7 @@ pub fn validate_query_elements(
 
         // If not found in nodes, check relationship properties
         if !found {
-            for properties in schema.rel_props.values() {
+            for (rel_type, properties) in &schema.rel_props {
                 if properties.iter().any(|p| p.name == access.property) {
                     found = true;
                     break;
@@ -431,7 +513,7 @@ pub fn validate_query_elements(
         }
     }
 
-    // Validate undefined variables
+    // Validate undefined variables - this is especially important for WITH clauses
     for variable in &elements.referenced_variables {
         if !elements.defined_variables.contains(variable) {
             errors.push(CypherGuardValidationError::UndefinedVariable(
@@ -973,5 +1055,107 @@ mod tests {
         }];
         let errors = validate_query(&query, &elements, &schema);
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_relationship_direction() {
+        // Create a schema with ACTED_IN relationship: Person -> Movie
+        let mut schema = DbSchema::new();
+        schema.add_label("Person").unwrap();
+        schema.add_label("Movie").unwrap();
+        
+        let acted_in_rel = DbSchemaRelationshipPattern {
+            start: "Person".to_string(),
+            end: "Movie".to_string(),
+            rel_type: "ACTED_IN".to_string(),
+        };
+        schema.add_relationship(&acted_in_rel).unwrap();
+
+        // Test valid direction: Person -> Movie (Right direction)
+        let valid_query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(RelationshipDetails {
+                            variable: Some("r".to_string()),
+                            direction: Direction::Right,
+                            properties: None,
+                            rel_type: Some("ACTED_IN".to_string()),
+                            length: None,
+                            where_clause: None,
+                            quantifier: None,
+                            is_optional: false,
+                        })),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Movie".to_string()),
+                            properties: None,
+                        }),
+                    ],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&valid_query);
+        let errors = validate_query_elements(&elements, &schema);
+        assert!(errors.is_empty(), "Valid direction should not produce errors: {:?}", errors);
+
+        // Test invalid direction: Person <- Movie (Left direction, but should be Person -> Movie)
+        let invalid_query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(RelationshipDetails {
+                            variable: Some("r".to_string()),
+                            direction: Direction::Left,
+                            properties: None,
+                            rel_type: Some("ACTED_IN".to_string()),
+                            length: None,
+                            where_clause: None,
+                            quantifier: None,
+                            is_optional: false,
+                        })),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Movie".to_string()),
+                            properties: None,
+                        }),
+                    ],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&invalid_query);
+        let errors = validate_query_elements(&elements, &schema);
+        assert!(!errors.is_empty(), "Invalid direction should produce errors");
+        assert!(errors.iter().any(|e| matches!(e, CypherGuardValidationError::InvalidRelationship(_))));
     }
 }
