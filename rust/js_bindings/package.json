@@ -1,6 +1,6 @@
 {
   "name": "cypher-guard",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Cypher query validation for Neo4j",
   "main": "index.js",
   "types": "index.d.ts",
