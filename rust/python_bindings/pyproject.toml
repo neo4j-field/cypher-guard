@@ -5,10 +5,10 @@ description = "Python bindings for Cypher Guard - A Rust library for parsing and
 readme = "../../README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Neo4j Field Team", email = "field@neo4j.com"}
+    {name = "Neo4j Field Team"}
 ]
 maintainers = [
-    {name = "Neo4j Field Team", email = "field@neo4j.com"}
+    {name = "Neo4j Field Team"}
 ]
 keywords = ["cypher", "neo4j", "validation", "parser", "graph", "database"]
 classifiers = [
