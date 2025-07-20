@@ -1,6 +1,6 @@
 [project]
 name = "cypher_guard"
-version = "0.1.9"
+version = "0.1.10"
 description = "Python bindings for Cypher Guard - A Rust library for parsing and validating Cypher queries against a user-defined schema"
 readme = "../../README.md"
 license = {text = "MIT"}
