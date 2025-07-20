@@ -49,4 +49,6 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "src"
-module-name = "cypher_guard" 
+module-name = "cypher_guard"
+manylinux = "2_34"
+targets = ["cp39", "cp310", "cp311", "cp312"] 

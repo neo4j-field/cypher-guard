@@ -49,7 +49,7 @@ jobs:
       run: cd rust/python_bindings && uv sync
     
     - name: Build Python bindings
-      run: cd rust/python_bindings && uv run maturin build --release
+      run: cd rust/python_bindings && uv run maturin build --release --manylinux 2_34
     
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
