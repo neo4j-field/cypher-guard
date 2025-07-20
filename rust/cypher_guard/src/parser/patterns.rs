@@ -160,15 +160,53 @@ pub fn pattern_element_sequence(
     );
     let mut elements = Vec::new();
     let mut current_input = input;
+    let mut loop_count = 0;
+    const MAX_LOOPS: usize = 100; // Prevent infinite loops
 
     loop {
-        println!("[pattern_element_sequence] LOOP: input='{}'", current_input);
+        loop_count += 1;
+        if loop_count > MAX_LOOPS {
+            println!("[pattern_element_sequence] MAX_LOOPS exceeded, breaking");
+            break;
+        }
+
+        println!(
+            "[pattern_element_sequence] LOOP {}: input='{}'",
+            loop_count, current_input
+        );
+
+        // Check if we've reached a clause boundary
+        let trimmed_input = current_input.trim_start();
+        if trimmed_input.is_empty()
+            || trimmed_input.starts_with("WHERE")
+            || trimmed_input.starts_with("RETURN")
+            || trimmed_input.starts_with("ON MATCH")
+            || trimmed_input.starts_with("ON CREATE")
+            || trimmed_input.starts_with("MATCH")
+            || trimmed_input.starts_with("WITH")
+            || trimmed_input.starts_with("UNWIND")
+            || trimmed_input.starts_with("CALL")
+            || trimmed_input.starts_with("CREATE")
+            || trimmed_input.starts_with("DELETE")
+            || trimmed_input.starts_with("DETACH DELETE")
+            || trimmed_input.starts_with("REMOVE")
+            || trimmed_input.starts_with("SET")
+            || trimmed_input.starts_with("MERGE")
+        {
+            println!(
+                "[pattern_element_sequence] Stopping at clause boundary: '{}'",
+                current_input
+            );
+            break;
+        }
+
         // QPP detection logic
-        if allow_qpp && current_input.starts_with('(') {
+        if allow_qpp && current_input.trim_start().starts_with('(') {
             // Find the matching closing parenthesis
             let mut depth = 1;
             let mut idx = 0;
-            for (i, c) in current_input.char_indices().skip(1) {
+            let trimmed_input = current_input.trim_start();
+            for (i, c) in trimmed_input.char_indices().skip(1) {
                 if c == '(' {
                     depth += 1;
                 } else if c == ')' {
@@ -180,21 +218,32 @@ pub fn pattern_element_sequence(
                 }
             }
             if depth == 0 {
-                let after_paren = &current_input[idx + 1..];
+                let after_paren = &trimmed_input[idx + 1..];
                 let after_paren_trim = after_paren.trim_start();
-                if after_paren_trim.starts_with('{') {
+                if after_paren_trim.starts_with('{')
+                    || after_paren_trim.starts_with('+')
+                    || after_paren_trim.starts_with('*')
+                {
                     println!(
                         "[pattern_element_sequence] Detected QPP at input='{}'",
                         current_input
                     );
-                    match quantified_path_pattern(current_input) {
+                    // Calculate the actual index in the original input
+                    let whitespace_len = current_input.len() - trimmed_input.len();
+                    let _actual_idx = whitespace_len + idx;
+                    let qpp_input = &current_input[whitespace_len..];
+
+                    match quantified_path_pattern(qpp_input) {
                         Ok((after, pattern)) => {
                             println!(
                                 "[pattern_element_sequence] Parsed QPP: {:?}, after='{}'",
                                 pattern, after
                             );
                             elements.push(pattern);
-                            current_input = after;
+                            // Calculate the remaining input after the QPP
+                            let after_qpp =
+                                &current_input[whitespace_len + qpp_input.len() - after.len()..];
+                            current_input = after_qpp.trim_start();
                             continue;
                         }
                         Err(e) => {
@@ -202,13 +251,15 @@ pub fn pattern_element_sequence(
                                 "[pattern_element_sequence] quantified_path_pattern failed: {:?}",
                                 e
                             );
-                            break;
+                            // If QPP parsing fails, fall back to regular parsing
+                            // Don't break, just continue with normal parsing
                         }
                     }
                 }
             }
         }
         // Try to parse a node first
+        let input_before_parsing = current_input;
         match node_pattern(current_input) {
             Ok((rest, node)) => {
                 println!(
@@ -241,13 +292,9 @@ pub fn pattern_element_sequence(
             }
         }
 
-        // If we've reached the end of the input or a clause boundary, stop
-        if current_input.is_empty()
-            || current_input.starts_with("WHERE")
-            || current_input.starts_with("RETURN")
-            || current_input.starts_with("ON MATCH")
-            || current_input.starts_with("ON CREATE")
-        {
+        // Check if we made progress
+        if current_input == input_before_parsing {
+            println!("[pattern_element_sequence] No progress made, breaking");
             break;
         }
     }
@@ -380,42 +427,60 @@ pub fn quantified_path_pattern(input: &str) -> IResult<&str, PatternElement> {
 
     // Now, where_input should be empty, and after_paren is the input after the closing parenthesis
     let mut input = after_paren;
-    // Skip any whitespace between ) and {
+    // Skip any whitespace between ) and quantifier
     let (rest, _) = multispace0(input)?;
     input = rest;
-    let (input, _) = char('{')(input)?;
+
+    // Handle different quantifier formats: {min,max}, {min,}, {+}, {*}, +, *
+    let (input, min, max) = if let Ok((rest, _)) = char::<&str, nom::error::Error<&str>>('+')(input)
+    {
+        // + means {1,} (one or more)
+        (rest, 1, None)
+    } else if let Ok((rest, _)) = char::<&str, nom::error::Error<&str>>('*')(input) {
+        // * means {0,} (zero or more)
+        (rest, 0, None)
+    } else {
+        // Try to parse {min,max} format
+        let (input, _) = char('{')(input)?;
+        println!(
+            "[quantified_path_pattern] After opening brace: input='{}'",
+            input
+        );
+
+        // Parse min value
+        let (rest, min_str) = digit1::<&str, nom::error::Error<&str>>(input)?;
+        let min = min_str.parse::<u32>().unwrap();
+
+        // Check for separator
+        let (rest, _) = alt((tag(".."), tag(",")))(rest)?;
+
+        // Check if there's a max value
+        if let Ok((rest, max_str)) = digit1::<&str, nom::error::Error<&str>>(rest) {
+            let max = max_str.parse::<u32>().unwrap();
+            (rest, min, Some(max))
+        } else {
+            // No max value means unlimited
+            (rest, min, None)
+        }
+    };
+
+    // If we parsed a brace format, we need to close it
+    let (input, _) = if input.starts_with('}') {
+        char('}')(input)?
+    } else {
+        (input, ' ')
+    };
+
     println!(
-        "[quantified_path_pattern] After opening brace: input='{}'",
+        "[quantified_path_pattern] After quantifier parsing: input='{}'",
         input
     );
-    let (input, min) = digit1(input)?;
-    println!(
-        "[quantified_path_pattern] Parsed min: {}, input='{}'",
-        min, input
-    );
-    let (input, _) = alt((tag(".."), tag(",")))(input)?;
-    println!(
-        "[quantified_path_pattern] After separator: input='{}'",
-        input
-    );
-    let (input, max) = digit1(input)?;
-    println!(
-        "[quantified_path_pattern] Parsed max: {}, input='{}'",
-        max, input
-    );
-    let (input, _) = char('}')(input)?;
-    println!(
-        "[quantified_path_pattern] After closing brace: input='{}'",
-        input
-    );
-    let min = min.parse::<u32>().unwrap();
-    let max = max.parse::<u32>().unwrap();
 
     // Create the quantified pattern
     let quantified_pattern = QuantifiedPathPattern {
         pattern: inner_pattern,
         min: Some(min),
-        max: Some(max),
+        max,
         where_clause,
         path_variable: path_var,
     };
@@ -646,6 +711,23 @@ mod tests {
     }
 
     #[test]
+    fn test_node_pattern_with_properties() {
+        let input = "(a:Station { name: 'Denmark Hill' })";
+        let (_, node) = node_pattern(input).unwrap();
+        assert_eq!(node.variable, Some("a".to_string()));
+        assert_eq!(node.label, Some("Station".to_string()));
+        assert!(node.properties.is_some());
+        if let Some(props) = node.properties {
+            assert_eq!(props.len(), 1);
+            assert_eq!(props[0].key, "name");
+            assert_eq!(
+                props[0].value,
+                PropertyValue::String("Denmark Hill".to_string())
+            );
+        }
+    }
+
+    #[test]
     fn test_relationship_pattern() {
         let input = "[r:KNOWS {since: 2020}]";
         let (_, rel) = relationship_details(input).unwrap();
@@ -734,6 +816,128 @@ mod tests {
             } else {
                 panic!("Expected relationship inside QuantifiedPathPattern");
             }
+        } else {
+            panic!("Expected quantified path pattern");
+        }
+    }
+
+    #[test]
+    fn test_quantified_path_pattern_with_anonymous_nodes() {
+        let input = "((:Stop)-[:NEXT]->(:Stop)){1,3}";
+        let (_, element) = match_element(input).unwrap();
+        assert_eq!(element.pattern.len(), 1);
+        if let PatternElement::QuantifiedPathPattern(qpp) = &element.pattern[0] {
+            assert_eq!(qpp.min, Some(1));
+            assert_eq!(qpp.max, Some(3));
+            assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
+                                              // Verify that the nodes inside QPP are anonymous
+            if let PatternElement::Node(node) = &qpp.pattern[0] {
+                assert_eq!(node.variable, None);
+                assert_eq!(node.label, Some("Stop".to_string()));
+            } else {
+                panic!("Expected node inside QuantifiedPathPattern");
+            }
+            if let PatternElement::Node(node) = &qpp.pattern[2] {
+                assert_eq!(node.variable, None);
+                assert_eq!(node.label, Some("Stop".to_string()));
+            } else {
+                panic!("Expected node inside QuantifiedPathPattern");
+            }
+        } else {
+            panic!("Expected quantified path pattern");
+        }
+    }
+
+    #[test]
+    fn test_complex_pattern_with_qpp() {
+        let input = "(a:Station { name: 'Denmark Hill' })<-[:CALLS_AT]-(d:Stop) ((:Stop)-[:NEXT]->(:Stop)){1,3} (final_stop:Stop)-[:CALLS_AT]->(:Station { name: 'Clapham Junction' })";
+        let (_, pattern) = pattern_element_sequence(input, true).unwrap();
+        println!("Parsed pattern: {:?}", pattern);
+        // Should have multiple elements: Node, Relationship, Node, QPP, Node, Relationship, Node
+        assert!(pattern.len() >= 5);
+
+        // Check that we have a QPP in the pattern
+        let has_qpp = pattern
+            .iter()
+            .any(|e| matches!(e, PatternElement::QuantifiedPathPattern(_)));
+        assert!(has_qpp, "Pattern should contain a QuantifiedPathPattern");
+    }
+
+    #[test]
+    fn test_property_map_debug() {
+        use crate::parser::components::property_map;
+        let input = "{ name: 'Denmark Hill' }";
+        let result = property_map(input);
+        println!("property_map result: {:?}", result);
+        assert!(result.is_ok());
+        let (rest, props) = result.unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(props.len(), 1);
+        assert_eq!(props[0].key, "name");
+        assert_eq!(
+            props[0].value,
+            PropertyValue::String("Denmark Hill".to_string())
+        );
+    }
+
+    #[test]
+    fn test_property_debug() {
+        use crate::parser::components::property;
+        let input = "name: 'Denmark Hill'";
+        let result = property(input);
+        println!("property result: {:?}", result);
+        assert!(result.is_ok());
+        let (rest, prop) = result.unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(prop.key, "name");
+        assert_eq!(
+            prop.value,
+            PropertyValue::String("Denmark Hill".to_string())
+        );
+    }
+
+    #[test]
+    fn test_property_map_simple() {
+        use crate::parser::components::property_map;
+        let input = "{name: 'Denmark Hill'}";
+        let result = property_map(input);
+        println!("property_map simple result: {:?}", result);
+        assert!(result.is_ok());
+        let (rest, props) = result.unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(props.len(), 1);
+        assert_eq!(props[0].key, "name");
+        assert_eq!(
+            props[0].value,
+            PropertyValue::String("Denmark Hill".to_string())
+        );
+    }
+
+    #[test]
+    fn test_qpp_with_plus_quantifier() {
+        let input = "((a)-[:LINK]-(b:Station) WHERE point.distance(a.location, ndl.location) > point.distance(b.location, ndl.location))+";
+        let (_, element) = match_element(input).unwrap();
+        assert_eq!(element.pattern.len(), 1);
+        if let PatternElement::QuantifiedPathPattern(qpp) = &element.pattern[0] {
+            assert_eq!(qpp.min, Some(1));
+            assert_eq!(qpp.max, None);
+            assert!(qpp.where_clause.is_some());
+            assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
+        } else {
+            panic!("Expected quantified path pattern");
+        }
+    }
+
+    #[test]
+    fn test_qpp_with_where_clause_multiline() {
+        let input = "((a)-[:LINK]-(b:Station) WHERE point.distance(a.location, ndl.location) > point.distance(b.location, ndl.location))+";
+        let (_, element) = match_element(input).unwrap();
+        assert_eq!(element.pattern.len(), 1);
+        if let PatternElement::QuantifiedPathPattern(qpp) = &element.pattern[0] {
+            assert_eq!(qpp.min, Some(1));
+            assert_eq!(qpp.max, None);
+            assert!(qpp.where_clause.is_some());
+            assert_eq!(qpp.pattern.len(), 3); // Node, Relationship, Node
         } else {
             panic!("Expected quantified path pattern");
         }

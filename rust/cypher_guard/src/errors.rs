@@ -80,6 +80,14 @@ pub enum CypherGuardValidationError {
         property: String,
         context: String,
     },
+
+    #[error("Invalid property type for '{variable}.{property}': expected {expected_type}, got value '{actual_value}'")]
+    InvalidPropertyType {
+        variable: String,
+        property: String,
+        expected_type: String,
+        actual_value: String,
+    },
 }
 
 impl CypherGuardValidationError {
@@ -140,6 +148,20 @@ impl CypherGuardValidationError {
             variable: variable.into(),
             property: property.into(),
             context: context.into(),
+        }
+    }
+
+    pub fn invalid_property_type(
+        variable: impl Into<String>,
+        property: impl Into<String>,
+        expected_type: impl Into<String>,
+        actual_value: impl Into<String>,
+    ) -> Self {
+        Self::InvalidPropertyType {
+            variable: variable.into(),
+            property: property.into(),
+            expected_type: expected_type.into(),
+            actual_value: actual_value.into(),
         }
     }
 

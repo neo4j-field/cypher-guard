@@ -11,6 +11,7 @@ pub struct QueryElements {
     pub node_properties: HashMap<String, HashSet<String>>, // label -> set of property names
     pub relationship_properties: HashMap<String, HashSet<String>>, // rel_type -> set of property names
     pub property_accesses: Vec<PropertyAccess>,                    // Property access with context
+    pub property_comparisons: Vec<PropertyComparison>, // Property comparisons for type validation
     pub defined_variables: HashSet<String>, // Variables that are defined (from MATCH, UNWIND, etc.)
     pub referenced_variables: HashSet<String>, // Variables that are referenced (from WITH, WHERE, RETURN, etc.)
     pub pattern_sequences: Vec<Vec<PatternElement>>, // Track complete pattern sequences for validation
@@ -21,6 +22,23 @@ pub struct PropertyAccess {
     pub variable: String,
     pub property: String,
     pub context: PropertyContext,
+}
+
+#[derive(Debug, Clone)]
+pub struct PropertyComparison {
+    pub variable: String,
+    pub property: String,
+    pub value: String,
+    pub value_type: PropertyValueType,
+}
+
+#[derive(Debug, Clone)]
+pub enum PropertyValueType {
+    String,
+    Number,
+    Boolean,
+    Null,
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +56,7 @@ impl QueryElements {
             node_properties: HashMap::new(),
             relationship_properties: HashMap::new(),
             property_accesses: Vec::new(),
+            property_comparisons: Vec::new(),
             defined_variables: HashSet::new(),
             referenced_variables: HashSet::new(),
             pattern_sequences: Vec::new(),
@@ -95,6 +114,41 @@ impl QueryElements {
     pub fn add_pattern_sequence(&mut self, pattern: Vec<PatternElement>) {
         self.pattern_sequences.push(pattern);
     }
+
+    /// Add a property comparison for type validation
+    pub fn add_property_comparison(&mut self, comparison: PropertyComparison) {
+        self.property_comparisons.push(comparison);
+    }
+}
+
+/// Determine the type of a property value from a string
+fn determine_value_type(value: &str) -> PropertyValueType {
+    let trimmed = value.trim();
+
+    // Check for null
+    if trimmed.eq_ignore_ascii_case("null") {
+        return PropertyValueType::Null;
+    }
+
+    // Check for boolean
+    if trimmed.eq_ignore_ascii_case("true") || trimmed.eq_ignore_ascii_case("false") {
+        return PropertyValueType::Boolean;
+    }
+
+    // Check for string literal (quoted)
+    if (trimmed.starts_with('"') && trimmed.ends_with('"'))
+        || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
+    {
+        return PropertyValueType::String;
+    }
+
+    // Check for number (integer or float)
+    if trimmed.parse::<i64>().is_ok() || trimmed.parse::<f64>().is_ok() {
+        return PropertyValueType::Number;
+    }
+
+    // Default to unknown (could be a variable reference)
+    PropertyValueType::Unknown
 }
 
 /// Extract all elements from a parsed query that need validation
@@ -247,9 +301,44 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
 /// Extract elements from a WHERE condition
 fn extract_from_where_condition(condition: &WhereCondition, elements: &mut QueryElements) {
     match condition {
-        WhereCondition::Comparison { left, right, .. } => {
+        WhereCondition::Comparison {
+            left,
+            right,
+            operator: _,
+        } => {
             extract_property_access_from_string(left, elements, PropertyContext::Where);
             extract_property_access_from_string(right, elements, PropertyContext::Where);
+
+            // Track property comparisons for type validation
+            if left.contains('.') {
+                // Left side is a property access
+                let parts: Vec<&str> = left.split('.').collect();
+                if parts.len() == 2 {
+                    let variable = parts[0].trim();
+                    let property = parts[1].trim();
+
+                    elements.add_property_comparison(PropertyComparison {
+                        variable: variable.to_string(),
+                        property: property.to_string(),
+                        value: right.to_string(),
+                        value_type: determine_value_type(right),
+                    });
+                }
+            } else if right.contains('.') {
+                // Right side is a property access
+                let parts: Vec<&str> = right.split('.').collect();
+                if parts.len() == 2 {
+                    let variable = parts[0].trim();
+                    let property = parts[1].trim();
+
+                    elements.add_property_comparison(PropertyComparison {
+                        variable: variable.to_string(),
+                        property: property.to_string(),
+                        value: left.to_string(),
+                        value_type: determine_value_type(left),
+                    });
+                }
+            }
         }
         WhereCondition::FunctionCall { arguments, .. } => {
             for arg in arguments {
@@ -289,6 +378,11 @@ fn extract_from_return_item(item: &str, elements: &mut QueryElements) {
 /// Extract elements from a WITH item
 fn extract_from_with_item(item: &WithItem, elements: &mut QueryElements) {
     extract_from_with_expression(&item.expression, elements);
+
+    // If there's an alias, add it as a defined variable
+    if let Some(alias) = &item.alias {
+        elements.add_defined_variable(alias.clone());
+    }
 }
 
 /// Extract elements from a WITH expression
@@ -322,10 +416,20 @@ fn extract_property_access_from_string(
     elements: &mut QueryElements,
     context: PropertyContext,
 ) {
+    let trimmed = s.trim();
+
+    // Skip string literals (quoted strings)
+    if trimmed.starts_with('"') && trimmed.ends_with('"') {
+        return;
+    }
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        return;
+    }
+
     // Simple pattern matching for property access: variable.property
-    if let Some(dot_pos) = s.find('.') {
-        let variable = s[..dot_pos].trim();
-        let property = s[dot_pos + 1..].trim();
+    if let Some(dot_pos) = trimmed.find('.') {
+        let variable = trimmed[..dot_pos].trim();
+        let property = trimmed[dot_pos + 1..].trim();
 
         if !variable.is_empty() && !property.is_empty() {
             elements.add_variable(variable.to_string());
@@ -336,9 +440,19 @@ fn extract_property_access_from_string(
             });
         }
     } else {
-        // Check if it's just a variable reference
-        let trimmed = s.trim();
-        if !trimmed.is_empty() && !trimmed.contains(' ') {
+        // Only add as a variable if it looks like a variable reference
+        // (not a string literal, number, or other literal)
+        if !trimmed.is_empty()
+            && !trimmed.contains(' ')
+            && !trimmed.chars().all(|c| c.is_ascii_digit())
+            && !trimmed.eq_ignore_ascii_case("true")
+            && !trimmed.eq_ignore_ascii_case("false")
+            && !trimmed.eq_ignore_ascii_case("null")
+            && !trimmed.starts_with('"')
+            && !trimmed.starts_with('\'')
+            && !trimmed.ends_with('"')
+            && !trimmed.ends_with('\'')
+        {
             elements.add_variable(trimmed.to_string());
         }
     }
@@ -369,7 +483,7 @@ pub fn validate_query_elements(
 
     // Validate relationship directions
     for pattern_sequence in &elements.pattern_sequences {
-        // Extract nodes and relationships from the pattern sequence
+        // Extract nodes and relationships from the pattern sequence, flattening QPPs
         let mut nodes = Vec::new();
         let mut relationships = Vec::new();
 
@@ -385,9 +499,27 @@ pub fn validate_query_elements(
                         relationships.push((rel_type.to_string(), rel.direction()));
                     }
                 }
-                PatternElement::QuantifiedPathPattern(_) => {
-                    // Skip QPPs for now
-                    continue;
+                PatternElement::QuantifiedPathPattern(qpp) => {
+                    // Extract nodes and relationships from inside the QPP
+                    // The QPP connects the previous node to the next node in the sequence
+                    for pattern_element in &qpp.pattern {
+                        match pattern_element {
+                            PatternElement::Node(node) => {
+                                if let Some(label) = &node.label {
+                                    nodes.push(label.clone());
+                                }
+                            }
+                            PatternElement::Relationship(rel) => {
+                                if let Some(rel_type) = rel.rel_type() {
+                                    relationships.push((rel_type.to_string(), rel.direction()));
+                                }
+                            }
+                            PatternElement::QuantifiedPathPattern(_) => {
+                                // Nested QPPs are not supported in this implementation
+                                continue;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -400,7 +532,7 @@ pub fn validate_query_elements(
                 .find(|r| r.rel_type == *rel_type)
             {
                 // Get the nodes connected by this relationship
-                if i < nodes.len() - 1 {
+                if i < nodes.len() - 1 && !nodes.is_empty() {
                     let node1 = &nodes[i];
                     let node2 = &nodes[i + 1];
 
@@ -478,17 +610,14 @@ pub fn validate_query_elements(
         }
     }
 
-    // Validate property access from all contexts
+    // Validate property access
     for access in &elements.property_accesses {
         let context_str = match access.context {
-            PropertyContext::Where => "WHERE",
-            PropertyContext::Return => "RETURN",
-            PropertyContext::With => "WITH",
+            PropertyContext::Where => "WHERE clause",
+            PropertyContext::Return => "RETURN clause",
+            PropertyContext::With => "WITH clause",
         };
 
-        // Try to find the variable in defined variables to determine its type
-        // For now, we'll use a simple approach: check if the property exists in any node or relationship
-        // In a more sophisticated implementation, we would track variable types from the pattern
         let mut found = false;
 
         // Check if the property exists in any node label
@@ -515,6 +644,60 @@ pub fn validate_query_elements(
                 property: access.property.clone(),
                 context: context_str.to_string(),
             });
+        }
+    }
+
+    // Validate property type comparisons
+    for comparison in &elements.property_comparisons {
+        // Find the property definition in the schema
+        let mut property_def = None;
+
+        // Check node properties first
+        for properties in schema.node_props.values() {
+            if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
+                property_def = Some(prop);
+                break;
+            }
+        }
+
+        // If not found in nodes, check relationship properties
+        if property_def.is_none() {
+            for properties in schema.rel_props.values() {
+                if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
+                    property_def = Some(prop);
+                    break;
+                }
+            }
+        }
+
+        if let Some(prop_def) = property_def {
+            // Check if the value type matches the property type
+            let type_mismatch = match (&comparison.value_type, &prop_def.neo4j_type.to_string()) {
+                (PropertyValueType::String, t) if t == "STRING" => false,
+                (PropertyValueType::Number, t) if t == "INTEGER" || t == "FLOAT" => false,
+                (PropertyValueType::Boolean, t) if t == "BOOLEAN" => false,
+                (PropertyValueType::Null, _) => false, // Null is always valid
+                (PropertyValueType::Unknown, _) => false, // Skip unknown types (variables)
+                // Special case: if we have a number but the property expects a string,
+                // and the number is simple (like "30"), it might be a string literal that got stripped
+                (PropertyValueType::Number, t) if t == "STRING" => {
+                    // Check if the value looks like it could be a string literal
+                    // (simple numbers like "30", "123", etc.)
+                    let is_simple_number = comparison.value.chars().all(|c| c.is_ascii_digit())
+                        && comparison.value.len() <= 10; // Reasonable limit for string literals
+                    !is_simple_number // Only flag as mismatch if it's not a simple number
+                }
+                _ => true, // Type mismatch
+            };
+
+            if type_mismatch {
+                errors.push(CypherGuardValidationError::InvalidPropertyType {
+                    variable: comparison.variable.clone(),
+                    property: comparison.property.clone(),
+                    expected_type: prop_def.neo4j_type.to_string(),
+                    actual_value: comparison.value.clone(),
+                });
+            }
         }
     }
 

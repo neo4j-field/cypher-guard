@@ -60,8 +60,10 @@ pub fn property(input: &str) -> IResult<&str, Property> {
 // Shared property map parser
 pub fn property_map(input: &str) -> IResult<&str, Vec<Property>> {
     let (input, _) = char('{')(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, properties) =
         separated_list0(tuple((multispace0, char(','), multispace0)), property)(input)?;
+    let (input, _) = multispace0(input)?;
     let (input, _) = char('}')(input)?;
     Ok((input, properties))
 }

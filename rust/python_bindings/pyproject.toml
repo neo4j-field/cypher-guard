@@ -1,10 +1,38 @@
 [project]
 name = "cypher_guard"
 version = "0.1.5"
-description = "Python bindings for Cypher Guard"
-
-dependencies = []
+description = "Python bindings for Cypher Guard - A Rust library for parsing and validating Cypher queries against a user-defined schema"
+readme = "../../README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Neo4j Field Team"}
+]
+maintainers = [
+    {name = "Neo4j Field Team"}
+]
+keywords = ["cypher", "neo4j", "validation", "parser", "graph", "database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Linguistic",
+]
 requires-python = ">=3.9.0"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/neo4j-field/cypher-guard"
+Documentation = "https://github.com/neo4j-field/cypher-guard#readme"
+Repository = "https://github.com/neo4j-field/cypher-guard"
+Issues = "https://github.com/neo4j-field/cypher-guard/issues"
 
 [dependency-groups]
 dev = [
