@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     
     steps:
     - uses: actions/checkout@v4
@@ -53,5 +54,5 @@ jobs:
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: rust/python_bindings/target/wheels/
+        packages-dir: target/wheels/
         skip-existing: true 
