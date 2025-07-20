@@ -261,7 +261,7 @@ pub enum UnwindExpression {
 // CALL clause for subqueries and procedures
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallClause {
-    pub subquery: Option<Query>,  // For CALL { ... } subqueries
-    pub procedure: Option<String>, // For CALL procedure() calls
+    pub subquery: Option<Query>,           // For CALL { ... } subqueries
+    pub procedure: Option<String>,         // For CALL procedure() calls
     pub yield_clause: Option<Vec<String>>, // For YIELD clause
 }

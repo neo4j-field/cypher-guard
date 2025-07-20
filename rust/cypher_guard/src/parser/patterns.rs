@@ -245,6 +245,8 @@ pub fn pattern_element_sequence(
         if current_input.is_empty()
             || current_input.starts_with("WHERE")
             || current_input.starts_with("RETURN")
+            || current_input.starts_with("ON MATCH")
+            || current_input.starts_with("ON CREATE")
         {
             break;
         }

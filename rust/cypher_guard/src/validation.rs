@@ -11,7 +11,8 @@ pub struct QueryElements {
     pub node_properties: HashMap<String, HashSet<String>>, // label -> set of property names
     pub relationship_properties: HashMap<String, HashSet<String>>, // rel_type -> set of property names
     pub property_accesses: Vec<PropertyAccess>,                    // Property access with context
-    pub undefined_variables: HashSet<String>, // Variables that are referenced but not defined
+    pub defined_variables: HashSet<String>, // Variables that are defined (from MATCH, UNWIND, etc.)
+    pub referenced_variables: HashSet<String>, // Variables that are referenced (from WITH, WHERE, RETURN, etc.)
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +37,8 @@ impl QueryElements {
             node_properties: HashMap::new(),
             relationship_properties: HashMap::new(),
             property_accesses: Vec::new(),
-            undefined_variables: HashSet::new(),
+            defined_variables: HashSet::new(),
+            referenced_variables: HashSet::new(),
         }
     }
 
@@ -68,7 +70,12 @@ impl QueryElements {
 
     /// Add a variable to the set
     pub fn add_variable(&mut self, variable: String) {
-        self.undefined_variables.insert(variable);
+        self.referenced_variables.insert(variable);
+    }
+
+    /// Add a variable that is defined
+    pub fn add_defined_variable(&mut self, variable: String) {
+        self.defined_variables.insert(variable);
     }
 
     /// Add property access with context
@@ -79,7 +86,7 @@ impl QueryElements {
     /// Add an undefined variable reference
     #[allow(dead_code)]
     pub fn add_undefined_variable(&mut self, variable: String) {
-        self.undefined_variables.insert(variable);
+        self.referenced_variables.insert(variable);
     }
 }
 
@@ -131,7 +138,7 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
 
     // Extract from UNWIND clauses
     for unwind_clause in &query.unwind_clauses {
-        elements.add_variable(unwind_clause.variable.clone());
+        elements.add_defined_variable(unwind_clause.variable.clone());
         // Optionally, could track type info here in the future
     }
 
@@ -142,7 +149,7 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
 fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElements) {
     // Extract the path variable if it exists
     if let Some(path_var) = &element.path_var {
-        elements.add_variable(path_var.clone());
+        elements.add_defined_variable(path_var.clone());
     }
 
     for pattern_element in &element.pattern {
@@ -150,7 +157,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
             PatternElement::Node(node) => {
                 // Extract variable from node
                 if let Some(variable) = &node.variable {
-                    elements.add_variable(variable.clone());
+                    elements.add_defined_variable(variable.clone());
                 }
 
                 if let Some(label) = &node.label {
@@ -170,7 +177,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     RelationshipPattern::Regular(details)
                     | RelationshipPattern::OptionalRelationship(details) => {
                         if let Some(variable) = &details.variable {
-                            elements.add_variable(variable.clone());
+                            elements.add_defined_variable(variable.clone());
                         }
                     }
                 }
@@ -190,7 +197,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
             PatternElement::QuantifiedPathPattern(qpp) => {
                 // Extract path variable if it exists
                 if let Some(path_var) = &qpp.path_variable {
-                    elements.add_variable(path_var.clone());
+                    elements.add_defined_variable(path_var.clone());
                 }
 
                 // Recursively extract from the inner pattern
@@ -198,7 +205,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     match pattern_element {
                         PatternElement::Node(node) => {
                             if let Some(variable) = &node.variable {
-                                elements.add_variable(variable.clone());
+                                elements.add_defined_variable(variable.clone());
                             }
                             if let Some(label) = &node.label {
                                 elements.add_node_label(label.clone());
@@ -209,7 +216,7 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                                 RelationshipPattern::Regular(details)
                                 | RelationshipPattern::OptionalRelationship(details) => {
                                     if let Some(variable) = &details.variable {
-                                        elements.add_variable(variable.clone());
+                                        elements.add_defined_variable(variable.clone());
                                     }
                                 }
                             }
@@ -424,6 +431,15 @@ pub fn validate_query_elements(
         }
     }
 
+    // Validate undefined variables
+    for variable in &elements.referenced_variables {
+        if !elements.defined_variables.contains(variable) {
+            errors.push(CypherGuardValidationError::UndefinedVariable(
+                variable.clone(),
+            ));
+        }
+    }
+
     errors
 }
 
@@ -534,9 +550,8 @@ mod tests {
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
-        assert_eq!(elements.node_labels.len(), 1);
-        assert_eq!(elements.undefined_variables.len(), 1);
+        assert!(elements.defined_variables.contains("a"));
+        assert_eq!(elements.property_accesses.len(), 0);
     }
 
     #[test]
@@ -571,7 +586,7 @@ mod tests {
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 1);
         assert_eq!(elements.property_accesses[0].variable, "a");
         assert_eq!(elements.property_accesses[0].property, "age");
@@ -609,7 +624,7 @@ mod tests {
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 2);
 
         let return_access: Vec<_> = elements
@@ -654,7 +669,7 @@ mod tests {
         let elements = extract_query_elements(&query);
 
         assert!(elements.node_labels.contains("Person"));
-        assert!(elements.undefined_variables.contains("a"));
+        assert!(elements.referenced_variables.contains("a"));
         assert_eq!(elements.property_accesses.len(), 1);
         assert_eq!(elements.property_accesses[0].variable, "a");
         assert_eq!(elements.property_accesses[0].property, "name");
@@ -683,7 +698,7 @@ mod tests {
             call_clauses: vec![],
         };
         let elements = extract_query_elements(&query);
-        assert!(elements.undefined_variables.contains("x"));
+        assert!(elements.defined_variables.contains("x"));
     }
 
     #[test]
@@ -692,7 +707,7 @@ mod tests {
         let mut elements = QueryElements::new();
 
         elements.add_node_label("Person".to_string());
-        elements.add_variable("a".to_string());
+        elements.add_defined_variable("a".to_string());
         elements.add_property_access(PropertyAccess {
             variable: "a".to_string(),
             property: "name".to_string(),
