@@ -34,48 +34,15 @@ pub enum Clause {
 
 // Parses a comma-separated list of match elements, stopping at clause boundaries
 pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
-    let mut elements = Vec::new();
-    let mut rest = input;
+    use nom::character::complete::char;
+    use nom::multi::separated_list1;
+    use nom::sequence::tuple;
 
-    // Parse at least one element
-    let (input, first) = match_element(rest)?;
-    elements.push(first);
-    rest = input;
+    // Parse comma-separated match elements
+    let (input, elements) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), match_element)(input)?;
 
-    loop {
-        // Lookahead: stop if next token is a clause boundary
-        let (check_rest, _) = multispace0(rest)?;
-        if check_rest.is_empty() {
-            break;
-        }
-
-        // Check for clause boundary directly
-        if check_rest.starts_with("WHERE")
-            || check_rest.starts_with("WITH")
-            || check_rest.starts_with("RETURN")
-            || check_rest.starts_with("CALL")
-            || check_rest.starts_with("UNWIND")
-            || check_rest.starts_with("MERGE")
-            || check_rest.starts_with("CREATE")
-            || check_rest.starts_with("OPTIONAL MATCH")
-            || check_rest.starts_with("MATCH")
-            || check_rest.starts_with("ON MATCH")
-            || check_rest.starts_with("ON CREATE")
-        {
-            break;
-        }
-
-        // No clause boundary found, continue parsing
-        match match_element(rest) {
-            Ok((next_rest, element)) => {
-                elements.push(element);
-                rest = next_rest;
-            }
-            Err(_) => break,
-        }
-    }
-
-    Ok((rest, elements))
+    Ok((input, elements))
 }
 
 // Parses the MATCH clause (e.g. MATCH (a)-[:KNOWS]->(b))
@@ -540,7 +507,7 @@ fn parse_subquery(input: &str) -> IResult<&str, Query> {
                 clauses.push(spanned_clause);
                 rest = next_rest;
             }
-            Err(_) => {
+            Err(_e) => {
                 break;
             }
         }
@@ -867,15 +834,22 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
     let mut rest = input;
     let mut clauses = Vec::new();
 
-    while let Ok((next_rest, spanned_clause)) = clause(rest) {
-        clauses.push(spanned_clause);
-        rest = next_rest;
-        // Check for end of input or only whitespace left
+    loop {
+        // Always skip leading whitespace before parsing the next clause
         let (r, _) = multispace0(rest)?;
-        if r.is_empty() {
+        rest = r;
+        if rest.is_empty() {
             break;
         }
-        rest = r;
+        match clause(rest) {
+            Ok((next_rest, spanned_clause)) => {
+                clauses.push(spanned_clause);
+                rest = next_rest;
+            }
+            Err(e) => {
+                break;
+            }
+        }
     }
 
     // Ensure we've consumed the entire input

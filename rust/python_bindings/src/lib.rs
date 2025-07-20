@@ -27,6 +27,7 @@ create_exception!(cypher_guard, UndefinedVariable, CypherValidationError);
 create_exception!(cypher_guard, TypeMismatch, CypherValidationError);
 create_exception!(cypher_guard, InvalidRelationship, CypherValidationError);
 create_exception!(cypher_guard, InvalidLabel, CypherValidationError);
+create_exception!(cypher_guard, InvalidPropertyType, CypherValidationError);
 
 // === Error Conversion Helpers ===
 fn convert_cypher_error(py: Python, err: CypherGuardError) -> PyErr {
@@ -85,6 +86,15 @@ fn convert_validation_error(_py: Python, err: CypherGuardValidationError) -> PyE
         CypherGuardValidationError::InvalidLabel(label) => {
             InvalidLabel::new_err(format!("Invalid label: {}", label))
         }
+        CypherGuardValidationError::InvalidPropertyType {
+            variable,
+            property,
+            expected_type,
+            actual_value,
+        } => InvalidPropertyType::new_err(format!(
+            "Invalid property type for '{}.{}': expected {}, got value '{}'",
+            variable, property, expected_type, actual_value
+        )),
     }
 }
 
@@ -152,6 +162,7 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TypeMismatch", py.get_type::<TypeMismatch>())?;
     m.add("InvalidRelationship", py.get_type::<InvalidRelationship>())?;
     m.add("InvalidLabel", py.get_type::<InvalidLabel>())?;
+    m.add("InvalidPropertyType", py.get_type::<InvalidPropertyType>())?;
 
     Ok(())
 }
