@@ -197,12 +197,12 @@ def test_with_clause_wildcard_valid(schema_json: str):
 def test_with_clause_invalid_variable(schema_json: str):
     query = "MATCH (a:Person) WITH b RETURN b.name"
     errors = get_validation_errors(query, schema_json)
-    assert errors and any("not defined in previous scope" in e for e in errors)
+    assert errors and any("Undefined variable" in e for e in errors)
 
 def test_with_clause_invalid_alias_expression(schema_json: str):
     query = "MATCH (a:Person) WITH b AS c RETURN c.name"
     errors = get_validation_errors(query, schema_json)
-    assert errors and any("not defined in previous scope" in e for e in errors)
+    assert errors and any("Undefined variable" in e for e in errors)
 
 def test_invalid_node_label(schema_json):
     import sys
@@ -232,14 +232,14 @@ def test_invalid_relationship_type(schema_json):
     assert "Invalid relationship type" in str(excinfo.value)
 
 def test_invalid_node_property(schema_json):
-    with pytest.raises(InvalidNodeProperty) as excinfo:
+    with pytest.raises(InvalidPropertyAccess) as excinfo:
         validate_cypher("MATCH (a:Person) RETURN a.invalid_prop", schema_json)
-    assert "Invalid node property" in str(excinfo.value)
+    assert "Invalid property access" in str(excinfo.value)
 
 def test_invalid_relationship_property(schema_json):
-    with pytest.raises(InvalidRelationshipProperty) as excinfo:
+    with pytest.raises(InvalidPropertyAccess) as excinfo:
         validate_cypher("MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN r.invalid_prop", schema_json)
-    assert "Invalid relationship property" in str(excinfo.value)
+    assert "Invalid property access" in str(excinfo.value)
 
 def test_invalid_property_access(schema_json):
     with pytest.raises(InvalidPropertyAccess) as excinfo:

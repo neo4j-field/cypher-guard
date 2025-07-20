@@ -866,7 +866,7 @@ pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
 pub fn parse_query(input: &str) -> IResult<&str, Query> {
     let mut rest = input;
     let mut clauses = Vec::new();
-    
+
     while let Ok((next_rest, spanned_clause)) = clause(rest) {
         clauses.push(spanned_clause);
         rest = next_rest;
@@ -877,7 +877,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         }
         rest = r;
     }
-    
+
     // Ensure we've consumed the entire input
     let (rest, _) = multispace0(rest)?;
     if !rest.is_empty() {
@@ -2718,11 +2718,3 @@ mod tests {
         assert!(result.is_ok(), "Complex mixed chain should work");
     }
 }
-
-
-
-
-
-
-
-

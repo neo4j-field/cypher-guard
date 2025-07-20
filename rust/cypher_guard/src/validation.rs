@@ -372,7 +372,7 @@ pub fn validate_query_elements(
         // Extract nodes and relationships from the pattern sequence
         let mut nodes = Vec::new();
         let mut relationships = Vec::new();
-        
+
         for element in pattern_sequence {
             match element {
                 PatternElement::Node(node) => {
@@ -391,15 +391,19 @@ pub fn validate_query_elements(
                 }
             }
         }
-        
+
         // Validate each relationship in the sequence
         for (i, (rel_type, direction)) in relationships.iter().enumerate() {
-            if let Some(schema_rel) = schema.relationships.iter().find(|r| r.rel_type == *rel_type) {
+            if let Some(schema_rel) = schema
+                .relationships
+                .iter()
+                .find(|r| r.rel_type == *rel_type)
+            {
                 // Get the nodes connected by this relationship
                 if i < nodes.len() - 1 {
                     let node1 = &nodes[i];
                     let node2 = &nodes[i + 1];
-                    
+
                     match direction {
                         Direction::Right => {
                             // Right direction: node1 -> node2
@@ -424,8 +428,9 @@ pub fn validate_query_elements(
                         Direction::Undirected => {
                             // Undirected: check if both nodes are valid for this relationship
                             // This is always valid since relationships are stored undirected
-                            let valid_combination = (node1 == &schema_rel.start && node2 == &schema_rel.end) ||
-                                                   (node1 == &schema_rel.end && node2 == &schema_rel.start);
+                            let valid_combination = (node1 == &schema_rel.start
+                                && node2 == &schema_rel.end)
+                                || (node1 == &schema_rel.end && node2 == &schema_rel.start);
                             if !valid_combination {
                                 errors.push(CypherGuardValidationError::InvalidRelationship(
                                     format!("Relationship '{}' invalid node combination: expected {} and {}, got {} and {}", 
@@ -487,7 +492,7 @@ pub fn validate_query_elements(
         let mut found = false;
 
         // Check if the property exists in any node label
-        for (label, properties) in &schema.node_props {
+        for properties in schema.node_props.values() {
             if properties.iter().any(|p| p.name == access.property) {
                 found = true;
                 break;
@@ -496,7 +501,7 @@ pub fn validate_query_elements(
 
         // If not found in nodes, check relationship properties
         if !found {
-            for (rel_type, properties) in &schema.rel_props {
+            for properties in schema.rel_props.values() {
                 if properties.iter().any(|p| p.name == access.property) {
                     found = true;
                     break;
@@ -1063,7 +1068,7 @@ mod tests {
         let mut schema = DbSchema::new();
         schema.add_label("Person").unwrap();
         schema.add_label("Movie").unwrap();
-        
+
         let acted_in_rel = DbSchemaRelationshipPattern {
             start: "Person".to_string(),
             end: "Movie".to_string(),
@@ -1082,16 +1087,18 @@ mod tests {
                             label: Some("Person".to_string()),
                             properties: None,
                         }),
-                        PatternElement::Relationship(RelationshipPattern::Regular(RelationshipDetails {
-                            variable: Some("r".to_string()),
-                            direction: Direction::Right,
-                            properties: None,
-                            rel_type: Some("ACTED_IN".to_string()),
-                            length: None,
-                            where_clause: None,
-                            quantifier: None,
-                            is_optional: false,
-                        })),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Right,
+                                properties: None,
+                                rel_type: Some("ACTED_IN".to_string()),
+                                length: None,
+                                where_clause: None,
+                                quantifier: None,
+                                is_optional: false,
+                            },
+                        )),
                         PatternElement::Node(NodePattern {
                             variable: Some("b".to_string()),
                             label: Some("Movie".to_string()),
@@ -1112,7 +1119,11 @@ mod tests {
 
         let elements = extract_query_elements(&valid_query);
         let errors = validate_query_elements(&elements, &schema);
-        assert!(errors.is_empty(), "Valid direction should not produce errors: {:?}", errors);
+        assert!(
+            errors.is_empty(),
+            "Valid direction should not produce errors: {:?}",
+            errors
+        );
 
         // Test invalid direction: Person <- Movie (Left direction, but should be Person -> Movie)
         let invalid_query = Query {
@@ -1125,16 +1136,18 @@ mod tests {
                             label: Some("Person".to_string()),
                             properties: None,
                         }),
-                        PatternElement::Relationship(RelationshipPattern::Regular(RelationshipDetails {
-                            variable: Some("r".to_string()),
-                            direction: Direction::Left,
-                            properties: None,
-                            rel_type: Some("ACTED_IN".to_string()),
-                            length: None,
-                            where_clause: None,
-                            quantifier: None,
-                            is_optional: false,
-                        })),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Left,
+                                properties: None,
+                                rel_type: Some("ACTED_IN".to_string()),
+                                length: None,
+                                where_clause: None,
+                                quantifier: None,
+                                is_optional: false,
+                            },
+                        )),
                         PatternElement::Node(NodePattern {
                             variable: Some("b".to_string()),
                             label: Some("Movie".to_string()),
@@ -1155,7 +1168,12 @@ mod tests {
 
         let elements = extract_query_elements(&invalid_query);
         let errors = validate_query_elements(&elements, &schema);
-        assert!(!errors.is_empty(), "Invalid direction should produce errors");
-        assert!(errors.iter().any(|e| matches!(e, CypherGuardValidationError::InvalidRelationship(_))));
+        assert!(
+            !errors.is_empty(),
+            "Invalid direction should produce errors"
+        );
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, CypherGuardValidationError::InvalidRelationship(_))));
     }
 }
