@@ -219,7 +219,8 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchemaMetadata>()?;
     m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
     m.add_function(wrap_pyfunction!(get_validation_errors, m)?)?;
-    m.add_function(wrap_pyfunction!(parse_query, m)?)?;
+    // `parse_query` is not implemented yet
+    // m.add_function(wrap_pyfunction!(parse_query, m)?)?;
 
     // Expose error classes using the simpler approach from PyO3 docs
     m.add(

@@ -1,100 +1,75 @@
-#!/usr/bin/env python3
-
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
+import pytest
 from cypher_guard import validate_cypher
 
-# Schema from the test
-schema_json = """
+
+@pytest.fixture
+def test_schema():
+    """Test schema fixture for all debug tests"""
+    return """
     {
         "node_props": {
-        "Person": [
-            {"name": "name", "neo4j_type": "STRING"},
-            {"name": "age", "neo4j_type": "INTEGER"},
-            {"name": "created", "neo4j_type": "BOOLEAN"}
+            "Person": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "age", "neo4j_type": "INTEGER"},
+                {"name": "created", "neo4j_type": "BOOLEAN"}
+            ],
+            "Movie": [
+                {"name": "title", "neo4j_type": "STRING"},
+                {"name": "year", "neo4j_type": "INTEGER"}
+            ],
+            "Station": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "location", "neo4j_type": "POINT"}
+            ],
+            "Stop": [
+                {"name": "departs", "neo4j_type": "STRING"},
+                {"name": "arrives", "neo4j_type": "STRING"}
+            ]
+        },
+        "rel_props": {
+            "KNOWS": [
+                {"name": "since", "neo4j_type": "DATE_TIME"}
+            ],
+            "ACTED_IN": [
+                {"name": "role", "neo4j_type": "STRING"}
+            ],
+            "CALLS_AT": [],
+            "NEXT": [],
+            "LINK": [
+                {"name": "distance", "neo4j_type": "FLOAT"}
+            ]
+        },
+        "relationships": [
+            {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
+            {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"},
+            {"start": "Stop", "end": "Station", "rel_type": "CALLS_AT"},
+            {"start": "Stop", "end": "Stop", "rel_type": "NEXT"},
+            {"start": "Station", "end": "Station", "rel_type": "LINK"}
         ],
-        "Movie": [
-            {"name": "title", "neo4j_type": "STRING"},
-            {"name": "year", "neo4j_type": "INTEGER"}
-        ],
-        "Station": [
-            {"name": "name", "neo4j_type": "STRING"},
-            {"name": "location", "neo4j_type": "POINT"}
-        ],
-        "Stop": [
-            {"name": "departs", "neo4j_type": "STRING"},
-            {"name": "arrives", "neo4j_type": "STRING"}
-        ]
-    },
-    "rel_props": {
-        "KNOWS": [
-            {"name": "since", "neo4j_type": "DATE_TIME"}
-        ],
-        "ACTED_IN": [
-            {"name": "role", "neo4j_type": "STRING"}
-        ],
-        "CALLS_AT": [],
-        "NEXT": [],
-        "LINK": [
-            {"name": "distance", "neo4j_type": "FLOAT"}
-        ]
-    },
-    "relationships": [
-        {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
-        {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"},
-        {"start": "Stop", "end": "Station", "rel_type": "CALLS_AT"},
-        {"start": "Stop", "end": "Stop", "rel_type": "NEXT"},
-        {"start": "Station", "end": "Station", "rel_type": "LINK"}
-    ],
-    "metadata": {
-        "index": [],
-        "constraint": []
+        "metadata": {
+            "index": [],
+            "constraint": []
+        }
     }
-}
-"""
+    """
 
-def test_simple_qpp():
+
+def test_simple_qpp(test_schema):
     """Test a simple QPP pattern without complex functions"""
     query = "MATCH ((a)-[:LINK]-(b:Station))+ RETURN a.name"
-    print(f"Testing simple QPP: {query}")
-    try:
-        result = validate_cypher(query, schema_json)
-        print(f"Result: {result}")
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+    result = validate_cypher(query, test_schema)
+    assert result is not None
 
-def test_qpp_with_where():
+
+def test_qpp_with_where(test_schema):
     """Test QPP with WHERE clause but no complex functions"""
     query = "MATCH ((a)-[:LINK]-(b:Station) WHERE a.name = 'test')+ RETURN a.name"
-    print(f"Testing QPP with WHERE: {query}")
-    try:
-        result = validate_cypher(query, schema_json)
-        print(f"Result: {result}")
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+    result = validate_cypher(query, test_schema)
+    assert result is not None
 
-def test_simple_pattern():
+
+def test_simple_pattern(test_schema):
     """Test a simple pattern without QPP"""
     query = "MATCH (a:Station)-[:LINK]-(b:Station) RETURN a.name"
-    print(f"Testing simple pattern: {query}")
-    try:
-        result = validate_cypher(query, schema_json)
-        print(f"Result: {result}")
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    print("Testing simplified patterns...")
-    test_simple_pattern()
-    print("\n" + "="*50 + "\n")
-    test_simple_qpp()
-    print("\n" + "="*50 + "\n")
-    test_qpp_with_where() 
+    result = validate_cypher(query, test_schema)
+    assert result is not None 
