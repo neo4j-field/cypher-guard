@@ -105,18 +105,18 @@ fn convert_schema_error(_py: Python, err: CypherGuardSchemaError) -> PyErr {
 // === Python API Functions ===
 
 /// Validate a Cypher query against a schema.
-/// 
+///
 /// Args:
 ///     query (str): The Cypher query string to validate
 ///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
-/// 
+///
 /// Returns:
 ///     bool: True if the query is valid according to the schema, False otherwise
-/// 
+///
 /// Raises:
 ///     CypherValidationError: If validation fails due to schema violations
 ///     TypeError: If schema is neither a string nor DbSchema object
-/// 
+///
 /// Examples:
 ///     >>> schema_json = '{"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}}'
 ///     >>> validate_cypher("MATCH (p:Person) RETURN p.name", schema_json)
@@ -136,27 +136,27 @@ pub fn validate_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> Py
         schema_obj
     } else {
         return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object"
+            "schema must be either a JSON string or DbSchema object",
         ));
     };
-    
+
     validate_cypher_with_schema(query, &db_schema).map_err(|e| convert_cypher_error(py, e))
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(query, schema, /)")]
 /// Get all validation errors for a Cypher query against a schema.
-/// 
+///
 /// Args:
 ///     query (str): The Cypher query string to validate
 ///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
-/// 
+///
 /// Returns:
 ///     List[str]: List of validation error messages. Empty list if query is valid.
-/// 
+///
 /// Raises:
 ///     TypeError: If schema is neither a string nor DbSchema object
-/// 
+///
 /// Examples:
 ///     >>> schema_json = '{"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}}'
 ///     >>> get_validation_errors("MATCH (p:InvalidLabel) RETURN p.name", schema_json)
@@ -165,7 +165,11 @@ pub fn validate_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> Py
 ///     >>> schema = DbSchema.from_dict({"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}})
 ///     >>> get_validation_errors("MATCH (p:Person) RETURN p.name", schema)
 ///     []
-pub fn get_validation_errors(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+pub fn get_validation_errors(
+    py: Python,
+    query: &str,
+    schema: &Bound<'_, PyAny>,
+) -> PyResult<Vec<String>> {
     let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
         // Schema provided as JSON string
         DbSchema::from_json_string(schema_str).map_err(|e| convert_cypher_error(py, e))?
@@ -174,30 +178,30 @@ pub fn get_validation_errors(py: Python, query: &str, schema: &Bound<'_, PyAny>)
         schema_obj
     } else {
         return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object"
+            "schema must be either a JSON string or DbSchema object",
         ));
     };
-    
+
     Ok(get_cypher_validation_errors(query, &db_schema))
 }
 
 #[pyfunction]
 #[pyo3(text_signature = "(query, /)")]
 /// Parse a Cypher query into an Abstract Syntax Tree (AST).
-/// 
+///
 /// Args:
 ///     query (str): The Cypher query string to parse
-/// 
+///
 /// Returns:
 ///     dict: The parsed AST as a Python dictionary (currently returns empty dict)
-/// 
+///
 /// Raises:
 ///     ValueError: If the query has syntax errors and cannot be parsed
-/// 
+///
 /// Examples:
 ///     >>> parse_query("MATCH (n) RETURN n")
 ///     {}
-/// 
+///
 /// Note:
 ///     This function currently returns an empty dictionary. Full AST serialization
 ///     to Python dictionaries is planned for future versions.
