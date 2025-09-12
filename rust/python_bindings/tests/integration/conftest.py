@@ -33,7 +33,7 @@ def neo4j_driver(setup: Neo4jContainer):
 def init_data(neo4j_driver: Driver, clear_data: None):
     "This uses the driver from testcontainers to create data in the database."
     with neo4j_driver.session(database="neo4j") as session:
-        session.run("CREATE CONSTRAINT person_name FOR (n:Person) REQUIRE n.name IS UNIQUE")
+        session.run("CREATE CONSTRAINT person_name IF NOT EXISTS FOR (n:Person) REQUIRE n.name IS UNIQUE")
         session.run("CREATE (a:Person {name: 'Alice', age: 30})")
         session.run("CREATE (b:Person {name: 'Bob', age: 25})")
         session.run("CREATE (c:Person {name: 'Charlie', age: 35})")
