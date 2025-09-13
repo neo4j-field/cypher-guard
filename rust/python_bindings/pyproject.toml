@@ -1,6 +1,6 @@
 [project]
 name = "cypher_guard"
-version = "0.1.12"
+version = "0.1.13"
 description = "Python bindings for Cypher Guard - A Rust library for parsing and validating Cypher queries against a user-defined schema"
 readme = "../../README.md"
 license = {text = "MIT"}
@@ -48,6 +48,5 @@ requires = ["maturin>=1.4,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-python-source = "src"
 module-name = "cypher_guard"
 manylinux = "2_34" 

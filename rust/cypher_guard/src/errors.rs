@@ -50,8 +50,6 @@ pub enum CypherGuardValidationError {
     #[error("Invalid property name: {0}")]
     InvalidPropertyName(String),
 
-    #[error("Undefined variable: {0}")]
-    UndefinedVariable(String),
 
     #[error("Type mismatch: expected {expected}, got {actual}")]
     TypeMismatch { expected: String, actual: String },
@@ -95,9 +93,6 @@ impl CypherGuardValidationError {
         Self::InvalidPropertyName(name.into())
     }
 
-    pub fn undefined_variable(var: impl Into<String>) -> Self {
-        Self::UndefinedVariable(var.into())
-    }
 
     pub fn type_mismatch(expected: impl Into<String>, actual: impl Into<String>) -> Self {
         Self::TypeMismatch {
@@ -173,13 +168,6 @@ impl CypherGuardValidationError {
         }
     }
 
-    /// Returns the variable name if this is an UndefinedVariable error
-    pub fn variable_name(&self) -> Option<&str> {
-        match self {
-            Self::UndefinedVariable(var) => Some(var),
-            _ => None,
-        }
-    }
 
     /// Returns the expected and actual types if this is a TypeMismatch error
     pub fn type_mismatch_details(&self) -> Option<(&str, &str)> {
@@ -264,6 +252,9 @@ pub enum CypherGuardParsingError {
     #[error("Invalid syntax: {0}")]
     InvalidSyntax(String),
 
+    #[error("Undefined variable: {0}")]
+    UndefinedVariable(String),
+
     #[error("Missing required clause: {clause}")]
     MissingRequiredClause { clause: String },
 
@@ -346,6 +337,12 @@ impl CypherGuardParsingError {
 
     pub fn invalid_syntax(msg: impl Into<String>) -> Self {
         Self::InvalidSyntax(msg.into())
+    }
+
+    pub fn undefined_variable(var: impl Into<String>) -> Self {
+        let var_name = var.into();
+        eprintln!("🔥 CREATING UndefinedVariable ERROR for: '{}'", var_name);
+        Self::UndefinedVariable(var_name)
     }
 
     // Query structure errors
@@ -1049,9 +1046,7 @@ mod tests {
         assert_eq!(prop_error.to_string(), "Invalid property name: my_prop");
         assert_eq!(prop_error.property_name(), Some("my_prop"));
 
-        let var_error = CypherGuardValidationError::undefined_variable("x");
-        assert_eq!(var_error.to_string(), "Undefined variable: x");
-        assert_eq!(var_error.variable_name(), Some("x"));
+        // undefined_variable is now a parsing error, not validation error
 
         let type_error = CypherGuardValidationError::type_mismatch("String", "Integer");
         assert_eq!(

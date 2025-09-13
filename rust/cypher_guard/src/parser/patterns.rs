@@ -17,45 +17,27 @@ use crate::parser::components::{property_map, relationship_type};
 use crate::parser::utils::identifier;
 
 pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
-    println!("[node_pattern] ENTER: input='{}'", input);
     match char::<&str, nom::error::Error<&str>>('(')(input) {
         Ok((input, _)) => {
-            println!("[node_pattern] After parsing '(': input='{}'", input);
             let (input, variable) = opt(identifier)(input)?;
-            println!(
-                "[node_pattern] After parsing variable: {:?}, input='{}'",
-                variable, input
-            );
             let (input, label) = opt(preceded(char(':'), identifier))(input)?;
-            println!(
-                "[node_pattern] After parsing label: {:?}, input='{}'",
-                label, input
-            );
             let (input, _) = multispace0(input)?;
             let (input, properties) = opt(property_map)(input)?;
-            println!(
-                "[node_pattern] After parsing properties: {:?}, input='{}'",
-                properties, input
-            );
             let (input, _) = char(')')(input)?;
-            println!("[node_pattern] After parsing ')': input='{}'", input);
             let result = NodePattern {
                 variable: variable.map(|s| s.to_string()),
                 label: label.map(|s| s.to_string()),
                 properties,
             };
-            println!("[node_pattern] EXIT: {:?}", result);
             Ok((input, result))
         }
         Err(e) => {
-            println!("[node_pattern] Failed to parse '(': {:?}", e);
             Err(e)
         }
     }
 }
 
 pub fn relationship_details(input: &str) -> IResult<&str, RelationshipDetails> {
-    println!("Parsing relationship details: {}", input);
     let (input, _) = char('[')(input)?;
     println!("After parsing '[': {}", input);
     let (input, variable) = opt(identifier)(input)?;
@@ -307,15 +289,10 @@ pub fn pattern_element_sequence(
 }
 
 pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
-    println!("[match_element] ENTER: input='{}'", input);
     let (input, path_var) = opt(terminated(
         identifier,
         tuple((multispace0, char('='), multispace0)),
     ))(input)?;
-    println!(
-        "[match_element] After path variable: {:?}, input='{}'",
-        path_var, input
-    );
     let (input, pattern) = pattern_element_sequence(input, true)?;
     println!(
         "[match_element] After pattern_element_sequence: pattern={:?}, input='{}'",
@@ -751,9 +728,9 @@ mod tests {
                     right,
                 } = &where_clause.conditions[0]
                 {
-                    assert_eq!(left, "a.name");
+                    assert_eq!(left, &crate::parser::ast::PropertyValue::Identifier("a.name".to_string()));
                     assert_eq!(operator, "=");
-                    assert_eq!(right, "Alice");
+                    assert_eq!(right, &crate::parser::ast::PropertyValue::String("Alice".to_string()));
                 } else {
                     panic!("Expected comparison condition");
                 }

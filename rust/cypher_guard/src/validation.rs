@@ -41,7 +41,7 @@ pub enum PropertyValueType {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum PropertyContext {
     Where,
     Return,
@@ -104,11 +104,6 @@ impl QueryElements {
         self.property_accesses.push(access);
     }
 
-    /// Add an undefined variable reference
-    #[allow(dead_code)]
-    pub fn add_undefined_variable(&mut self, variable: String) {
-        self.referenced_variables.insert(variable);
-    }
 
     /// Add a pattern sequence for validation
     pub fn add_pattern_sequence(&mut self, pattern: Vec<PatternElement>) {
@@ -121,34 +116,67 @@ impl QueryElements {
     }
 }
 
-/// Determine the type of a property value from a string
-fn determine_value_type(value: &str) -> PropertyValueType {
-    let trimmed = value.trim();
 
-    // Check for null
-    if trimmed.eq_ignore_ascii_case("null") {
-        return PropertyValueType::Null;
+
+/// Convert PropertyValue to PropertyValueType
+fn property_value_to_type(value: &PropertyValue) -> PropertyValueType {
+    match value {
+        PropertyValue::String(_) => PropertyValueType::String,
+        PropertyValue::Number(_) => PropertyValueType::Number,
+        PropertyValue::Boolean(_) => PropertyValueType::Boolean,
+        PropertyValue::Null => PropertyValueType::Null,
+        PropertyValue::Identifier(_) => PropertyValueType::Unknown,
+        _ => PropertyValueType::Unknown,
     }
+}
 
-    // Check for boolean
-    if trimmed.eq_ignore_ascii_case("true") || trimmed.eq_ignore_ascii_case("false") {
-        return PropertyValueType::Boolean;
+/// Convert PropertyValue to String representation
+fn property_value_to_string(value: &PropertyValue) -> String {
+    match value {
+        PropertyValue::String(s) => s.clone(),
+        PropertyValue::Number(n) => n.to_string(),
+        PropertyValue::Boolean(b) => b.to_string(),
+        PropertyValue::Null => "null".to_string(),
+        PropertyValue::Identifier(id) => id.clone(),
+        PropertyValue::Parameter(p) => format!("${}", p),
+        _ => "unknown".to_string(),
     }
+}
 
-    // Check for string literal (quoted)
-    if (trimmed.starts_with('"') && trimmed.ends_with('"'))
-        || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
-    {
-        return PropertyValueType::String;
+/// Extract elements from a PropertyValue (for WHERE conditions)
+fn extract_from_property_value(
+    value: &PropertyValue,
+    elements: &mut QueryElements,
+    context: PropertyContext,
+) {
+    match value {
+        PropertyValue::Identifier(id) => {
+            extract_property_access_from_string(id, elements, context);
+        }
+        PropertyValue::String(_s) => {
+            // Literals don't contribute variables
+        }
+        PropertyValue::Number(_) => {
+            // Literals don't contribute variables
+        }
+        PropertyValue::Boolean(_) => {
+            // Literals don't contribute variables
+        }
+        PropertyValue::Null => {
+            // Literals don't contribute variables
+        }
+        PropertyValue::Parameter(_) => {
+            // Parameters don't contribute variables (they're external)
+        }
+        PropertyValue::FunctionCall { args, .. } => {
+            for arg in args {
+                extract_from_property_value(arg, elements, context);
+            }
+        }
+        _ => {
+            // Handle other cases as needed
+        }
     }
-
-    // Check for number (integer or float)
-    if trimmed.parse::<i64>().is_ok() || trimmed.parse::<f64>().is_ok() {
-        return PropertyValueType::Number;
-    }
-
-    // Default to unknown (could be a variable reference)
-    PropertyValueType::Unknown
 }
 
 /// Extract all elements from a parsed query that need validation
@@ -300,43 +328,48 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
 
 /// Extract elements from a WHERE condition
 fn extract_from_where_condition(condition: &WhereCondition, elements: &mut QueryElements) {
+    eprintln!("🔍 VALIDATION: extract_from_where_condition called with: {:?}", condition);
     match condition {
         WhereCondition::Comparison {
             left,
             right,
             operator: _,
         } => {
-            extract_property_access_from_string(left, elements, PropertyContext::Where);
-            extract_property_access_from_string(right, elements, PropertyContext::Where);
+            extract_from_property_value(left, elements, PropertyContext::Where);
+            extract_from_property_value(right, elements, PropertyContext::Where);
 
             // Track property comparisons for type validation
-            if left.contains('.') {
-                // Left side is a property access
-                let parts: Vec<&str> = left.split('.').collect();
-                if parts.len() == 2 {
-                    let variable = parts[0].trim();
-                    let property = parts[1].trim();
+            if let PropertyValue::Identifier(left_str) = left {
+                if left_str.contains('.') {
+                    // Left side is a property access
+                    let parts: Vec<&str> = left_str.split('.').collect();
+                    if parts.len() == 2 {
+                        let variable = parts[0].trim();
+                        let property = parts[1].trim();
 
-                    elements.add_property_comparison(PropertyComparison {
-                        variable: variable.to_string(),
-                        property: property.to_string(),
-                        value: right.to_string(),
-                        value_type: determine_value_type(right),
-                    });
+                        elements.add_property_comparison(PropertyComparison {
+                            variable: variable.to_string(),
+                            property: property.to_string(),
+                            value: property_value_to_string(right),
+                            value_type: property_value_to_type(right),
+                        });
+                    }
                 }
-            } else if right.contains('.') {
-                // Right side is a property access
-                let parts: Vec<&str> = right.split('.').collect();
-                if parts.len() == 2 {
-                    let variable = parts[0].trim();
-                    let property = parts[1].trim();
+            } else if let PropertyValue::Identifier(right_str) = right {
+                if right_str.contains('.') {
+                    // Right side is a property access
+                    let parts: Vec<&str> = right_str.split('.').collect();
+                    if parts.len() == 2 {
+                        let variable = parts[0].trim();
+                        let property = parts[1].trim();
 
-                    elements.add_property_comparison(PropertyComparison {
-                        variable: variable.to_string(),
-                        property: property.to_string(),
-                        value: left.to_string(),
-                        value_type: determine_value_type(left),
-                    });
+                        elements.add_property_comparison(PropertyComparison {
+                            variable: variable.to_string(),
+                            property: property.to_string(),
+                            value: property_value_to_string(left),
+                            value_type: property_value_to_type(left),
+                        });
+                    }
                 }
             }
         }
@@ -372,6 +405,7 @@ fn extract_from_where_condition(condition: &WhereCondition, elements: &mut Query
 
 /// Extract elements from a RETURN item
 fn extract_from_return_item(item: &str, elements: &mut QueryElements) {
+    println!("🔍 RETURN_ITEM: processing '{}'", item);
     extract_property_access_from_string(item, elements, PropertyContext::Return);
 }
 
@@ -417,12 +451,15 @@ fn extract_property_access_from_string(
     context: PropertyContext,
 ) {
     let trimmed = s.trim();
+    println!("DEBUG: extract_property_access_from_string called with: '{}'", trimmed);
 
     // Skip string literals (quoted strings)
     if trimmed.starts_with('"') && trimmed.ends_with('"') {
+        println!("DEBUG: Skipping double-quoted string: {}", trimmed);
         return;
     }
     if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        println!("DEBUG: Skipping single-quoted string: {}", trimmed);
         return;
     }
 
@@ -453,16 +490,21 @@ fn extract_property_access_from_string(
             && !trimmed.ends_with('"')
             && !trimmed.ends_with('\'')
         {
+            println!("DEBUG: Adding variable: {}", trimmed);
             elements.add_variable(trimmed.to_string());
         }
     }
 }
+
 
 /// Validate extracted query elements against the schema
 pub fn validate_query_elements(
     elements: &QueryElements,
     schema: &DbSchema,
 ) -> Vec<CypherGuardValidationError> {
+    eprintln!("DEBUG: validate_query_elements called");
+    eprintln!("DEBUG: elements.referenced_variables: {:?}", elements.referenced_variables);
+    eprintln!("DEBUG: elements.defined_variables: {:?}", elements.defined_variables);
     let mut errors = Vec::new();
 
     // Validate node labels
@@ -621,8 +663,8 @@ pub fn validate_query_elements(
         let mut found = false;
 
         // Check if the property exists in any node label
-        for properties in schema.node_props.values() {
-            if properties.iter().any(|p| p.name == access.property) {
+        for node in &schema.nodes {
+            if node.properties.iter().any(|p| p.name == access.property) {
                 found = true;
                 break;
             }
@@ -653,8 +695,8 @@ pub fn validate_query_elements(
         let mut property_def = None;
 
         // Check node properties first
-        for properties in schema.node_props.values() {
-            if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
+        for node in &schema.nodes {
+            if let Some(prop) = node.properties.iter().find(|p| p.name == comparison.property) {
                 property_def = Some(prop);
                 break;
             }
@@ -701,54 +743,9 @@ pub fn validate_query_elements(
         }
     }
 
-    // Validate undefined variables - this is especially important for WITH clauses
-    for variable in &elements.referenced_variables {
-        if !elements.defined_variables.contains(variable) {
-            errors.push(CypherGuardValidationError::UndefinedVariable(
-                variable.clone(),
-            ));
-        }
-    }
-
     errors
 }
 
-#[allow(dead_code)]
-/// Main entry point for full Cypher query validation.
-///
-/// This function performs all clause-level, cross-clause, and schema-level validation.
-/// As new Cypher features are added (e.g., clause order, type inference, parameter checks),
-/// extend this function to keep validation logic centralized and maintainable.
-pub fn validate_query(
-    query: &Query,
-    elements: &QueryElements,
-    schema: &DbSchema,
-) -> Vec<CypherGuardValidationError> {
-    let mut errors = Vec::new();
-
-    // Basic UNWIND validation: check type of UNWIND expression
-    for unwind_clause in &query.unwind_clauses {
-        use crate::parser::ast::UnwindExpression;
-        match &unwind_clause.expression {
-            UnwindExpression::List(_) => {
-                // Lists are always valid for UNWIND
-            }
-            UnwindExpression::Identifier(_) => {
-                // Identifiers are valid (they should be variables)
-            }
-            UnwindExpression::FunctionCall { .. } => {
-                // Function calls are valid
-            }
-            UnwindExpression::Parameter(_) => {
-                // Parameters are valid
-            }
-        }
-    }
-
-    // Existing validation logic
-    errors.extend(validate_query_elements(elements, schema));
-    errors
-}
 
 #[cfg(test)]
 mod tests {
@@ -783,8 +780,8 @@ mod tests {
             rel_type: "LIVES_IN".to_string(),
         };
 
-        schema.add_relationship(&knows_rel).unwrap();
-        schema.add_relationship(&lives_in_rel).unwrap();
+        schema.add_relationship_pattern(knows_rel).unwrap();
+        schema.add_relationship_pattern(lives_in_rel).unwrap();
 
         let since_prop = DbSchemaProperty::new("since", PropertyType::STRING);
         schema
@@ -843,9 +840,9 @@ mod tests {
             with_clauses: vec![],
             where_clauses: vec![WhereClause {
                 conditions: vec![WhereCondition::Comparison {
-                    left: "a.age".to_string(),
+                    left: crate::parser::ast::PropertyValue::Identifier("a.age".to_string()),
                     operator: ">".to_string(),
-                    right: "18".to_string(),
+                    right: crate::parser::ast::PropertyValue::Number(18),
                 }],
             }],
             return_clauses: vec![],
@@ -1055,12 +1052,15 @@ mod tests {
     #[test]
     fn test_validate_query_elements_invalid_property_access() {
         let schema_json = r#"{
-            "node_props": {
-                "Person": [
-                    {"name": "name", "neo4j_type": "STRING"},
-                    {"name": "age", "neo4j_type": "INTEGER"}
-                ]
-            },
+            "nodes": [
+                {
+                    "label": "Person",
+                    "properties": [
+                        {"name": "name", "neo4j_type": "STRING"},
+                        {"name": "age", "neo4j_type": "INTEGER"}
+                    ]
+                }
+            ],
             "rel_props": {},
             "relationships": [],
             "metadata": {"index": [], "constraint": []}
@@ -1224,7 +1224,7 @@ mod tests {
         };
         let elements = QueryElements::new();
         let schema = DbSchema::new();
-        let errors = validate_query(&query, &elements, &schema);
+        let errors = validate_query_elements(&elements, &schema);
         // All UNWIND expression types are now considered valid
         assert!(errors.is_empty());
 
@@ -1233,7 +1233,7 @@ mod tests {
             expression: UnwindExpression::List(vec![PropertyValue::Number(1)]),
             variable: "x".to_string(),
         }];
-        let errors = validate_query(&query, &elements, &schema);
+        let errors = validate_query_elements(&elements, &schema);
         assert!(errors.is_empty());
 
         // Valid: parameter
@@ -1241,7 +1241,7 @@ mod tests {
             expression: UnwindExpression::Parameter("foo".to_string()),
             variable: "x".to_string(),
         }];
-        let errors = validate_query(&query, &elements, &schema);
+        let errors = validate_query_elements(&elements, &schema);
         assert!(errors.is_empty());
     }
 
@@ -1257,7 +1257,7 @@ mod tests {
             end: "Movie".to_string(),
             rel_type: "ACTED_IN".to_string(),
         };
-        schema.add_relationship(&acted_in_rel).unwrap();
+        schema.add_relationship_pattern(acted_in_rel).unwrap();
 
         // Test valid direction: Person -> Movie (Right direction)
         let valid_query = Query {

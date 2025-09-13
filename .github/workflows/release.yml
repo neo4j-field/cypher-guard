@@ -52,7 +52,7 @@ jobs:
     - name: Build Rust core
       run: |
         cd rust/cypher_guard
-        cargo build --release --features python-bindings
+        cargo build --release
     
     # Build Python bindings
     - name: Build Python bindings
@@ -60,6 +60,7 @@ jobs:
         cd rust/python_bindings
         uv sync
         uv run maturin build --release
+        uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl
     
     # Build JavaScript bindings
     - name: Build JavaScript bindings

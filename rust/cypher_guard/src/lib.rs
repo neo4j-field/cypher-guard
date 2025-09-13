@@ -15,8 +15,8 @@ pub use errors::{
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
 };
 pub use schema::{
-    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaProperty,
-    DbSchemaRelationshipPattern, PropertyType,
+    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaNode,
+    DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType,
 };
 
 use parser::ast::*;
@@ -29,8 +29,12 @@ pub fn validate_cypher(_query: &str) -> Result<bool> {
 
 /// Parse a Cypher query with custom error handling
 pub fn parse_query(query: &str) -> std::result::Result<Query, CypherGuardParsingError> {
+    println!("DEBUG: lib.rs parse_query called with: {}", query);
     match parser::clauses::parse_query(query) {
-        Ok((_, ast)) => Ok(ast),
+        Ok((remaining, ast)) => {
+            println!("DEBUG: lib.rs parse_query succeeded, remaining: '{}', AST: {:?}", remaining, ast);
+            Ok(ast)
+        },
         Err(nom::Err::Error(e)) => {
             // Check if this is a validation error by looking at the error kind
             // If it's a Tag error, it might be a validation error
@@ -113,9 +117,13 @@ use crate::validation::{extract_query_elements, validate_query_elements};
 
 /// Validate full query with schema: returns true if valid, or error on parse failure
 pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<bool> {
+    println!("DEBUG: validate_cypher_with_schema called with query: {}", query);
     let ast = parse_query(query)?;
+    println!("DEBUG: Parsed AST successfully: {:#?}", ast);
     let elements = extract_query_elements(&ast);
+    eprintln!("DEBUG: Extracted elements successfully");
     let errors = validate_query_elements(&elements, schema);
+    eprintln!("DEBUG: Validation completed with {} errors", errors.len());
     if errors.is_empty() {
         Ok(true)
     } else {
@@ -128,13 +136,20 @@ pub fn validate_cypher_with_schema(query: &str, schema: &DbSchema) -> Result<boo
 
 /// Get validation errors for a query (for Python/JS bindings)
 pub fn get_cypher_validation_errors(query: &str, schema: &DbSchema) -> Vec<String> {
+    println!("🔍 get_cypher_validation_errors called with: {}", query);
     match parse_query(query) {
         Ok(ast) => {
+            println!("🔍 Parse succeeded, AST: {:?}", ast);
             let elements = extract_query_elements(&ast);
+            println!("🔍 Extracted elements: referenced={:?}, defined={:?}", elements.referenced_variables, elements.defined_variables);
             let errors = validate_query_elements(&elements, schema);
+            println!("🔍 Validation completed with {} errors: {:?}", errors.len(), errors);
             errors.into_iter().map(|e| e.to_string()).collect()
         }
-        Err(_) => vec!["Invalid Cypher syntax".to_string()],
+        Err(e) => {
+            println!("🔍 Parse failed with error: {:?}", e);
+            vec!["Invalid Cypher syntax".to_string()]
+        }
     }
 }
 

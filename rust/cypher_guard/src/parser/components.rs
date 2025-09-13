@@ -9,13 +9,27 @@ use nom::{
 };
 
 use crate::parser::ast::{Quantifier, *};
-use crate::parser::utils::{identifier, number_literal, string_literal};
+use crate::parser::utils::identifier;
+
+// Local string literal parsing function for components
+fn string_literal_components(input: &str) -> IResult<&str, String> {
+    let (input, quote) = alt((char('\''), char('"')))(input)?;
+    let (input, s) = nom::bytes::complete::take_while(|c| c != quote)(input)?;
+    let (input, _) = char(quote)(input)?;
+    Ok((input, s.to_string()))
+}
+
+// Local number literal parsing function for components  
+fn number_literal_components(input: &str) -> IResult<&str, i64> {
+    let (input, n) = nom::character::complete::digit1(input)?;
+    Ok((input, n.parse().unwrap()))
+}
 
 // Shared property value parser
 pub fn property_value(input: &str) -> IResult<&str, PropertyValue> {
     alt((
-        map(string_literal, PropertyValue::String),
-        map(number_literal, PropertyValue::Number),
+        map(string_literal_components, PropertyValue::String),
+        map(number_literal_components, PropertyValue::Number),
         map(function_call, |(name, args)| PropertyValue::FunctionCall {
             name,
             args: args.into_iter().map(PropertyValue::String).collect(),
@@ -32,8 +46,8 @@ pub fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
         alt((
             map(char('*'), |_| "*".to_string()),
             map(identifier, |s| s.to_string()),
-            map(string_literal, |s| s),
-            map(number_literal, |n| n.to_string()),
+            map(string_literal_components, |s| s),
+            map(|input| number_literal_components(input).map(|(i, n)| (i, n.to_string())), |n| n),
         )),
     )(input)?;
     let (input, _) = char(')')(input)?;

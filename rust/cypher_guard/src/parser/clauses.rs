@@ -15,7 +15,7 @@ use crate::parser::ast::{
 };
 use crate::parser::patterns::*;
 use crate::parser::span::{offset_to_line_column, Spanned};
-use crate::parser::utils::{identifier, string_literal};
+use crate::parser::utils::identifier;
 use crate::CypherGuardParsingError;
 
 #[derive(Debug, Clone)]
@@ -145,6 +145,14 @@ fn numeric_literal(input: &str) -> IResult<&str, String> {
     Ok((input, num.to_string()))
 }
 
+// Local string literal parsing function (since utils::string_literal is dead code)
+pub fn string_literal_local(input: &str) -> IResult<&str, String> {
+    let (input, quote) = alt((char('\''), char('"')))(input)?;
+    let (input, s) = nom::bytes::complete::take_while(|c| c != quote)(input)?;
+    let (input, _) = char(quote)(input)?;
+    Ok((input, s.to_string()))
+}
+
 // Parses a path property access
 fn path_property(input: &str) -> IResult<&str, (String, String)> {
     let (input, path_var) = map(identifier, |s| s.to_string())(input)?;
@@ -181,7 +189,7 @@ fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
             // Try to parse property access
             map(property_access, |s| s),
             // Try to parse string literals
-            map(string_literal, |s| s),
+            map(string_literal_local, |s| s),
             // Try to parse numeric literals
             map(numeric_literal, |n| n.to_string()),
             // Try to parse boolean literals
@@ -239,7 +247,7 @@ fn parse_and_expr(input: &str) -> IResult<&str, ast::WhereCondition> {
 }
 
 // Parses basic conditions (comparisons, NOT, parenthesized, function calls, etc.)
-fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
+pub fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     let (input, _) = multispace0(input)?;
 
     // Try to parse NOT
@@ -273,8 +281,8 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
     // Try to parse as a comparison first
     let comparison_result = (|| {
         let (input, left) = alt((
-            map(property_access, |s| s),
-            map(identifier, |s| s.to_string()),
+            map(property_access, ast::PropertyValue::Identifier),
+            map(identifier, |s| ast::PropertyValue::Identifier(s.to_string())),
         ))(input)?;
         let (input, _) = multispace0(input)?;
         let (input, operator) = alt((
@@ -295,16 +303,19 @@ fn parse_basic_condition(input: &str) -> IResult<&str, ast::WhereCondition> {
                 ast::WhereCondition::Comparison {
                     left,
                     operator: operator.to_string(),
-                    right: "".to_string(),
+                    right: ast::PropertyValue::Null,
                 },
             ));
         }
 
         let (input, _) = multispace0(input)?;
         let (input, right) = alt((
-            map(string_literal, |s| s),
-            map(numeric_literal, |n| n),
-            map(identifier, |s| s.to_string()),
+            map(string_literal_local, ast::PropertyValue::String),
+            map(numeric_literal, |n| ast::PropertyValue::Number(n.parse().unwrap())),
+            map(tag_no_case("true"), |_| ast::PropertyValue::Boolean(true)),
+            map(tag_no_case("false"), |_| ast::PropertyValue::Boolean(false)),
+            map(tag_no_case("null"), |_| ast::PropertyValue::Null),
+            map(identifier, |s| ast::PropertyValue::Identifier(s.to_string())),
         ))(input)?;
         Ok((
             input,
@@ -728,7 +739,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
         let (rest, items) = separated_list0(
             tuple((multispace0, char(','), multispace0)),
             alt((
-                map(string_literal, PropertyValue::String),
+                map(string_literal_local, PropertyValue::String),
                 map(numeric_literal, |n| {
                     PropertyValue::Number(n.parse().unwrap())
                 }),
@@ -750,7 +761,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
                 identifier,
                 tuple((multispace0, char(':'), multispace0)),
                 alt((
-                    map(string_literal, PropertyValue::String),
+                    map(string_literal_local, PropertyValue::String),
                     map(numeric_literal, |n| {
                         PropertyValue::Number(n.parse().unwrap())
                     }),
@@ -771,7 +782,7 @@ fn property_value(input: &str) -> IResult<&str, PropertyValue> {
 
     // Try to parse as a primitive value
     let (input, value) = alt((
-        map(string_literal, PropertyValue::String),
+        map(string_literal_local, PropertyValue::String),
         map(identifier, |s| PropertyValue::String(s.to_string())),
         map(numeric_literal, |n| {
             PropertyValue::Number(n.parse().unwrap())
@@ -877,6 +888,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             nom::error::ErrorKind::Tag,
         )));
     }
+
 
     // Convert clauses to Query struct
     let mut query = Query {
@@ -1109,6 +1121,7 @@ fn clause_name(clause: &Clause) -> &'static str {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1333,9 +1346,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.age".to_string()));
                 assert_eq!(operator, ">");
-                assert_eq!(right, "30");
+                assert!(matches!(right, ast::PropertyValue::Number(30)));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1352,9 +1365,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "=");
-                assert_eq!(right, "Alice");
+                assert_eq!(right, &ast::PropertyValue::String("Alice".to_string()));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1373,9 +1386,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("a.age".to_string()));
                         assert_eq!(o, ">");
-                        assert_eq!(r, "30");
+                        assert_eq!(r, &ast::PropertyValue::Number(30));
                     }
                     _ => unreachable!("Expected comparison on left "),
                 }
@@ -1385,9 +1398,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("b.name".to_string()));
                         assert_eq!(o, "=");
-                        assert_eq!(r, "Bob");
+                        assert_eq!(r, &ast::PropertyValue::String("Bob".to_string()));
                     }
                     _ => unreachable!("Expected comparison on right "),
                 }
@@ -1409,9 +1422,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("a.age".to_string()));
                         assert_eq!(o, ">");
-                        assert_eq!(r, "30");
+                        assert_eq!(r, &ast::PropertyValue::Number(30));
                     }
                     _ => unreachable!("Expected comparison on left "),
                 }
@@ -1421,9 +1434,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("b.name".to_string()));
                         assert_eq!(o, "=");
-                        assert_eq!(r, "Bob");
+                        assert_eq!(r, &ast::PropertyValue::String("Bob".to_string()));
                     }
                     _ => unreachable!("Expected comparison on right "),
                 }
@@ -1443,9 +1456,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "IS NULL");
-                assert_eq!(right, "");
+                assert_eq!(right, &ast::PropertyValue::Null);
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1462,9 +1475,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "IS NOT NULL");
-                assert_eq!(right, "");
+                assert_eq!(right, &ast::PropertyValue::Null);
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1481,9 +1494,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "name"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "<>");
-                assert_eq!(right, "Alice");
+                assert_eq!(right, &ast::PropertyValue::String("Alice".to_string()));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1546,9 +1559,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, "p.length");
+                assert_eq!(left, &ast::PropertyValue::Identifier("p.length".to_string()));
                 assert_eq!(operator, ">");
-                assert_eq!(right, "5");
+                assert_eq!(right, &ast::PropertyValue::Number(5));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1565,9 +1578,9 @@ mod tests {
                     operator,
                     right,
                 } => {
-                    assert_eq!(left, &("a".to_string() + "." + "name"));
+                    assert_eq!(left, &ast::PropertyValue::Identifier("a.name".to_string()));
                     assert_eq!(operator, "=");
-                    assert_eq!(right, "Alice");
+                    assert_eq!(right, &ast::PropertyValue::String("Alice".to_string()));
                 }
                 _ => unreachable!("Expected comparison inside NOT "),
             },
@@ -1586,9 +1599,9 @@ mod tests {
                     operator,
                     right,
                 } => {
-                    assert_eq!(left, &("a".to_string() + "." + "age"));
+                    assert_eq!(left, &ast::PropertyValue::Identifier("a.age".to_string()));
                     assert_eq!(operator, ">");
-                    assert_eq!(right, "30");
+                    assert!(matches!(right, ast::PropertyValue::Number(30)));
                 }
                 _ => unreachable!("Expected comparison inside parentheses"),
             },
@@ -1612,9 +1625,9 @@ mod tests {
                                     operator: o1,
                                     right: r1,
                                 } => {
-                                    assert_eq!(l1, &("a".to_string() + "." + "age"));
+                                    assert_eq!(l1, &ast::PropertyValue::Identifier("a.age".to_string()));
                                     assert_eq!(o1, ">");
-                                    assert_eq!(r1, "30");
+                                    assert_eq!(r1, &ast::PropertyValue::Number(30));
                                 }
                                 _ => unreachable!("Expected comparison inside parentheses (left) "),
                             }
@@ -1624,9 +1637,9 @@ mod tests {
                                     operator: o2,
                                     right: r2,
                                 } => {
-                                    assert_eq!(l2, &("b".to_string() + "." + "name"));
+                                    assert_eq!(l2, &ast::PropertyValue::Identifier("b.name".to_string()));
                                     assert_eq!(o2, "=");
-                                    assert_eq!(r2, "Bob");
+                                    assert_eq!(r2, &ast::PropertyValue::String("Bob".to_string()));
                                 }
                                 _ => {
                                     unreachable!("Expected comparison inside parentheses (right) ")
@@ -1645,9 +1658,9 @@ mod tests {
                             operator,
                             right,
                         } => {
-                            assert_eq!(left, &("c".to_string() + "." + "active"));
+                            assert_eq!(left, &ast::PropertyValue::Identifier("c.active".to_string()));
                             assert_eq!(operator, "=");
-                            assert_eq!(right, "true");
+                            assert!(matches!(right, ast::PropertyValue::Boolean(true)));
                         }
                         _ => unreachable!("Expected comparison inside NOT "),
                     },
@@ -1670,9 +1683,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("a".to_string() + "." + "age"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("a.age".to_string()));
                         assert_eq!(o, ">");
-                        assert_eq!(r, "30");
+                        assert_eq!(r, &ast::PropertyValue::Number(30));
                     }
                     _ => unreachable!("Expected comparison on left "),
                 }
@@ -1682,9 +1695,9 @@ mod tests {
                         operator: o,
                         right: r,
                     } => {
-                        assert_eq!(l, &("b".to_string() + "." + "name"));
+                        assert_eq!(l, &ast::PropertyValue::Identifier("b.name".to_string()));
                         assert_eq!(o, "=");
-                        assert_eq!(r, "Bob");
+                        assert_eq!(r, &ast::PropertyValue::String("Bob".to_string()));
                     }
                     _ => unreachable!("Expected comparison on right "),
                 }
@@ -1694,6 +1707,130 @@ mod tests {
     }
 
     // Error cases for WHERE clause
+
+    #[test]
+    fn test_where_clause_with_string_literal() {
+        let input = "WHERE a.name = 'Alice'";
+        
+        match where_clause(input) {
+            Ok((remaining, clause)) => {
+                
+                // Verify we have exactly one condition
+                assert_eq!(clause.conditions.len(), 1, "Should have exactly one condition");
+                
+                // Check the condition structure
+                if let ast::WhereCondition::Comparison { left, operator, right } = &clause.conditions[0] {
+                    match right {
+                        ast::PropertyValue::String(s) => {
+                            assert_eq!(s, "Alice");
+                        }
+                        ast::PropertyValue::Identifier(i) => {
+                            panic!("❌ FAILED: Right side is Identifier(\"{}\") - should be String!", i);
+                        }
+                        other => {
+                            panic!("❌ UNEXPECTED: Right side is {:?}", other);
+                        }
+                    }
+                    
+                    assert!(matches!(left, ast::PropertyValue::Identifier(_)), "Left should be Identifier");
+                    assert_eq!(operator, "=");
+                } else {
+                    panic!("Condition should be a Comparison, got: {:?}", clause.conditions[0]);
+                }
+                
+                assert_eq!(remaining, "", "Should consume entire input");
+            }
+            Err(e) => {
+                panic!("❌ WHERE clause parsing failed: {:?}", e);
+            }
+        }
+        
+        println!("✅ Unit test passed: WHERE clause correctly parses string literals");
+    }
+
+    #[test]
+    fn test_where_clause_with_integer_literal() {
+        println!("\n=== UNIT TEST: WHERE clause with integer literal (control test) ===");
+        let input = "WHERE a.age > 30";
+        println!("Testing: {}", input);
+        
+        match where_clause(input) {
+            Ok((remaining, clause)) => {
+                println!("✅ WHERE clause parsed successfully");
+                
+                if let ast::WhereCondition::Comparison { left: _, operator, right } = &clause.conditions[0] {
+                    match right {
+                        ast::PropertyValue::Number(n) => {
+                            println!("✅ CORRECT: Right side is Number({})", n);
+                            assert_eq!(*n, 30);
+                        }
+                        other => {
+                            panic!("❌ UNEXPECTED: Right side should be Number, got {:?}", other);
+                        }
+                    }
+                    
+                    assert_eq!(operator, ">");
+                } else {
+                    panic!("Condition should be a Comparison");
+                }
+                
+                assert_eq!(remaining, "", "Should consume entire input");
+            }
+            Err(e) => {
+                panic!("❌ WHERE clause parsing failed: {:?}", e);
+            }
+        }
+        
+        println!("✅ Control test passed: WHERE clause correctly parses integer literals");
+    }
+
+    #[test]
+    fn test_full_query_with_where_clause() {
+        println!("\n=== UNIT TEST: Full query with WHERE clause ===");
+        let input = "MATCH (a:Person) WHERE a.name = 'Alice' RETURN a";
+        println!("Testing full query: {}", input);
+        
+        match parse_query(input) {
+            Ok((remaining, query)) => {
+                println!("✅ Full query parsed successfully");
+                println!("Remaining: '{}'", remaining);
+                
+                // Check that WHERE clauses are included in the AST
+                println!("Match clauses: {}", query.match_clauses.len());
+                println!("WHERE clauses: {}", query.where_clauses.len());
+                println!("Return clauses: {}", query.return_clauses.len());
+                
+                // This should NOT be 0!
+                if query.where_clauses.len() == 0 {
+                    println!("❌ BUG CONFIRMED: WHERE clauses are parsed but not included in AST!");
+                    panic!("WHERE clauses missing from AST");
+                } else {
+                    println!("✅ WHERE clauses correctly included in AST");
+                    
+                    // Verify the WHERE clause content
+                    let where_clause = &query.where_clauses[0];
+                    if let ast::WhereCondition::Comparison { left: _, operator: _, right } = &where_clause.conditions[0] {
+                        match right {
+                            ast::PropertyValue::String(s) => {
+                                println!("✅ CORRECT: WHERE clause contains String(\"{}\")", s);
+                                assert_eq!(s, "Alice");
+                            }
+                            other => {
+                                println!("❌ WRONG: WHERE clause contains {:?}, expected String", other);
+                                panic!("Expected String(\"Alice\"), got {:?}", other);
+                            }
+                        }
+                    }
+                }
+                
+                println!("✅ Unit test passed: Full query correctly includes WHERE clauses in AST");
+            }
+            Err(e) => {
+                println!("❌ Full query parsing failed: {:?}", e);
+                panic!("Full query parsing failed: {:?}", e);
+            }
+        }
+    }
     #[test]
     fn test_where_clause_missing_where() {
         let input = "a.age > 30";
@@ -1768,9 +1905,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.age".to_string()));
                 assert_eq!(operator, ">");
-                assert_eq!(right, "30");
+                assert!(matches!(right, ast::PropertyValue::Number(30)));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1787,9 +1924,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, &("a".to_string() + "." + "age"));
+                assert_eq!(left, &ast::PropertyValue::Identifier("a.age".to_string()));
                 assert_eq!(operator, ">");
-                assert_eq!(right, "30");
+                assert!(matches!(right, ast::PropertyValue::Number(30)));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1806,9 +1943,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, "age");
+                assert_eq!(left, ast::PropertyValue::Identifier("age".to_string()));
                 assert_eq!(operator, ">");
-                assert_eq!(right, "30");
+                assert!(matches!(right, ast::PropertyValue::Number(30)));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1824,9 +1961,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, "a".to_string() + "." + "name");
+                assert_eq!(left, ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "=");
-                assert_eq!(right, "Alice");
+                assert_eq!(right, ast::PropertyValue::String("Alice".to_string()));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1842,9 +1979,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, "a".to_string() + "." + "active");
+                assert_eq!(left, ast::PropertyValue::Identifier("a.active".to_string()));
                 assert_eq!(operator, "=");
-                assert_eq!(right, "true");
+                assert!(matches!(right, ast::PropertyValue::Boolean(true)));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -1860,9 +1997,9 @@ mod tests {
                 operator,
                 right,
             } => {
-                assert_eq!(left, "a".to_string() + "." + "name");
+                assert_eq!(left, ast::PropertyValue::Identifier("a.name".to_string()));
                 assert_eq!(operator, "=");
-                assert_eq!(right, "NULL");
+                assert!(matches!(right, ast::PropertyValue::Null));
             }
             _ => unreachable!("Expected comparison condition"),
         }
@@ -2691,4 +2828,95 @@ mod tests {
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Complex mixed chain should work");
     }
+
+    #[test]
+    fn test_debug_parse_basic_condition_string() {
+        println!("\n=== DEBUG: Testing parse_basic_condition with string ===");
+        let input = "a.name = 'Alice'";
+        println!("Input: '{}'", input);
+        
+        match parse_basic_condition(input) {
+            Ok((remaining, condition)) => {
+                println!("SUCCESS: remaining='{}'", remaining);
+                if let ast::WhereCondition::Comparison { left, operator, right } = condition {
+                    println!("Left: {:?}", left);
+                    println!("Operator: {}", operator);
+                    println!("Right: {:?}", right);
+                    
+                    // Check if right side is String or Identifier
+                    match &right {
+                        ast::PropertyValue::String(s) => println!("✅ CORRECT: String({})", s),
+                        ast::PropertyValue::Identifier(s) => println!("❌ WRONG: Identifier({}) - should be String!", s),
+                        _ => println!("❓ OTHER: {:?}", right),
+                    }
+                    
+                    // Assert it should be a String, not Identifier
+                    assert!(matches!(right, ast::PropertyValue::String(_)), 
+                           "Expected String literal, got {:?}", right);
+                }
+            }
+            Err(e) => {
+                println!("ERROR: {:?}", e);
+                panic!("parse_basic_condition failed: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_debug_parse_basic_condition_integer() {
+        println!("\n=== DEBUG: Testing parse_basic_condition with integer ===");
+        let input = "a.age = 30";
+        println!("Input: '{}'", input);
+        
+        match parse_basic_condition(input) {
+            Ok((remaining, condition)) => {
+                println!("SUCCESS: remaining='{}'", remaining);
+                if let ast::WhereCondition::Comparison { left, operator, right } = condition {
+                    println!("Left: {:?}", left);
+                    println!("Operator: {}", operator);
+                    println!("Right: {:?}", right);
+                    
+                    assert!(matches!(right, ast::PropertyValue::Number(_)), 
+                           "Expected Number literal, got {:?}", right);
+                }
+            }
+            Err(e) => {
+                println!("ERROR: {:?}", e);
+                panic!("parse_basic_condition failed: {:?}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_debug_string_literal_local() {
+        println!("\n=== DEBUG: Testing string_literal_local directly ===");
+        
+        println!("Testing '\"Alice\"':");
+        match string_literal_local("\"Alice\"") {
+            Ok((remaining, s)) => {
+                println!("SUCCESS: '{}', remaining: '{}'", s, remaining);
+                assert_eq!(s, "Alice");
+                assert_eq!(remaining, "");
+            }
+            Err(e) => {
+                println!("ERROR: {:?}", e);
+                panic!("string_literal_local failed with double quotes: {:?}", e);
+            }
+        }
+        
+        println!("Testing '\\'Alice\\'':");
+        match string_literal_local("'Alice'") {
+            Ok((remaining, s)) => {
+                println!("SUCCESS: '{}', remaining: '{}'", s, remaining);
+                assert_eq!(s, "Alice");
+                assert_eq!(remaining, "");
+            }
+            Err(e) => {
+                println!("ERROR: {:?}", e);
+                panic!("string_literal_local failed with single quotes: {:?}", e);
+            }
+        }
+    }
+
+
 }

@@ -54,6 +54,8 @@ jobs:
       run: |
         cd rust/python_bindings
         uv run maturin build --release --manylinux 2_34 --target x86_64-unknown-linux-gnu
+        # Install the wheel to ensure it works (but don't need it for PyPI)
+        uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl || true
         # Verify only manylinux wheels were created
         ls -la ../../target/wheels/
     

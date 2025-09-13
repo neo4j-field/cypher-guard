@@ -1,23 +1,17 @@
 [package]
 name = "cypher-guard"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 
 [lib]
 name = "cypher_guard"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [features]
 default = []
-python-bindings = ["pyo3", "pyo3/extension-module"]
 
 [dependencies]
 nom.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-
-[dependencies.pyo3]
-workspace = true
-optional = true
-features = ["macros"]
