@@ -1059,15 +1059,12 @@ mod tests {
     #[test]
     fn test_validate_query_elements_invalid_property_access() {
         let schema_json = r#"{
-            "nodes": [
-                {
-                    "label": "Person",
-                    "properties": [
-                        {"name": "name", "neo4j_type": "STRING"},
-                        {"name": "age", "neo4j_type": "INTEGER"}
-                    ]
-                }
-            ],
+            "node_props": {
+                "Person": [
+                    {"name": "name", "neo4j_type": "STRING"},
+                    {"name": "age", "neo4j_type": "INTEGER"}
+                ]
+            },
             "rel_props": {},
             "relationships": [],
             "metadata": {"index": [], "constraint": []}

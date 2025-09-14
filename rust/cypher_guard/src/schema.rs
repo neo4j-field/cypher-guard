@@ -341,6 +341,15 @@ impl DbSchema {
     /// Add a property to a node label
     pub fn add_node_property(&mut self, label: &str, property: &DbSchemaProperty) -> Result<()> {
         if let Some(properties) = self.node_props.get_mut(label) {
+            // Check for duplicate property
+            if properties.iter().any(|p| p.name == property.name) {
+                return Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::DuplicateProperty(format!(
+                        "Property '{}' already exists for label '{}'",
+                        property.name, label
+                    )),
+                ));
+            }
             properties.push(property.clone());
             Ok(())
         } else {
@@ -540,7 +549,6 @@ impl fmt::Display for DbSchema {
 mod tests {
     use super::*;
     use crate::errors::{CypherGuardError, CypherGuardSchemaError};
-    use std::fs::remove_file;
 
     fn create_person_name_property() -> DbSchemaProperty {
         DbSchemaProperty::new("name", PropertyType::STRING)
@@ -605,7 +613,7 @@ mod tests {
     #[test]
     fn test_schema_creation() {
         let schema = create_test_schema();
-        assert_eq!(schema.nodes.len(), 2);
+        assert_eq!(schema.node_props.len(), 2);
         assert!(schema.has_label("Person"));
         assert!(schema.has_label("Place"));
         assert!(!schema.has_label("NonExistent"));
