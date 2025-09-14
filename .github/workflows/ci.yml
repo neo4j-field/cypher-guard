@@ -72,7 +72,8 @@ jobs:
       run: |
         cd rust/python_bindings
         uv run maturin build --release
-        uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl
+        WHEEL_FILE=$(find ../../target/wheels/ -name "cypher_guard-*-cp*-*.whl" | head -1)
+        uv pip install --force-reinstall "$WHEEL_FILE"
     
     - name: Run Python tests
       run: cd rust/python_bindings && uv run pytest tests/ -vv
