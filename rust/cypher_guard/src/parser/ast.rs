@@ -33,9 +33,9 @@ pub struct WhereClause {
 #[derive(Debug, PartialEq, Clone)]
 pub enum WhereCondition {
     Comparison {
-        left: String,
+        left: PropertyValue,
         operator: String,
-        right: String,
+        right: PropertyValue,
     },
     FunctionCall {
         function: String,
@@ -180,6 +180,7 @@ pub enum PropertyValue {
         args: Vec<PropertyValue>,
     },
     Parameter(String),
+    Identifier(String), // For variable references and property access
 }
 
 // MERGE clause

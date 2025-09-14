@@ -59,7 +59,8 @@ uv-install:
 build: build-python
 
 build-python: uv-install
-	cd rust/python_bindings && uv run maturin develop
+	cd rust/python_bindings && uv run maturin build --release
+	cd rust/python_bindings && uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl
 
 test-python: uv-install
 	cd rust/python_bindings && uv run pytest tests/ -vv

@@ -116,7 +116,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", "📄 Loading schema...".bright_green());
     }
 
-    let schema = match DbSchema::from_json_file(schema_path) {
+    let schema_content = std::fs::read_to_string(schema_path)?;
+    let schema = match DbSchema::from_json_string(&schema_content) {
         Ok(schema) => {
             if verbose {
                 println!("✅ Schema loaded successfully");

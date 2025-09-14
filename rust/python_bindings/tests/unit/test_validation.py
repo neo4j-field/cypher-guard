@@ -6,50 +6,50 @@ def schema_json():
     return '''
     {
         "node_props": {
-        "Person": [
-            {"name": "name", "neo4j_type": "STRING"},
-            {"name": "age", "neo4j_type": "INTEGER"},
-            {"name": "created", "neo4j_type": "BOOLEAN"}
+            "Person": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "age", "neo4j_type": "INTEGER"},
+                {"name": "created", "neo4j_type": "BOOLEAN"}
+            ],
+            "Movie": [
+                {"name": "title", "neo4j_type": "STRING"},
+                {"name": "year", "neo4j_type": "INTEGER"}
+            ],
+            "Station": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "location", "neo4j_type": "POINT"}
+            ],
+            "Stop": [
+                {"name": "departs", "neo4j_type": "STRING"},
+                {"name": "arrives", "neo4j_type": "STRING"}
+            ]
+        },
+        "rel_props": {
+            "KNOWS": [
+                {"name": "since", "neo4j_type": "DATE_TIME"}
+            ],
+            "ACTED_IN": [
+                {"name": "role", "neo4j_type": "STRING"}
+            ],
+            "CALLS_AT": [],
+            "NEXT": [],
+            "LINK": [
+                {"name": "distance", "neo4j_type": "FLOAT"}
+            ]
+        },
+        "relationships": [
+            {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
+            {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"},
+            {"start": "Stop", "end": "Station", "rel_type": "CALLS_AT"},
+            {"start": "Stop", "end": "Stop", "rel_type": "NEXT"},
+            {"start": "Station", "end": "Station", "rel_type": "LINK"}
         ],
-        "Movie": [
-            {"name": "title", "neo4j_type": "STRING"},
-            {"name": "year", "neo4j_type": "INTEGER"}
-        ],
-        "Station": [
-            {"name": "name", "neo4j_type": "STRING"},
-            {"name": "location", "neo4j_type": "POINT"}
-        ],
-        "Stop": [
-            {"name": "departs", "neo4j_type": "STRING"},
-            {"name": "arrives", "neo4j_type": "STRING"}
-        ]
-    },
-    "rel_props": {
-        "KNOWS": [
-            {"name": "since", "neo4j_type": "DATE_TIME"}
-        ],
-        "ACTED_IN": [
-            {"name": "role", "neo4j_type": "STRING"}
-        ],
-        "CALLS_AT": [],
-        "NEXT": [],
-        "LINK": [
-            {"name": "distance", "neo4j_type": "FLOAT"}
-        ]
-    },
-    "relationships": [
-        {"start": "Person", "end": "Person", "rel_type": "KNOWS"},
-        {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"},
-        {"start": "Stop", "end": "Station", "rel_type": "CALLS_AT"},
-        {"start": "Stop", "end": "Stop", "rel_type": "NEXT"},
-        {"start": "Station", "end": "Station", "rel_type": "LINK"}
-    ],
-    "metadata": {
-        "index": [],
-        "constraint": []
+        "metadata": {
+            "index": [],
+            "constraint": []
+        }
     }
-}
-'''
+    '''
 
 def get_valid_cypher_queries():
     return [

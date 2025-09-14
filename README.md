@@ -390,6 +390,35 @@ This project is open source and welcomes contributions! Please open issues or su
 3. Build: `make build-python`
 4. Test: `make test-python`
 
+### Troubleshooting
+
+#### UV Caching Issues on macOS
+
+If you encounter issues where code changes aren't reflected after rebuilding (e.g., old debug output persisting, functions not updating), this is due to a known UV bug on macOS where `.so` files aren't properly updated.
+
+**Symptoms:**
+- Old debug output or panics appearing despite source code changes
+- New functions not available after rebuild
+- `maturin develop` appears to succeed but changes aren't reflected
+
+**Solutions:**
+
+1. **First try**: Clean rebuild
+   ```bash
+   make clean && make build-python
+   ```
+
+2. **If that fails**: The Makefile uses `uv pip install --force-reinstall` which should handle most caching issues, but if you still have problems:
+   ```bash
+   # Remove virtual environment and rebuild completely
+   rm -rf rust/python_bindings/.venv
+   make build-python
+   ```
+
+3. **Last resort**: Bump version numbers in `Cargo.toml` and `pyproject.toml` files to force complete recompilation.
+
+**Note**: This issue is specific to UV on macOS and doesn't affect production deployments or other platforms.
+
 ---
 
 ## License
