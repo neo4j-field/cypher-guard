@@ -180,7 +180,7 @@ pub enum PropertyValue {
         args: Vec<PropertyValue>,
     },
     Parameter(String),
-    Identifier(String),  // For variable references and property access
+    Identifier(String), // For variable references and property access
 }
 
 // MERGE clause

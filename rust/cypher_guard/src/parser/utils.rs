@@ -4,7 +4,6 @@ pub fn identifier(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_alphanumeric() || c == '_')(input)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +40,4 @@ mod tests {
         let result = identifier("");
         assert!(result.is_err());
     }
-
 }

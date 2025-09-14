@@ -31,9 +31,7 @@ pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
             };
             Ok((input, result))
         }
-        Err(e) => {
-            Err(e)
-        }
+        Err(e) => Err(e),
     }
 }
 
@@ -728,9 +726,15 @@ mod tests {
                     right,
                 } = &where_clause.conditions[0]
                 {
-                    assert_eq!(left, &crate::parser::ast::PropertyValue::Identifier("a.name".to_string()));
+                    assert_eq!(
+                        left,
+                        &crate::parser::ast::PropertyValue::Identifier("a.name".to_string())
+                    );
                     assert_eq!(operator, "=");
-                    assert_eq!(right, &crate::parser::ast::PropertyValue::String("Alice".to_string()));
+                    assert_eq!(
+                        right,
+                        &crate::parser::ast::PropertyValue::String("Alice".to_string())
+                    );
                 } else {
                     panic!("Expected comparison condition");
                 }

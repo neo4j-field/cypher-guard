@@ -50,7 +50,6 @@ pub enum CypherGuardValidationError {
     #[error("Invalid property name: {0}")]
     InvalidPropertyName(String),
 
-
     #[error("Type mismatch: expected {expected}, got {actual}")]
     TypeMismatch { expected: String, actual: String },
 
@@ -92,7 +91,6 @@ impl CypherGuardValidationError {
     pub fn invalid_property_name(name: impl Into<String>) -> Self {
         Self::InvalidPropertyName(name.into())
     }
-
 
     pub fn type_mismatch(expected: impl Into<String>, actual: impl Into<String>) -> Self {
         Self::TypeMismatch {
@@ -167,7 +165,6 @@ impl CypherGuardValidationError {
             _ => None,
         }
     }
-
 
     /// Returns the expected and actual types if this is a TypeMismatch error
     pub fn type_mismatch_details(&self) -> Option<(&str, &str)> {

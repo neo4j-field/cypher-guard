@@ -41,9 +41,12 @@ impl PropertyType {
             "POINT" => Ok(PropertyType::POINT),
             "DATE_TIME" => Ok(PropertyType::DATE_TIME),
             "LIST" => Ok(PropertyType::LIST),
-            _ => Err(CypherGuardError::Schema(CypherGuardSchemaError::InvalidPropertyType(
-                format!("Invalid property type: {}", s)
-            ))),
+            _ => Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidPropertyType(format!(
+                    "Invalid property type: {}",
+                    s
+                )),
+            )),
         }
     }
 }
@@ -99,7 +102,11 @@ impl DbSchemaProperty {
         }
     }
 
-    pub fn with_enum_values(name: &str, neo4j_type: PropertyType, enum_values: Vec<String>) -> Self {
+    pub fn with_enum_values(
+        name: &str,
+        neo4j_type: PropertyType,
+        enum_values: Vec<String>,
+    ) -> Self {
         Self {
             name: name.to_string(),
             neo4j_type,
@@ -270,7 +277,6 @@ pub struct DbSchema {
     pub metadata: DbSchemaMetadata,
 }
 
-
 impl Default for DbSchema {
     fn default() -> Self {
         Self::new()
@@ -292,9 +298,9 @@ impl DbSchema {
     pub fn from_json_string(json_str: &str) -> Result<Self> {
         match serde_json::from_str(json_str) {
             Ok(schema) => Ok(schema),
-            Err(e) => Err(CypherGuardError::Schema(CypherGuardSchemaError::InvalidJson(
-                format!("Failed to parse schema JSON: {}", e)
-            ))),
+            Err(e) => Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::InvalidJson(format!("Failed to parse schema JSON: {}", e)),
+            )),
         }
     }
 
@@ -302,18 +308,21 @@ impl DbSchema {
     pub fn to_json_string(&self) -> Result<String> {
         match serde_json::to_string_pretty(self) {
             Ok(json) => Ok(json),
-            Err(e) => Err(CypherGuardError::Schema(CypherGuardSchemaError::SerializationError(
-                format!("Failed to serialize schema: {}", e)
-            ))),
+            Err(e) => Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::SerializationError(format!(
+                    "Failed to serialize schema: {}",
+                    e
+                )),
+            )),
         }
     }
 
     /// Add a new node label to the schema
     pub fn add_label(&mut self, label: &str) -> Result<()> {
         if self.has_label(label) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateLabel(
-                format!("Label '{}' already exists", label)
-            )));
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateLabel(format!("Label '{}' already exists", label)),
+            ));
         }
         self.node_props.insert(label.to_string(), Vec::new());
         Ok(())
@@ -322,9 +331,9 @@ impl DbSchema {
     /// Remove a node label from the schema
     pub fn remove_label(&mut self, label: &str) -> Result<()> {
         if self.node_props.remove(label).is_none() {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
-                format!("Label '{}' not found", label)
-            )));
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(format!("Label '{}' not found", label)),
+            ));
         }
         Ok(())
     }
@@ -335,9 +344,9 @@ impl DbSchema {
             properties.push(property.clone());
             Ok(())
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
-                format!("Label '{}' not found", label)
-            )))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(format!("Label '{}' not found", label)),
+            ))
         }
     }
 
@@ -347,15 +356,18 @@ impl DbSchema {
             let initial_len = properties.len();
             properties.retain(|p| p.name != property_name);
             if properties.len() == initial_len {
-                return Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(
-                    format!("Property '{}' not found for label '{}'", property_name, label)
-                )));
+                return Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(format!(
+                        "Property '{}' not found for label '{}'",
+                        property_name, label
+                    )),
+                ));
             }
             Ok(())
         } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
-                format!("Label '{}' not found", label)
-            )))
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::LabelNotFound(format!("Label '{}' not found", label)),
+            ))
         }
     }
 
@@ -392,8 +404,8 @@ impl DbSchema {
 
     /// Check if a relationship type exists
     pub fn has_relationship_type(&self, rel_type: &str) -> bool {
-        self.rel_props.contains_key(rel_type) || 
-        self.relationships.iter().any(|r| r.rel_type == rel_type)
+        self.rel_props.contains_key(rel_type)
+            || self.relationships.iter().any(|r| r.rel_type == rel_type)
     }
 
     /// Check if a specific relationship property exists
@@ -404,57 +416,76 @@ impl DbSchema {
     }
 
     /// Add a relationship property
-    pub fn add_relationship_property(&mut self, rel_type: &str, property: &DbSchemaProperty) -> Result<()> {
+    pub fn add_relationship_property(
+        &mut self,
+        rel_type: &str,
+        property: &DbSchemaProperty,
+    ) -> Result<()> {
         let properties = self.rel_props.entry(rel_type.to_string()).or_default();
-        
+
         // Check for duplicates
         if properties.iter().any(|p| p.name == property.name) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(
-                format!("Property '{}' already exists for relationship '{}'", property.name, rel_type)
-            )));
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::DuplicateProperty(format!(
+                    "Property '{}' already exists for relationship '{}'",
+                    property.name, rel_type
+                )),
+            ));
         }
-        
+
         properties.push(property.clone());
         Ok(())
     }
 
     /// Remove a relationship property
-    pub fn remove_relationship_property(&mut self, rel_type: &str, property_name: &str) -> Result<()> {
+    pub fn remove_relationship_property(
+        &mut self,
+        rel_type: &str,
+        property_name: &str,
+    ) -> Result<()> {
         if let Some(properties) = self.rel_props.get_mut(rel_type) {
             let initial_len = properties.len();
             properties.retain(|p| p.name != property_name);
-            
+
             if properties.len() == initial_len {
-                return Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(
-                    format!("Property '{}' not found for relationship '{}'", property_name, rel_type)
-                )));
+                return Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::PropertyNotFound(format!(
+                        "Property '{}' not found for relationship '{}'",
+                        property_name, rel_type
+                    )),
+                ));
             }
-            
+
             // Remove empty relationship type
             if properties.is_empty() {
                 self.rel_props.remove(rel_type);
             }
-            
-        Ok(())
-                        } else {
-            Err(CypherGuardError::Schema(CypherGuardSchemaError::relationship_not_found(
-                format!("Relationship type '{}' not found", rel_type)
-            )))
+
+            Ok(())
+        } else {
+            Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::relationship_not_found(format!(
+                    "Relationship type '{}' not found",
+                    rel_type
+                )),
+            ))
         }
     }
 
     /// Add a relationship pattern
     pub fn add_relationship_pattern(&mut self, pattern: DbSchemaRelationshipPattern) -> Result<()> {
         // Check for duplicates
-        if self.relationships.iter().any(|p| 
+        if self.relationships.iter().any(|p| {
             p.start == pattern.start && p.end == pattern.end && p.rel_type == pattern.rel_type
-        ) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::duplicate_relationship(
-                format!("Relationship pattern '({})--[{}]--->({})' already exists", 
-                    pattern.start, pattern.rel_type, pattern.end)
-            )));
+        }) {
+            return Err(CypherGuardError::Schema(
+                CypherGuardSchemaError::duplicate_relationship(format!(
+                    "Relationship pattern '({})--[{}]--->({})' already exists",
+                    pattern.start, pattern.rel_type, pattern.end
+                )),
+            ));
         }
-        
+
         self.relationships.push(pattern);
         Ok(())
     }
@@ -464,17 +495,23 @@ impl DbSchema {
         // Check that all relationship patterns reference existing node labels
         for pattern in &self.relationships {
             if !self.has_label(&pattern.start) {
-                return Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
-                    format!("Start label '{}' in relationship pattern not found", pattern.start)
-                )));
+                return Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::LabelNotFound(format!(
+                        "Start label '{}' in relationship pattern not found",
+                        pattern.start
+                    )),
+                ));
             }
             if !self.has_label(&pattern.end) {
-                return Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
-                    format!("End label '{}' in relationship pattern not found", pattern.end)
-                )));
+                return Err(CypherGuardError::Schema(
+                    CypherGuardSchemaError::LabelNotFound(format!(
+                        "End label '{}' in relationship pattern not found",
+                        pattern.end
+                    )),
+                ));
             }
         }
-        
+
         // Additional validation can be added here
         Ok(())
     }
@@ -482,7 +519,11 @@ impl DbSchema {
 
 impl fmt::Display for DbSchema {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Labels: {:?}", self.node_props.keys().collect::<Vec<_>>())?;
+        writeln!(
+            f,
+            "Labels: {:?}",
+            self.node_props.keys().collect::<Vec<_>>()
+        )?;
         writeln!(f, "Properties:")?;
         for (label, properties) in &self.node_props {
             writeln!(f, "  {}: {:?}", label, properties)?;
@@ -527,11 +568,11 @@ mod tests {
 
     fn create_test_schema() -> DbSchema {
         let mut schema = DbSchema::new();
-        
+
         // Add labels
         schema.add_label("Person").unwrap();
         schema.add_label("Place").unwrap();
-        
+
         // Add properties
         let person_name_property = create_person_name_property();
         let person_age_property = create_person_age_property();
@@ -573,18 +614,18 @@ mod tests {
     #[test]
     fn test_add_and_remove_labels() {
         let mut schema = DbSchema::new();
-        
+
         // Add label
         assert!(schema.add_label("Person").is_ok());
         assert!(schema.has_label("Person"));
-        
+
         // Duplicate label should fail
         assert!(schema.add_label("Person").is_err());
-        
+
         // Remove label
         assert!(schema.remove_label("Person").is_ok());
         assert!(!schema.has_label("Person"));
-        
+
         // Remove non-existent label should fail
         assert!(schema.remove_label("Person").is_err());
     }
@@ -593,22 +634,22 @@ mod tests {
     fn test_add_and_remove_node_property() {
         let mut schema = DbSchema::new();
         schema.add_label("Person").unwrap();
-        
+
         // Add property
         assert!(schema
             .add_node_property("Person", &create_person_name_property(),)
             .is_ok());
         assert!(schema.has_node_property("Person", "name"));
-        
+
         // Duplicate property should fail
         assert!(schema
             .add_node_property("Person", &create_person_name_property())
             .is_err());
-        
+
         // Remove property
         assert!(schema.remove_node_property("Person", "name").is_ok());
         assert!(!schema.has_node_property("Person", "name"));
-        
+
         // Remove non-existent property should fail
         assert!(schema.remove_node_property("Person", "name").is_err());
     }
@@ -617,25 +658,25 @@ mod tests {
     fn test_add_and_remove_relationship_property() {
         let mut schema = DbSchema::new();
         let knows_since_property = create_knows_since_property();
-        
+
         // Add relationship property
         assert!(schema
             .add_relationship_property("KNOWS", &knows_since_property)
             .is_ok());
         assert!(schema.rel_props.contains_key("KNOWS"));
         assert_eq!(schema.rel_props["KNOWS"].len(), 1);
-        
+
         // Duplicate should fail
         assert!(schema
             .add_relationship_property("KNOWS", &knows_since_property)
             .is_err());
-        
+
         // Remove property
         assert!(schema
             .remove_relationship_property("KNOWS", "since")
             .is_ok());
         assert!(!schema.rel_props.contains_key("KNOWS"));
-        
+
         // Remove non-existent should fail
         assert!(schema
             .remove_relationship_property("KNOWS", "since")
@@ -655,35 +696,65 @@ mod tests {
         let mut schema = DbSchema::new();
         schema.add_label("Person").unwrap();
         schema.add_label("Place").unwrap();
-        
+
         // Add valid relationship pattern
         let valid_pattern = DbSchemaRelationshipPattern::new("Person", "Place", "LIVES_IN");
         schema.add_relationship_pattern(valid_pattern).unwrap();
-        
+
         // Schema should be valid
         assert!(schema.validate().is_ok());
-        
+
         // Add invalid relationship pattern (non-existent label)
         let invalid_pattern = DbSchemaRelationshipPattern::new("Person", "NonExistent", "WORKS_AT");
         schema.add_relationship_pattern(invalid_pattern).unwrap();
-        
+
         // Schema should now be invalid
         assert!(schema.validate().is_err());
     }
 
     #[test]
     fn test_property_type_from_string() {
-        assert_eq!(PropertyType::from_string("STRING").unwrap(), PropertyType::STRING);
-        assert_eq!(PropertyType::from_string("str").unwrap(), PropertyType::STRING);
-        assert_eq!(PropertyType::from_string("INTEGER").unwrap(), PropertyType::INTEGER);
-        assert_eq!(PropertyType::from_string("int").unwrap(), PropertyType::INTEGER);
-        assert_eq!(PropertyType::from_string("FLOAT").unwrap(), PropertyType::FLOAT);
-        assert_eq!(PropertyType::from_string("BOOLEAN").unwrap(), PropertyType::BOOLEAN);
-        assert_eq!(PropertyType::from_string("bool").unwrap(), PropertyType::BOOLEAN);
-        assert_eq!(PropertyType::from_string("POINT").unwrap(), PropertyType::POINT);
-        assert_eq!(PropertyType::from_string("DATE_TIME").unwrap(), PropertyType::DATE_TIME);
-        assert_eq!(PropertyType::from_string("LIST").unwrap(), PropertyType::LIST);
-        
+        assert_eq!(
+            PropertyType::from_string("STRING").unwrap(),
+            PropertyType::STRING
+        );
+        assert_eq!(
+            PropertyType::from_string("str").unwrap(),
+            PropertyType::STRING
+        );
+        assert_eq!(
+            PropertyType::from_string("INTEGER").unwrap(),
+            PropertyType::INTEGER
+        );
+        assert_eq!(
+            PropertyType::from_string("int").unwrap(),
+            PropertyType::INTEGER
+        );
+        assert_eq!(
+            PropertyType::from_string("FLOAT").unwrap(),
+            PropertyType::FLOAT
+        );
+        assert_eq!(
+            PropertyType::from_string("BOOLEAN").unwrap(),
+            PropertyType::BOOLEAN
+        );
+        assert_eq!(
+            PropertyType::from_string("bool").unwrap(),
+            PropertyType::BOOLEAN
+        );
+        assert_eq!(
+            PropertyType::from_string("POINT").unwrap(),
+            PropertyType::POINT
+        );
+        assert_eq!(
+            PropertyType::from_string("DATE_TIME").unwrap(),
+            PropertyType::DATE_TIME
+        );
+        assert_eq!(
+            PropertyType::from_string("LIST").unwrap(),
+            PropertyType::LIST
+        );
+
         // Invalid type should fail
         assert!(PropertyType::from_string("INVALID").is_err());
     }

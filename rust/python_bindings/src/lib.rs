@@ -3,9 +3,8 @@
 use ::cypher_guard::{
     get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema,
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
-    DbSchema as CoreDbSchema, 
-    DbSchemaProperty as CoreDbSchemaProperty, 
-    DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern, 
+    DbSchema as CoreDbSchema, DbSchemaProperty as CoreDbSchemaProperty,
+    DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
     PropertyType as CorePropertyType,
 };
 use pyo3::create_exception;
@@ -122,17 +121,20 @@ impl PropertyType {
             "POINT" => CorePropertyType::POINT,
             "DATE_TIME" => CorePropertyType::DATE_TIME,
             "LIST" => CorePropertyType::LIST,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid property type: {}", type_str)
-            )),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Invalid property type: {}",
+                    type_str
+                )))
+            }
         };
         Ok(Self { inner })
     }
-    
+
     fn __str__(&self) -> String {
         self.inner.to_string()
     }
-    
+
     fn __repr__(&self) -> String {
         format!("PropertyType({})", self.inner)
     }
@@ -171,11 +173,14 @@ impl DbSchemaProperty {
             "POINT" => CorePropertyType::POINT,
             "DATE_TIME" => CorePropertyType::DATE_TIME,
             "LIST" => CorePropertyType::LIST,
-            _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid property type: {}", neo4j_type)
-            )),
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Invalid property type: {}",
+                    neo4j_type
+                )))
+            }
         };
-        
+
         let inner = CoreDbSchemaProperty {
             name,
             neo4j_type: property_type,
@@ -185,8 +190,8 @@ impl DbSchemaProperty {
             distinct_value_count: None,
             example_values: None,
         };
-        
-        Ok(Self { 
+
+        Ok(Self {
             name: inner.name.clone(),
             neo4j_type: inner.neo4j_type.to_string(),
             enum_values: inner.enum_values.clone(),
@@ -194,13 +199,16 @@ impl DbSchemaProperty {
             max_value: inner.max_value,
             distinct_value_count: inner.distinct_value_count,
             example_values: inner.example_values.clone(),
-            inner 
+            inner,
         })
     }
 
     #[classmethod]
     #[pyo3(name = "from_dict")]
-    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
         let name = match dict.get_item("name")? {
             Some(value) => value.extract::<String>()?,
             None => match dict.get_item("property")? {
@@ -212,7 +220,7 @@ impl DbSchemaProperty {
                 }
             },
         };
-        
+
         let neo4j_type = match dict.get_item("neo4j_type")? {
             Some(value) => value.extract::<String>()?,
             None => match dict.get_item("type")? {
@@ -224,7 +232,7 @@ impl DbSchemaProperty {
                 }
             },
         };
-        
+
         Self::new(name, &neo4j_type)
     }
 
@@ -250,12 +258,14 @@ impl DbSchemaProperty {
         }
         Ok(dict.into())
     }
-    
+
     fn __repr__(&self) -> String {
-        format!("DbSchemaProperty(name={}, neo4j_type={})", self.name, self.neo4j_type)
+        format!(
+            "DbSchemaProperty(name={}, neo4j_type={})",
+            self.name, self.neo4j_type
+        )
     }
 }
-
 
 /// Python wrapper for DbSchemaRelationshipPattern
 #[pyclass]
@@ -286,10 +296,13 @@ impl DbSchemaRelationshipPattern {
             inner,
         }
     }
-    
+
     #[classmethod]
     #[pyo3(name = "from_dict")]
-    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
         let start = dict
             .get_item("start")?
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'start' field"))?
@@ -322,8 +335,10 @@ impl DbSchemaRelationshipPattern {
     }
 
     fn __repr__(&self) -> String {
-        format!("DbSchemaRelationshipPattern(start={}, end={}, rel_type={})", 
-                self.start, self.end, self.rel_type)
+        format!(
+            "DbSchemaRelationshipPattern(start={}, end={}, rel_type={})",
+            self.start, self.end, self.rel_type
+        )
     }
 }
 
@@ -349,81 +364,97 @@ impl DbSchema {
             inner,
         }
     }
-    
+
     #[classmethod]
     #[pyo3(name = "from_json_string")]
-    fn py_from_json_string(_cls: &Bound<'_, pyo3::types::PyType>, json_str: &str) -> PyResult<Self> {
+    fn py_from_json_string(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        json_str: &str,
+    ) -> PyResult<Self> {
         let inner = CoreDbSchema::from_json_string(json_str)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        
+
         // Convert core node_props to Python wrapper node_props
-        let node_props = inner.node_props.iter().map(|(label, core_properties)| {
-            let properties = core_properties.iter().map(|core_prop| {
-                DbSchemaProperty {
-                    name: core_prop.name.clone(),
-                    neo4j_type: core_prop.neo4j_type.to_string(),
-                    enum_values: core_prop.enum_values.clone(),
-                    min_value: core_prop.min_value,
-                    max_value: core_prop.max_value,
-                    distinct_value_count: core_prop.distinct_value_count,
-                    example_values: core_prop.example_values.clone(),
-                    inner: core_prop.clone(),
-                }
-            }).collect();
-            
-            (label.clone(), properties)
-        }).collect();
-        
+        let node_props = inner
+            .node_props
+            .iter()
+            .map(|(label, core_properties)| {
+                let properties = core_properties
+                    .iter()
+                    .map(|core_prop| DbSchemaProperty {
+                        name: core_prop.name.clone(),
+                        neo4j_type: core_prop.neo4j_type.to_string(),
+                        enum_values: core_prop.enum_values.clone(),
+                        min_value: core_prop.min_value,
+                        max_value: core_prop.max_value,
+                        distinct_value_count: core_prop.distinct_value_count,
+                        example_values: core_prop.example_values.clone(),
+                        inner: core_prop.clone(),
+                    })
+                    .collect();
+
+                (label.clone(), properties)
+            })
+            .collect();
+
         // Convert core relationships to Python wrapper relationships
-        let relationships = inner.relationships.iter().map(|core_rel| {
-            DbSchemaRelationshipPattern {
+        let relationships = inner
+            .relationships
+            .iter()
+            .map(|core_rel| DbSchemaRelationshipPattern {
                 start: core_rel.start.clone(),
                 end: core_rel.end.clone(),
                 rel_type: core_rel.rel_type.clone(),
                 inner: core_rel.clone(),
-            }
-        }).collect();
-        
-        Ok(Self { 
+            })
+            .collect();
+
+        Ok(Self {
             node_props,
             relationships,
-            inner 
+            inner,
         })
     }
-    
-    
+
     fn has_label(&self, label: &str) -> bool {
         self.inner.has_label(label)
     }
-    
+
     fn has_node_property(&self, label: &str, name: &str) -> bool {
         self.inner.has_node_property(label, name)
     }
 
-    #[classmethod] 
+    #[classmethod]
     #[pyo3(name = "from_dict")]
-    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
         let mut core_schema = CoreDbSchema::new();
-        
+
         // Parse node_props (Neo4j GraphRAG standard format)
         if let Some(node_props_item) = dict.get_item("node_props")? {
             let node_props_dict = node_props_item.downcast::<pyo3::types::PyDict>()?;
             for (label, props_item) in node_props_dict.iter() {
                 let label = label.extract::<String>()?;
-                
-                core_schema.add_label(&label)
+
+                core_schema
+                    .add_label(&label)
                     .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-                
+
                 let props_list = props_item.downcast::<pyo3::types::PyList>()?;
                 for prop_item in props_list.iter() {
                     let prop_dict = prop_item.downcast::<pyo3::types::PyDict>()?;
                     let prop = DbSchemaProperty::py_from_dict(_cls, prop_dict)?;
-                    core_schema.add_node_property(&label, &prop.inner)
-                        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+                    core_schema
+                        .add_node_property(&label, &prop.inner)
+                        .map_err(|e| {
+                            PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
+                        })?;
                 }
             }
         }
-        
+
         // Parse rel_props (if present)
         if let Some(rel_props_item) = dict.get_item("rel_props")? {
             let rel_props_dict = rel_props_item.downcast::<pyo3::types::PyDict>()?;
@@ -433,27 +464,34 @@ impl DbSchema {
                 for prop_item in properties_list.iter() {
                     let prop_dict = prop_item.downcast::<pyo3::types::PyDict>()?;
                     let prop = DbSchemaProperty::py_from_dict(_cls, prop_dict)?;
-                    core_schema.add_relationship_property(&rel_type_str, &prop.inner)
-                        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+                    core_schema
+                        .add_relationship_property(&rel_type_str, &prop.inner)
+                        .map_err(|e| {
+                            PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
+                        })?;
                 }
             }
         }
-        
+
         // Parse relationships (if present)
         if let Some(relationships_item) = dict.get_item("relationships")? {
             let relationships_list = relationships_item.downcast::<pyo3::types::PyList>()?;
             for rel_item in relationships_list.iter() {
                 let rel_dict = rel_item.downcast::<pyo3::types::PyDict>()?;
                 let rel = DbSchemaRelationshipPattern::py_from_dict(_cls, rel_dict)?;
-                core_schema.add_relationship_pattern(rel.inner)
+                core_schema
+                    .add_relationship_pattern(rel.inner)
                     .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
             }
         }
-        
+
         // Convert core schema to wrapper
-        let node_props = core_schema.node_props.iter()
+        let node_props = core_schema
+            .node_props
+            .iter()
             .map(|(label, core_properties)| {
-                let properties = core_properties.iter()
+                let properties = core_properties
+                    .iter()
                     .map(|core_prop| DbSchemaProperty {
                         name: core_prop.name.clone(),
                         neo4j_type: core_prop.neo4j_type.to_string(),
@@ -468,8 +506,10 @@ impl DbSchema {
                 (label.clone(), properties)
             })
             .collect();
-            
-        let relationships = core_schema.relationships.iter()
+
+        let relationships = core_schema
+            .relationships
+            .iter()
             .map(|core_rel| DbSchemaRelationshipPattern {
                 start: core_rel.start.clone(),
                 end: core_rel.end.clone(),
@@ -477,7 +517,7 @@ impl DbSchema {
                 inner: core_rel.clone(),
             })
             .collect();
-        
+
         Ok(Self {
             node_props,
             relationships,
@@ -488,7 +528,7 @@ impl DbSchema {
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
-        
+
         // Convert node_props to dict
         let node_props_dict = pyo3::types::PyDict::new_bound(py);
         for (label, properties) in &self.node_props {
@@ -499,21 +539,23 @@ impl DbSchema {
             node_props_dict.set_item(label, props_list)?;
         }
         dict.set_item("node_props", node_props_dict)?;
-        
+
         // Convert relationships to dict
         let rels_list = pyo3::types::PyList::empty_bound(py);
         for rel in &self.relationships {
             rels_list.append(rel.py_to_dict(py)?)?;
         }
         dict.set_item("relationships", rels_list)?;
-        
+
         Ok(dict.into())
     }
-    
+
     fn __repr__(&self) -> String {
-        format!("DbSchema(node_props={} labels, relationships={} types)", 
-                self.node_props.len(), 
-                self.relationships.len())
+        format!(
+            "DbSchema(node_props={} labels, relationships={} types)",
+            self.node_props.len(),
+            self.relationships.len()
+        )
     }
 }
 
@@ -622,12 +664,8 @@ pub fn get_validation_errors(
 ///     to Python dictionaries is planned for future versions.
 pub fn parse_query(py: Python, query: &str) -> PyResult<PyObject> {
     match parse_query_rust(query) {
-        Ok(_ast) => {
-            Ok(PyDict::new_bound(py).into())
-        },
-        Err(e) => {
-            Err(convert_parsing_error(py, e))
-        },
+        Ok(_ast) => Ok(PyDict::new_bound(py).into()),
+        Err(e) => Err(convert_parsing_error(py, e)),
     }
 }
 

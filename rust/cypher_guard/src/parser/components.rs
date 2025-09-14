@@ -19,7 +19,7 @@ fn string_literal_components(input: &str) -> IResult<&str, String> {
     Ok((input, s.to_string()))
 }
 
-// Local number literal parsing function for components  
+// Local number literal parsing function for components
 fn number_literal_components(input: &str) -> IResult<&str, i64> {
     let (input, n) = nom::character::complete::digit1(input)?;
     Ok((input, n.parse().unwrap()))
@@ -47,7 +47,10 @@ pub fn function_call(input: &str) -> IResult<&str, (String, Vec<String>)> {
             map(char('*'), |_| "*".to_string()),
             map(identifier, |s| s.to_string()),
             map(string_literal_components, |s| s),
-            map(|input| number_literal_components(input).map(|(i, n)| (i, n.to_string())), |n| n),
+            map(
+                |input| number_literal_components(input).map(|(i, n)| (i, n.to_string())),
+                |n| n,
+            ),
         )),
     )(input)?;
     let (input, _) = char(')')(input)?;

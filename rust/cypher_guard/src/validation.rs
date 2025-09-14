@@ -104,7 +104,6 @@ impl QueryElements {
         self.property_accesses.push(access);
     }
 
-
     /// Add a pattern sequence for validation
     pub fn add_pattern_sequence(&mut self, pattern: Vec<PatternElement>) {
         self.pattern_sequences.push(pattern);
@@ -115,8 +114,6 @@ impl QueryElements {
         self.property_comparisons.push(comparison);
     }
 }
-
-
 
 /// Convert PropertyValue to PropertyValueType
 fn property_value_to_type(value: &PropertyValue) -> PropertyValueType {
@@ -328,7 +325,10 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
 
 /// Extract elements from a WHERE condition
 fn extract_from_where_condition(condition: &WhereCondition, elements: &mut QueryElements) {
-    eprintln!("🔍 VALIDATION: extract_from_where_condition called with: {:?}", condition);
+    eprintln!(
+        "🔍 VALIDATION: extract_from_where_condition called with: {:?}",
+        condition
+    );
     match condition {
         WhereCondition::Comparison {
             left,
@@ -451,7 +451,10 @@ fn extract_property_access_from_string(
     context: PropertyContext,
 ) {
     let trimmed = s.trim();
-    println!("DEBUG: extract_property_access_from_string called with: '{}'", trimmed);
+    println!(
+        "DEBUG: extract_property_access_from_string called with: '{}'",
+        trimmed
+    );
 
     // Skip string literals (quoted strings)
     if trimmed.starts_with('"') && trimmed.ends_with('"') {
@@ -496,15 +499,20 @@ fn extract_property_access_from_string(
     }
 }
 
-
 /// Validate extracted query elements against the schema
 pub fn validate_query_elements(
     elements: &QueryElements,
     schema: &DbSchema,
 ) -> Vec<CypherGuardValidationError> {
     eprintln!("DEBUG: validate_query_elements called");
-    eprintln!("DEBUG: elements.referenced_variables: {:?}", elements.referenced_variables);
-    eprintln!("DEBUG: elements.defined_variables: {:?}", elements.defined_variables);
+    eprintln!(
+        "DEBUG: elements.referenced_variables: {:?}",
+        elements.referenced_variables
+    );
+    eprintln!(
+        "DEBUG: elements.defined_variables: {:?}",
+        elements.defined_variables
+    );
     let mut errors = Vec::new();
 
     // Validate node labels
@@ -745,7 +753,6 @@ pub fn validate_query_elements(
 
     errors
 }
-
 
 #[cfg(test)]
 mod tests {
