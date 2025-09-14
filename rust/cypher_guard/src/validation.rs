@@ -663,8 +663,8 @@ pub fn validate_query_elements(
         let mut found = false;
 
         // Check if the property exists in any node label
-        for node in &schema.nodes {
-            if node.properties.iter().any(|p| p.name == access.property) {
+        for (_label, properties) in &schema.node_props {
+            if properties.iter().any(|p| p.name == access.property) {
                 found = true;
                 break;
             }
@@ -695,8 +695,8 @@ pub fn validate_query_elements(
         let mut property_def = None;
 
         // Check node properties first
-        for node in &schema.nodes {
-            if let Some(prop) = node.properties.iter().find(|p| p.name == comparison.property) {
+        for (_label, properties) in &schema.node_props {
+            if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
                 property_def = Some(prop);
                 break;
             }

@@ -5,37 +5,25 @@ import pytest
 def schema_json():
     return '''
     {
-        "nodes": [
-            {
-                "label": "Person",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"},
-                    {"name": "age", "neo4j_type": "INTEGER"},
-                    {"name": "created", "neo4j_type": "BOOLEAN"}
-                ]
-            },
-            {
-                "label": "Movie",
-                "properties": [
-                    {"name": "title", "neo4j_type": "STRING"},
-                    {"name": "year", "neo4j_type": "INTEGER"}
-                ]
-            },
-            {
-                "label": "Station",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"},
-                    {"name": "location", "neo4j_type": "POINT"}
-                ]
-            },
-            {
-                "label": "Stop",
-                "properties": [
-                    {"name": "departs", "neo4j_type": "STRING"},
-                    {"name": "arrives", "neo4j_type": "STRING"}
-                ]
-            }
-        ],
+        "node_props": {
+            "Person": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "age", "neo4j_type": "INTEGER"},
+                {"name": "created", "neo4j_type": "BOOLEAN"}
+            ],
+            "Movie": [
+                {"name": "title", "neo4j_type": "STRING"},
+                {"name": "year", "neo4j_type": "INTEGER"}
+            ],
+            "Station": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "location", "neo4j_type": "POINT"}
+            ],
+            "Stop": [
+                {"name": "departs", "neo4j_type": "STRING"},
+                {"name": "arrives", "neo4j_type": "STRING"}
+            ]
+        },
         "rel_props": {
             "KNOWS": [
                 {"name": "since", "neo4j_type": "DATE_TIME"}

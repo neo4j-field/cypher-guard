@@ -149,60 +149,6 @@ impl DbSchemaProperty {
     }
 }
 
-/// Structure representing a node label with its properties in the schema.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct DbSchemaNode {
-    pub label: String,
-    pub properties: Vec<DbSchemaProperty>,
-}
-
-impl DbSchemaNode {
-    pub fn new(label: &str) -> Self {
-        Self {
-            label: label.to_string(),
-            properties: Vec::new(),
-        }
-    }
-
-    pub fn with_properties(label: &str, properties: Vec<DbSchemaProperty>) -> Self {
-        Self {
-            label: label.to_string(),
-            properties,
-        }
-    }
-
-    pub fn add_property(&mut self, property: DbSchemaProperty) -> Result<()> {
-        // Check for duplicates
-        if self.has_property(&property.name) {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::DuplicateProperty(
-                format!("Property '{}' already exists for node '{}'", property.name, self.label)
-            )));
-        }
-        self.properties.push(property);
-        Ok(())
-    }
-
-    pub fn has_property(&self, name: &str) -> bool {
-        self.properties.iter().any(|p| p.name == name)
-    }
-
-    pub fn get_property(&self, name: &str) -> Option<&DbSchemaProperty> {
-        self.properties.iter().find(|p| p.name == name)
-    }
-
-    pub fn remove_property(&mut self, name: &str) -> Result<()> {
-        let initial_len = self.properties.len();
-        self.properties.retain(|p| p.name != name);
-        
-        if self.properties.len() == initial_len {
-            return Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(
-                format!("Property '{}' not found for node '{}'", name, self.label)
-            )));
-        }
-        Ok(())
-    }
-}
-
 /// Structure representing a relationship pattern in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DbSchemaRelationshipPattern {
@@ -314,8 +260,8 @@ impl DbSchemaMetadata {
 /// Follows the Neo4j GraphRAG library standard format.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DbSchema {
-    /// Node labels with their properties (explicit structure)
-    pub nodes: Vec<DbSchemaNode>,
+    /// Node properties by node label (Neo4j GraphRAG standard format)
+    pub node_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Relationship properties by relationship type
     pub rel_props: HashMap<String, Vec<DbSchemaProperty>>,
     /// Valid relationship patterns
@@ -335,7 +281,7 @@ impl DbSchema {
     /// Create a new, empty schema
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
+            node_props: HashMap::new(),
             rel_props: HashMap::new(),
             relationships: Vec::new(),
             metadata: DbSchemaMetadata::new(),
@@ -369,16 +315,13 @@ impl DbSchema {
                 format!("Label '{}' already exists", label)
             )));
         }
-        self.nodes.push(DbSchemaNode::new(label));
+        self.node_props.insert(label.to_string(), Vec::new());
         Ok(())
     }
 
     /// Remove a node label from the schema
     pub fn remove_label(&mut self, label: &str) -> Result<()> {
-        let initial_len = self.nodes.len();
-        self.nodes.retain(|node| node.label != label);
-        
-        if self.nodes.len() == initial_len {
+        if self.node_props.remove(label).is_none() {
             return Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
                 format!("Label '{}' not found", label)
             )));
@@ -388,9 +331,10 @@ impl DbSchema {
 
     /// Add a property to a node label
     pub fn add_node_property(&mut self, label: &str, property: &DbSchemaProperty) -> Result<()> {
-        if let Some(node) = self.nodes.iter_mut().find(|n| n.label == label) {
-            node.add_property(property.clone())
-            } else {
+        if let Some(properties) = self.node_props.get_mut(label) {
+            properties.push(property.clone());
+            Ok(())
+        } else {
             Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
                 format!("Label '{}' not found", label)
             )))
@@ -399,9 +343,16 @@ impl DbSchema {
 
     /// Remove a property from a node label
     pub fn remove_node_property(&mut self, label: &str, property_name: &str) -> Result<()> {
-        if let Some(node) = self.nodes.iter_mut().find(|n| n.label == label) {
-            node.remove_property(property_name)
-            } else {
+        if let Some(properties) = self.node_props.get_mut(label) {
+            let initial_len = properties.len();
+            properties.retain(|p| p.name != property_name);
+            if properties.len() == initial_len {
+                return Err(CypherGuardError::Schema(CypherGuardSchemaError::PropertyNotFound(
+                    format!("Property '{}' not found for label '{}'", property_name, label)
+                )));
+            }
+            Ok(())
+        } else {
             Err(CypherGuardError::Schema(CypherGuardSchemaError::LabelNotFound(
                 format!("Label '{}' not found", label)
             )))
@@ -410,38 +361,33 @@ impl DbSchema {
 
     /// Check if a label exists in the schema
     pub fn has_label(&self, label: &str) -> bool {
-        self.nodes.iter().any(|node| node.label == label)
+        self.node_props.contains_key(label)
     }
 
     /// Check if a specific property exists for a node label
     pub fn has_node_property(&self, label: &str, property_name: &str) -> bool {
-        self.nodes
-            .iter()
-            .find(|node| node.label == label)
-            .is_some_and(|node| node.has_property(property_name))
+        self.node_props
+            .get(label)
+            .is_some_and(|properties| properties.iter().any(|p| p.name == property_name))
     }
 
     /// Get all properties for a specific node label
     pub fn get_node_properties(&self, label: &str) -> Option<&Vec<DbSchemaProperty>> {
-        self.nodes
-            .iter()
-            .find(|node| node.label == label)
-            .map(|node| &node.properties)
+        self.node_props.get(label)
     }
 
     /// Get a specific property for a node label
     pub fn get_node_property(&self, label: &str, property_name: &str) -> Option<&DbSchemaProperty> {
-        self.nodes
-            .iter()
-            .find(|node| node.label == label)
-            .and_then(|node| node.get_property(property_name))
+        self.node_props
+            .get(label)
+            .and_then(|properties| properties.iter().find(|p| p.name == property_name))
     }
 
     /// Check if a property exists in any node
     pub fn has_property_in_nodes(&self, property_name: &str) -> bool {
-        self.nodes
-            .iter()
-            .any(|node| node.has_property(property_name))
+        self.node_props
+            .values()
+            .any(|properties| properties.iter().any(|p| p.name == property_name))
     }
 
     /// Check if a relationship type exists
@@ -536,15 +482,16 @@ impl DbSchema {
 
 impl fmt::Display for DbSchema {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Labels: {:?}", self.nodes.iter().map(|n| &n.label).collect::<Vec<_>>())?;
+        writeln!(f, "Labels: {:?}", self.node_props.keys().collect::<Vec<_>>())?;
         writeln!(f, "Properties:")?;
-        for node in &self.nodes {
-            writeln!(f, "  {}: {:?}", node.label, node.properties)?;
+        for (label, properties) in &self.node_props {
+            writeln!(f, "  {}: {:?}", label, properties)?;
         }
         writeln!(f, "Relationship Properties: {:?}", self.rel_props)?;
         writeln!(f, "Relationships: {:?}", self.relationships)?;
         writeln!(f, "Constraints: {:?}", self.metadata.constraint)?;
-        writeln!(f, "Indexes: {:?}", self.metadata.index)
+        writeln!(f, "Indexes: {:?}", self.metadata.index)?;
+        Ok(())
     }
 }
 

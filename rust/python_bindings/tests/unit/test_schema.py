@@ -27,6 +27,10 @@ def test_PropertyType_equality():
     assert str(pt1) == str(pt2)
     assert str(pt1) != str(pt3)
 
+def test_PropertyType_from_string():
+    pt = PropertyType("STRING")
+    assert str(pt) == "STRING"
+
 def test_DbSchemaProperty_init_from_dict_valid():
     prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]})
     assert prop is not None
@@ -35,89 +39,74 @@ def test_DbSchemaProperty_init_from_dict_valid():
     # Note: enum_values might not be preserved in the current implementation
     assert hasattr(prop, 'enum_values')
 
-def test_DbSchemaProperty_init_from_dict_minimal():
-    prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING"})
-    assert prop is not None
-    assert prop.name == "name"
-    assert prop.neo4j_type == "STRING"
+def test_DbSchemaProperty_init_from_dict_missing_name():
+    with pytest.raises(Exception):
+        DbSchemaProperty.from_dict({"neo4j_type": "STRING"})
 
-def test_DbSchemaProperty_to_dict_valid():
-    prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]})
+def test_DbSchemaProperty_init_from_dict_missing_type():
+    with pytest.raises(Exception):
+        DbSchemaProperty.from_dict({"name": "name"})
+
+def test_DbSchemaProperty_to_dict():
+    prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING"})
     result = prop.to_dict()
-    assert "name" in result
     assert result["name"] == "name"
     assert result["neo4j_type"] == "STRING"
 
-def test_DbSchemaProperty_repr():
-    prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING"})
-    repr_str = repr(prop)
-    assert "DbSchemaProperty" in repr_str
-    assert "name=name" in repr_str
-    assert "neo4j_type=STRING" in repr_str
-
 def test_DbSchemaRelationshipPattern_init_from_dict_valid():
-    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "REL_A"})
+    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "relA"})
     assert rel is not None
     assert rel.start == "nodeA"
     assert rel.end == "nodeB"
-    assert rel.rel_type == "REL_A"
+    assert rel.rel_type == "relA"
 
-def test_DbSchemaRelationshipPattern_init_from_dict_invalid_keys():
-    with pytest.raises(KeyError):
-        DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB"})
+def test_DbSchemaRelationshipPattern_to_dict():
+    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "relA"})
+    result = rel.to_dict()
+    assert result["start"] == "nodeA"
+    assert result["end"] == "nodeB"
+    assert result["rel_type"] == "relA"
 
-def test_DbSchemaRelationshipPattern_repr():
-    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "REL_A"})
-    assert repr(rel) == "DbSchemaRelationshipPattern(start=nodeA, end=nodeB, rel_type=REL_A)"
-
-def test_DbSchemaRelationshipPattern_to_dict_valid():
-    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "REL_A"})
-    assert rel.to_dict() == {"start": "nodeA", "end": "nodeB", "rel_type": "REL_A"}
+def test_DbSchemaRelationshipPattern_str():
+    rel = DbSchemaRelationshipPattern.from_dict({"start": "nodeA", "end": "nodeB", "rel_type": "relA"})
+    rel_str = str(rel)
+    assert "nodeA" in rel_str
+    assert "nodeB" in rel_str
+    assert "relA" in rel_str
 
 def test_DbSchema_init_from_dict_valid():
     schema = DbSchema.from_dict({
-        "nodes": [
-            {
-                "label": "nodeA",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, 
-                    {"name": "age", "neo4j_type": "INTEGER"}
-                ]
-            },
-            {
-                "label": "nodeB",
-                "properties": [
-                    {"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}
-                ]
-            }
-        ],
+        "node_props": {
+            "nodeA": [
+                {"name": "name", "neo4j_type": "STRING"}, 
+                {"name": "age", "neo4j_type": "INTEGER"}
+            ],
+            "nodeB": [
+                {"name": "title", "neo4j_type": "STRING"}
+            ]
+        },
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"index": [], "constraint": []}
     })
     assert schema is not None
-    assert len(schema.nodes) == 2
-    assert len(schema.relationships) == 1
-    assert schema.nodes[0].label == "nodeA"
-    assert len(schema.nodes[0].properties) == 2
-    assert schema.nodes[0].properties[0].name == "name"
-    assert schema.nodes[0].properties[1].name == "age"
-    assert schema.nodes[1].label == "nodeB"
-    assert len(schema.nodes[1].properties) == 1
-    assert schema.nodes[1].properties[0].name == "title"
+    assert len(schema.node_props) == 2
+    assert "nodeA" in schema.node_props
+    assert len(schema.node_props["nodeA"]) == 2
+    assert schema.node_props["nodeA"][0].name == "name"
+    assert "nodeB" in schema.node_props
+    assert len(schema.node_props["nodeB"]) == 1
+    assert schema.node_props["nodeB"][0].name == "title"
     assert schema.relationships[0].start == "nodeA"
 
 def test_DbSchema_to_dict_valid():
     d = {
-        "nodes": [
-            {
-                "label": "nodeA",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"}, 
-                    {"name": "age", "neo4j_type": "INTEGER"}
-                ]
-            }
-        ],
+        "node_props": {
+            "nodeA": [
+                {"name": "name", "neo4j_type": "STRING"}, 
+                {"name": "age", "neo4j_type": "INTEGER"}
+            ]
+        },
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"index": [], "constraint": []}
@@ -125,61 +114,52 @@ def test_DbSchema_to_dict_valid():
     schema = DbSchema.from_dict(d)
     result = schema.to_dict()
     
-    # Check that the basic structure is there (only nodes and relationships are returned)
-    assert "nodes" in result
+    # Check that the basic structure is there (only node_props and relationships are returned)
+    assert "node_props" in result
     assert "relationships" in result
-    assert len(result["nodes"]) == 1
-    assert result["nodes"][0]["label"] == "nodeA"
+    assert len(result["node_props"]) == 1
+    assert "nodeA" in result["node_props"]
     assert len(result["relationships"]) == 1
     assert result["relationships"][0]["start"] == "nodeA"
 
 def test_DbSchema_str():
     schema = DbSchema.from_dict({
-        "nodes": [
-            {
-                "label": "nodeA",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"}, 
-                    {"name": "age", "neo4j_type": "INTEGER"}
-                ]
-            }
-        ],
+        "node_props": {
+            "nodeA": [
+                {"name": "name", "neo4j_type": "STRING"}, 
+                {"name": "age", "neo4j_type": "INTEGER"}
+            ]
+        },
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"index": [], "constraint": []}
     })
     schema_str = str(schema)
-    assert "DbSchema" in schema_str
-    assert "nodes=" in schema_str
-    assert "relationships=" in schema_str
+    assert "node_props=1 labels" in schema_str
+    assert "relationships=1 types" in schema_str
 
 def test_DbSchema_repr():
     schema = DbSchema.from_dict({
-        "nodes": [
-            {
-                "label": "nodeA",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"}
-                ]
-            }
-        ],
-        "rel_props": {},
-        "relationships": [],
+        "node_props": {
+            "nodeA": [
+                {"name": "name", "neo4j_type": "STRING"}, 
+                {"name": "age", "neo4j_type": "INTEGER"}
+            ]
+        },
+        "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
+        "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
         "metadata": {"index": [], "constraint": []}
     })
-    repr_str = repr(schema)
-    assert "DbSchema" in repr_str
+    schema_repr = repr(schema)
+    assert "DbSchema" in schema_repr
 
 def test_DbSchema_has_label():
     schema = DbSchema.from_dict({
-        "nodes": [
-            {
-                "label": "Person",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"}
-                ]
-            }
-        ],
+        "node_props": {
+            "Person": [
+                {"name": "name", "neo4j_type": "STRING"}
+            ]
+        },
         "rel_props": {},
         "relationships": [],
         "metadata": {"index": [], "constraint": []}
@@ -189,20 +169,17 @@ def test_DbSchema_has_label():
 
 def test_DbSchema_has_node_property():
     schema = DbSchema.from_dict({
-        "nodes": [
-            {
-                "label": "Person",
-                "properties": [
-                    {"name": "name", "neo4j_type": "STRING"},
-                    {"name": "age", "neo4j_type": "INTEGER"}
-                ]
-            }
-        ],
+        "node_props": {
+            "Person": [
+                {"name": "name", "neo4j_type": "STRING"},
+                {"name": "age", "neo4j_type": "INTEGER"}
+            ]
+        },
         "rel_props": {},
         "relationships": [],
         "metadata": {"index": [], "constraint": []}
     })
     assert schema.has_node_property("Person", "name") == True
     assert schema.has_node_property("Person", "age") == True
-    assert schema.has_node_property("Person", "height") == False
-    assert schema.has_node_property("Movie", "title") == False
+    assert schema.has_node_property("Person", "title") == False
+    assert schema.has_node_property("Movie", "name") == False

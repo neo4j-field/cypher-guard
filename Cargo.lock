@@ -172,8 +172,7 @@ dependencies = [
 
 [[package]]
 name = "cypher-guard-eval"
-version = "0.1.11"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "clap",
  "colored",
@@ -186,8 +185,7 @@ dependencies = [
 
 [[package]]
 name = "cypher_guard_js_bindings"
-version = "0.1.11"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "cypher-guard",
  "napi",

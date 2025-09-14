@@ -15,7 +15,7 @@ pub use errors::{
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
 };
 pub use schema::{
-    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata, DbSchemaNode,
+    DbSchema, DbSchemaConstraint, DbSchemaIndex, DbSchemaMetadata,
     DbSchemaProperty, DbSchemaRelationshipPattern, PropertyType,
 };
 

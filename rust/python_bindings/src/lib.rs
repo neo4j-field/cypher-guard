@@ -4,7 +4,7 @@ use ::cypher_guard::{
     get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema,
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
     DbSchema as CoreDbSchema, 
-    DbSchemaNode as CoreDbSchemaNode, DbSchemaProperty as CoreDbSchemaProperty, 
+    DbSchemaProperty as CoreDbSchemaProperty, 
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern, 
     PropertyType as CorePropertyType,
 };
@@ -256,44 +256,6 @@ impl DbSchemaProperty {
     }
 }
 
-/// Python wrapper for DbSchemaNode  
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct DbSchemaNode {
-    #[pyo3(get)]
-    pub label: String,
-    #[pyo3(get)]
-    pub properties: Vec<DbSchemaProperty>,
-    inner: CoreDbSchemaNode,
-}
-
-#[pymethods]
-impl DbSchemaNode {
-    #[new]
-    fn new(label: String) -> Self {
-        let inner = CoreDbSchemaNode::new(&label);
-        Self {
-            label: label.clone(),
-            properties: Vec::new(),
-            inner,
-        }
-    }
-    
-    fn add_property(&mut self, property: DbSchemaProperty) -> PyResult<()> {
-        self.inner.add_property(property.inner.clone())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        self.properties.push(property);
-        Ok(())
-    }
-    
-    fn has_property(&self, name: &str) -> bool {
-        self.inner.has_property(name)
-    }
-    
-    fn __repr__(&self) -> String {
-        format!("DbSchemaNode(label={}, properties={})", self.label, self.properties.len())
-    }
-}
 
 /// Python wrapper for DbSchemaRelationshipPattern
 #[pyclass]
@@ -370,7 +332,7 @@ impl DbSchemaRelationshipPattern {
 #[derive(Debug, Clone)]
 pub struct DbSchema {
     #[pyo3(get)]
-    pub nodes: Vec<DbSchemaNode>,
+    pub node_props: std::collections::HashMap<String, Vec<DbSchemaProperty>>,
     #[pyo3(get)]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
     inner: CoreDbSchema,
@@ -382,7 +344,7 @@ impl DbSchema {
     fn new() -> Self {
         let inner = CoreDbSchema::new();
         Self {
-            nodes: Vec::new(),
+            node_props: std::collections::HashMap::new(),
             relationships: Vec::new(),
             inner,
         }
@@ -394,9 +356,9 @@ impl DbSchema {
         let inner = CoreDbSchema::from_json_string(json_str)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         
-        // Convert core nodes to Python wrapper nodes
-        let nodes = inner.nodes.iter().map(|core_node| {
-            let properties = core_node.properties.iter().map(|core_prop| {
+        // Convert core node_props to Python wrapper node_props
+        let node_props = inner.node_props.iter().map(|(label, core_properties)| {
+            let properties = core_properties.iter().map(|core_prop| {
                 DbSchemaProperty {
                     name: core_prop.name.clone(),
                     neo4j_type: core_prop.neo4j_type.to_string(),
@@ -409,11 +371,7 @@ impl DbSchema {
                 }
             }).collect();
             
-            DbSchemaNode {
-                label: core_node.label.clone(),
-                properties,
-                inner: core_node.clone(),
-            }
+            (label.clone(), properties)
         }).collect();
         
         // Convert core relationships to Python wrapper relationships
@@ -427,18 +385,12 @@ impl DbSchema {
         }).collect();
         
         Ok(Self { 
-            nodes,
+            node_props,
             relationships,
             inner 
         })
     }
     
-    fn add_node(&mut self, node: DbSchemaNode) -> PyResult<()> {
-        self.inner.add_label(&node.label)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        self.nodes.push(node);
-        Ok(())
-    }
     
     fn has_label(&self, label: &str) -> bool {
         self.inner.has_label(label)
@@ -453,28 +405,21 @@ impl DbSchema {
     fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
         let mut core_schema = CoreDbSchema::new();
         
-        // Parse nodes (if present)
-        if let Some(nodes_item) = dict.get_item("nodes")? {
-            let nodes_list = nodes_item.downcast::<pyo3::types::PyList>()?;
-            for node_item in nodes_list.iter() {
-                let node_dict = node_item.downcast::<pyo3::types::PyDict>()?;
-                
-                let label = node_dict
-                    .get_item("label")?
-                    .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'label' field"))?
-                    .extract::<String>()?;
+        // Parse node_props (Neo4j GraphRAG standard format)
+        if let Some(node_props_item) = dict.get_item("node_props")? {
+            let node_props_dict = node_props_item.downcast::<pyo3::types::PyDict>()?;
+            for (label, props_item) in node_props_dict.iter() {
+                let label = label.extract::<String>()?;
                 
                 core_schema.add_label(&label)
                     .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
                 
-                if let Some(properties_item) = node_dict.get_item("properties")? {
-                    let properties_list = properties_item.downcast::<pyo3::types::PyList>()?;
-                    for prop_item in properties_list.iter() {
-                        let prop_dict = prop_item.downcast::<pyo3::types::PyDict>()?;
-                        let prop = DbSchemaProperty::py_from_dict(_cls, prop_dict)?;
-                        core_schema.add_node_property(&label, &prop.inner)
-                            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-                    }
+                let props_list = props_item.downcast::<pyo3::types::PyList>()?;
+                for prop_item in props_list.iter() {
+                    let prop_dict = prop_item.downcast::<pyo3::types::PyDict>()?;
+                    let prop = DbSchemaProperty::py_from_dict(_cls, prop_dict)?;
+                    core_schema.add_node_property(&label, &prop.inner)
+                        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
                 }
             }
         }
@@ -506,10 +451,9 @@ impl DbSchema {
         }
         
         // Convert core schema to wrapper
-        let nodes = core_schema.nodes.iter()
-            .map(|core_node| DbSchemaNode {
-                label: core_node.label.clone(),
-                properties: core_node.properties.iter()
+        let node_props = core_schema.node_props.iter()
+            .map(|(label, core_properties)| {
+                let properties = core_properties.iter()
                     .map(|core_prop| DbSchemaProperty {
                         name: core_prop.name.clone(),
                         neo4j_type: core_prop.neo4j_type.to_string(),
@@ -520,8 +464,8 @@ impl DbSchema {
                         example_values: core_prop.example_values.clone(),
                         inner: core_prop.clone(),
                     })
-                    .collect(),
-                inner: core_node.clone(),
+                    .collect();
+                (label.clone(), properties)
             })
             .collect();
             
@@ -535,7 +479,7 @@ impl DbSchema {
             .collect();
         
         Ok(Self {
-            nodes,
+            node_props,
             relationships,
             inner: core_schema,
         })
@@ -545,19 +489,16 @@ impl DbSchema {
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
         
-        // Convert nodes to dict
-        let nodes_list = pyo3::types::PyList::empty_bound(py);
-        for node in &self.nodes {
-            let node_dict = pyo3::types::PyDict::new_bound(py);
-            node_dict.set_item("label", &node.label)?;
+        // Convert node_props to dict
+        let node_props_dict = pyo3::types::PyDict::new_bound(py);
+        for (label, properties) in &self.node_props {
             let props_list = pyo3::types::PyList::empty_bound(py);
-            for prop in &node.properties {
+            for prop in properties {
                 props_list.append(prop.py_to_dict(py)?)?;
             }
-            node_dict.set_item("properties", props_list)?;
-            nodes_list.append(node_dict)?;
+            node_props_dict.set_item(label, props_list)?;
         }
-        dict.set_item("nodes", nodes_list)?;
+        dict.set_item("node_props", node_props_dict)?;
         
         // Convert relationships to dict
         let rels_list = pyo3::types::PyList::empty_bound(py);
@@ -570,8 +511,8 @@ impl DbSchema {
     }
     
     fn __repr__(&self) -> String {
-        format!("DbSchema(nodes={} labels, relationships={} types)", 
-                self.nodes.len(), 
+        format!("DbSchema(node_props={} labels, relationships={} types)", 
+                self.node_props.len(), 
                 self.relationships.len())
     }
 }
@@ -604,7 +545,7 @@ impl DbSchema {
 pub fn validate_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
     let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
         // Schema provided as JSON string
-        DbSchema::from_json_string(schema_str).map_err(|e| convert_cypher_error(py, e))?
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
     } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
         // Schema provided as DbSchema object
         schema_obj
@@ -614,7 +555,7 @@ pub fn validate_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> Py
         ));
     };
 
-    validate_cypher_with_schema(query, &db_schema).map_err(|e| convert_cypher_error(py, e))
+    validate_cypher_with_schema(query, &db_schema.inner).map_err(|e| convert_cypher_error(py, e))
 }
 
 #[pyfunction]
@@ -646,7 +587,7 @@ pub fn get_validation_errors(
 ) -> PyResult<Vec<String>> {
     let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
         // Schema provided as JSON string
-        DbSchema::from_json_string(schema_str).map_err(|e| convert_cypher_error(py, e))?
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
     } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
         // Schema provided as DbSchema object
         schema_obj
@@ -656,7 +597,7 @@ pub fn get_validation_errors(
         ));
     };
 
-    Ok(get_cypher_validation_errors(query, &db_schema))
+    Ok(get_cypher_validation_errors(query, &db_schema.inner))
 }
 
 #[pyfunction]
@@ -693,7 +634,6 @@ pub fn parse_query(py: Python, query: &str) -> PyResult<PyObject> {
 #[pymodule]
 fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchema>()?;
-    m.add_class::<DbSchemaNode>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<DbSchemaRelationshipPattern>()?;
     m.add_class::<PropertyType>()?;

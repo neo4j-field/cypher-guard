@@ -121,7 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(schema) => {
             if verbose {
                 println!("✅ Schema loaded successfully");
-                println!("   - Node labels: {}", schema.nodes.len());
+                println!("   - Node labels: {}", schema.node_props.len());
                 println!("   - Relationship types: {}", schema.rel_props.len());
                 println!("   - Relationships: {}", schema.relationships.len());
             }
