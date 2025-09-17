@@ -4,7 +4,7 @@ version = "0.1.17"
 edition = "2021"
 
 [lib]
-name = "cypher_guard"
+name = "cypher_guard_python"
 crate-type = ["cdylib"]
 
 [dependencies]

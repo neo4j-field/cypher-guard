@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "cypher_guard"
-crate-type = ["rlib", "dylib"]
+crate-type = ["rlib"]
 
 [[bin]]
 name = "cypher_guard"
