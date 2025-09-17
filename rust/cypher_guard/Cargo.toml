@@ -7,6 +7,10 @@ edition = "2021"
 name = "cypher_guard"
 crate-type = ["rlib"]
 
+[[bin]]
+name = "cypher_guard"
+path = "src/main.rs"
+
 [features]
 default = []
 

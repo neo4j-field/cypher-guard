@@ -4,7 +4,7 @@ version = "0.1.17"
 edition = "2021"
 
 [lib]
-name = "cypher_guard"
+name = "cypher_guard_python"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -14,11 +14,3 @@ serde_json = "1.0"
 
 [build-dependencies]
 pyo3-build-config = "0.21.2"
-
-[build]
-rustflags = [
-    "-C", "link-arg=-undefined",
-    "-C", "link-arg=dynamic_lookup",
-    "-C", "link-arg=-framework",
-    "-C", "link-arg=CoreFoundation"
-]

@@ -54,7 +54,7 @@ jobs:
     - name: Generate Rust docs
       run: |
         cd rust/cypher_guard
-        cargo doc --no-deps --features python-bindings
+        cargo doc --no-deps
         cd ../..
         
         # Copy Rust docs to output directory
