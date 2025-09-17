@@ -70,7 +70,7 @@ jobs:
         npm ci
         npm run build
     
-    # Build evaluation tool
+    # Build evaluation tool  
     - name: Build evaluation tool
       run: |
         cargo build --release --bin eval
@@ -93,11 +93,10 @@ jobs:
         mkdir -p release-assets
         
         # Copy Rust binaries
-        cp target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
-        cp rust/cypher_guard/target/release/libcypher_guard.so release-assets/libcypher_guard-linux.so
+        cp rust/cypher_guard/target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
         
-        # Copy Python wheel
-        cp rust/python_bindings/target/wheels/*.whl release-assets/
+        # Copy Python wheel  
+        cp target/wheels/*.whl release-assets/
         
         # Copy JavaScript package
         cp rust/js_bindings/cypher_guard-*.tgz release-assets/ 2>/dev/null || true

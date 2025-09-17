@@ -1117,8 +1117,8 @@ pub fn parse_query(py: Python, query: &str) -> PyResult<PyObject> {
     }
 }
 
-#[pymodule(name = "cypher_guard")]
-fn cypher_guard_python(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pymodule]
+fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<DbSchemaRelationshipPattern>()?;
