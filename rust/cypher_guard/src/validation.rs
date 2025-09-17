@@ -325,10 +325,6 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
 
 /// Extract elements from a WHERE condition
 fn extract_from_where_condition(condition: &WhereCondition, elements: &mut QueryElements) {
-    eprintln!(
-        "🔍 VALIDATION: extract_from_where_condition called with: {:?}",
-        condition
-    );
     match condition {
         WhereCondition::Comparison {
             left,
@@ -355,7 +351,9 @@ fn extract_from_where_condition(condition: &WhereCondition, elements: &mut Query
                         });
                     }
                 }
-            } else if let PropertyValue::Identifier(right_str) = right {
+            }
+            
+            if let PropertyValue::Identifier(right_str) = right {
                 if right_str.contains('.') {
                     // Right side is a property access
                     let parts: Vec<&str> = right_str.split('.').collect();
@@ -728,15 +726,7 @@ pub fn validate_query_elements(
                 (PropertyValueType::Boolean, t) if t == "BOOLEAN" => false,
                 (PropertyValueType::Null, _) => false, // Null is always valid
                 (PropertyValueType::Unknown, _) => false, // Skip unknown types (variables)
-                // Special case: if we have a number but the property expects a string,
-                // and the number is simple (like "30"), it might be a string literal that got stripped
-                (PropertyValueType::Number, t) if t == "STRING" => {
-                    // Check if the value looks like it could be a string literal
-                    // (simple numbers like "30", "123", etc.)
-                    let is_simple_number = comparison.value.chars().all(|c| c.is_ascii_digit())
-                        && comparison.value.len() <= 10; // Reasonable limit for string literals
-                    !is_simple_number // Only flag as mismatch if it's not a simple number
-                }
+                // Strict type checking: no automatic conversions between types
                 _ => true, // Type mismatch
             };
 
@@ -748,6 +738,13 @@ pub fn validate_query_elements(
                     actual_value: comparison.value.clone(),
                 });
             }
+        } else {
+            // Property not found in schema - this is also an error
+            errors.push(CypherGuardValidationError::InvalidPropertyAccess {
+                variable: comparison.variable.clone(),
+                property: comparison.property.clone(),
+                context: "property comparison".to_string(),
+            });
         }
     }
 
