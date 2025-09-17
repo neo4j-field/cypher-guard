@@ -125,7 +125,8 @@ impl QueryElements {
 
     /// Add a variable to relationship type binding
     pub fn add_variable_relationship_binding(&mut self, variable: String, rel_type: String) {
-        self.variable_relationship_bindings.insert(variable, rel_type);
+        self.variable_relationship_bindings
+            .insert(variable, rel_type);
     }
 }
 
@@ -261,13 +262,10 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                 // Extract variable from node
                 if let Some(variable) = &node.variable {
                     elements.add_defined_variable(variable.clone());
-                    
+
                     // Track variable to node label binding
                     if let Some(label) = &node.label {
-                        elements.add_variable_node_binding(
-                            variable.clone(),
-                            label.clone()
-                        );
+                        elements.add_variable_node_binding(variable.clone(), label.clone());
                     }
                 }
 
@@ -289,12 +287,12 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     | RelationshipPattern::OptionalRelationship(details) => {
                         if let Some(variable) = &details.variable {
                             elements.add_defined_variable(variable.clone());
-                            
+
                             // Track variable to relationship type binding
                             if let Some(rel_type) = &details.rel_type {
                                 elements.add_variable_relationship_binding(
                                     variable.clone(),
-                                    rel_type.clone()
+                                    rel_type.clone(),
                                 );
                             }
                         }
@@ -382,7 +380,7 @@ fn extract_from_where_condition(condition: &WhereCondition, elements: &mut Query
                     }
                 }
             }
-            
+
             if let PropertyValue::Identifier(right_str) = right {
                 if right_str.contains('.') {
                     // Right side is a property access
@@ -736,7 +734,10 @@ pub fn validate_query_elements(
             if let Some(properties) = schema.node_props.get(bound_node_label) {
                 property_def = properties.iter().find(|p| p.name == comparison.property);
             }
-        } else if let Some(bound_rel_type) = elements.variable_relationship_bindings.get(&comparison.variable) {
+        } else if let Some(bound_rel_type) = elements
+            .variable_relationship_bindings
+            .get(&comparison.variable)
+        {
             // Variable is bound to a specific relationship type - search only within that type
             if let Some(properties) = schema.rel_props.get(bound_rel_type) {
                 property_def = properties.iter().find(|p| p.name == comparison.property);
