@@ -15,6 +15,8 @@ pub struct QueryElements {
     pub defined_variables: HashSet<String>, // Variables that are defined (from MATCH, UNWIND, etc.)
     pub referenced_variables: HashSet<String>, // Variables that are referenced (from WITH, WHERE, RETURN, etc.)
     pub pattern_sequences: Vec<Vec<PatternElement>>, // Track complete pattern sequences for validation
+    pub variable_node_bindings: HashMap<String, String>, // variable -> node label bindings
+    pub variable_relationship_bindings: HashMap<String, String>, // variable -> relationship type bindings
 }
 
 #[derive(Debug, Clone)]
@@ -60,6 +62,8 @@ impl QueryElements {
             defined_variables: HashSet::new(),
             referenced_variables: HashSet::new(),
             pattern_sequences: Vec::new(),
+            variable_node_bindings: HashMap::new(),
+            variable_relationship_bindings: HashMap::new(),
         }
     }
 
@@ -112,6 +116,16 @@ impl QueryElements {
     /// Add a property comparison for type validation
     pub fn add_property_comparison(&mut self, comparison: PropertyComparison) {
         self.property_comparisons.push(comparison);
+    }
+
+    /// Add a variable to node label binding
+    pub fn add_variable_node_binding(&mut self, variable: String, label: String) {
+        self.variable_node_bindings.insert(variable, label);
+    }
+
+    /// Add a variable to relationship type binding
+    pub fn add_variable_relationship_binding(&mut self, variable: String, rel_type: String) {
+        self.variable_relationship_bindings.insert(variable, rel_type);
     }
 }
 
@@ -247,6 +261,14 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                 // Extract variable from node
                 if let Some(variable) = &node.variable {
                     elements.add_defined_variable(variable.clone());
+                    
+                    // Track variable to node label binding
+                    if let Some(label) = &node.label {
+                        elements.add_variable_node_binding(
+                            variable.clone(),
+                            label.clone()
+                        );
+                    }
                 }
 
                 if let Some(label) = &node.label {
@@ -267,6 +289,14 @@ fn extract_from_match_element(element: &MatchElement, elements: &mut QueryElemen
                     | RelationshipPattern::OptionalRelationship(details) => {
                         if let Some(variable) = &details.variable {
                             elements.add_defined_variable(variable.clone());
+                            
+                            // Track variable to relationship type binding
+                            if let Some(rel_type) = &details.rel_type {
+                                elements.add_variable_relationship_binding(
+                                    variable.clone(),
+                                    rel_type.clone()
+                                );
+                            }
                         }
                     }
                 }
@@ -697,23 +727,37 @@ pub fn validate_query_elements(
 
     // Validate property type comparisons
     for comparison in &elements.property_comparisons {
-        // Find the property definition in the schema
+        // Find the property definition in the schema - context-aware search
         let mut property_def = None;
 
-        // Check node properties first
-        for properties in schema.node_props.values() {
-            if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
-                property_def = Some(prop);
-                break;
+        // First, try context-aware search using variable bindings
+        if let Some(bound_node_label) = elements.variable_node_bindings.get(&comparison.variable) {
+            // Variable is bound to a specific node label - search only within that label
+            if let Some(properties) = schema.node_props.get(bound_node_label) {
+                property_def = properties.iter().find(|p| p.name == comparison.property);
             }
-        }
-
-        // If not found in nodes, check relationship properties
-        if property_def.is_none() {
-            for properties in schema.rel_props.values() {
+        } else if let Some(bound_rel_type) = elements.variable_relationship_bindings.get(&comparison.variable) {
+            // Variable is bound to a specific relationship type - search only within that type
+            if let Some(properties) = schema.rel_props.get(bound_rel_type) {
+                property_def = properties.iter().find(|p| p.name == comparison.property);
+            }
+        } else {
+            // Fallback: No binding found, use global search (for backward compatibility)
+            // Check node properties first
+            for properties in schema.node_props.values() {
                 if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
                     property_def = Some(prop);
                     break;
+                }
+            }
+
+            // If not found in nodes, check relationship properties
+            if property_def.is_none() {
+                for properties in schema.rel_props.values() {
+                    if let Some(prop) = properties.iter().find(|p| p.name == comparison.property) {
+                        property_def = Some(prop);
+                        break;
+                    }
                 }
             }
         }
