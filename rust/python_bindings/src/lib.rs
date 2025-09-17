@@ -3,9 +3,9 @@
 use ::cypher_guard::{
     get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema,
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
-    DbSchema as CoreDbSchema, DbSchemaProperty as CoreDbSchemaProperty,
+    DbSchema as CoreDbSchema, DbSchemaMetadata as CoreDbSchemaMetadata,
+    DbSchemaProperty as CoreDbSchemaProperty,
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
-    DbSchemaMetadata as CoreDbSchemaMetadata,
     PropertyType as CorePropertyType,
 };
 use pyo3::create_exception;
@@ -579,20 +579,22 @@ impl DbSchema {
         // Parse metadata from the input dictionary
         let metadata = if let Some(metadata_item) = dict.get_item("metadata")? {
             let metadata_dict = metadata_item.downcast::<pyo3::types::PyDict>()?;
-            
+
             // Extract constraint and index as raw PyObjects
             let constraint = if let Some(constraint_item) = metadata_dict.get_item("constraint")? {
-                constraint_item.extract::<Vec<PyObject>>().unwrap_or_default()
+                constraint_item
+                    .extract::<Vec<PyObject>>()
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             };
-            
+
             let index = if let Some(index_item) = metadata_dict.get_item("index")? {
                 index_item.extract::<Vec<PyObject>>().unwrap_or_default()
             } else {
                 Vec::new()
             };
-            
+
             DbSchemaMetadata {
                 constraint,
                 index,

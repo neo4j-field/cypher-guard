@@ -44,10 +44,10 @@ fmt:
 	cargo fmt --all -- --check
 
 clippy:
-	cd rust/cypher_guard && cargo clippy --features python-bindings -- -D warnings -A clippy::uninlined_format_args
+	cd rust/cypher_guard && cargo clippy -- -D warnings -A clippy::uninlined_format_args
 
 clippy-all:
-	cargo clippy --features python-bindings -- -D warnings -A clippy::uninlined_format_args
+	cargo clippy -- -D warnings -A clippy::uninlined_format_args
 
 build-rust:
 	cargo build --verbose
@@ -78,7 +78,7 @@ docs: docs-rust docs-python docs-js
 
 docs-rust:
 	@echo "Generating Rust API documentation..."
-	cd rust/cypher_guard && cargo doc --no-deps --features python-bindings
+	cd rust/cypher_guard && cargo doc --no-deps
 	mkdir -p docs/api/rust
 	cp -r target/doc/* docs/api/rust/
 	@echo "Rust documentation generated at docs/api/rust/"
