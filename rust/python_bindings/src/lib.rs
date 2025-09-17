@@ -643,6 +643,136 @@ pub fn get_validation_errors(
 }
 
 #[pyfunction]
+#[pyo3(text_signature = "(query, schema, /)")]
+/// Fast validation check - returns True if query is valid, False if it has any errors.
+/// Optimized for LLM validation loops where you only need to know if the query is valid.
+///
+/// Args:
+///     query (str): The Cypher query string to validate
+///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
+///
+/// Returns:
+///     bool: True if query is completely valid, False if it has any validation or parsing errors
+///
+/// Examples:
+///     >>> has_valid_cypher("MATCH (p:Person) RETURN p.name", schema_json)
+///     True
+///     >>> has_valid_cypher("MATCH (p:InvalidLabel) RETURN p.name", schema_json)  
+///     False
+pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
+    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
+        schema_obj
+    } else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "schema must be either a JSON string or DbSchema object",
+        ));
+    };
+
+    // Fast path - just check if there are any validation errors
+    let errors = get_cypher_validation_errors(query, &db_schema.inner);
+    Ok(errors.is_empty())
+}
+
+#[pyfunction]
+#[pyo3(text_signature = "(query, schema, /)")]
+/// Get structured validation errors optimized for LLM feedback.
+/// Returns categorized error information to help LLMs generate better corrections.
+///
+/// Args:
+///     query (str): The Cypher query string to validate
+///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
+///
+/// Returns:
+///     dict: Structured error information with categories and suggestions
+///
+/// Examples:
+///     >>> get_structured_errors("MATCH (p:InvalidLabel) RETURN p.invalid", schema)
+///     {
+///         'has_errors': True,
+///         'error_count': 2,
+///         'categories': {
+///             'schema_errors': ['Invalid node label: InvalidLabel'],
+///             'property_errors': ['Invalid property: p.invalid'],
+///             'syntax_errors': [],
+///             'type_errors': []
+///         },
+///         'query': 'MATCH (p:InvalidLabel) RETURN p.invalid',
+///         'suggestions': ['Check available node labels in schema', 'Verify property names']
+///     }
+pub fn get_structured_errors(
+    py: Python,
+    query: &str,
+    schema: &Bound<'_, PyAny>,
+) -> PyResult<PyObject> {
+    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
+    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
+        schema_obj
+    } else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "schema must be either a JSON string or DbSchema object",
+        ));
+    };
+
+    let errors = get_cypher_validation_errors(query, &db_schema.inner);
+
+    // Categorize errors for better LLM understanding
+    let mut schema_errors = Vec::new();
+    let mut property_errors = Vec::new();
+    let mut syntax_errors = Vec::new();
+    let mut type_errors = Vec::new();
+    let mut suggestions = Vec::new();
+
+    for error in &errors {
+        let error_str = error.to_string();
+        if error_str.contains("Invalid node label")
+            || error_str.contains("Invalid relationship type")
+        {
+            schema_errors.push(error_str.clone());
+            suggestions.push(
+                "Check available node labels and relationship types in your schema".to_string(),
+            );
+        } else if error_str.contains("Invalid property") || error_str.contains("property access") {
+            property_errors.push(error_str.clone());
+            suggestions.push(
+                "Verify property names exist for the specified node/relationship type".to_string(),
+            );
+        } else if error_str.contains("property type") || error_str.contains("expected") {
+            type_errors.push(error_str.clone());
+            suggestions.push(
+                "Check the data type of the value matches the property's expected type".to_string(),
+            );
+        } else {
+            syntax_errors.push(error_str);
+            suggestions.push("Review Cypher syntax and query structure".to_string());
+        }
+    }
+
+    // Remove duplicate suggestions
+    suggestions.sort();
+    suggestions.dedup();
+
+    // Build result dictionary
+    let result = PyDict::new_bound(py);
+    result.set_item("has_errors", !errors.is_empty())?;
+    result.set_item("error_count", errors.len())?;
+    result.set_item("query", query)?;
+
+    let categories = PyDict::new_bound(py);
+    categories.set_item("schema_errors", schema_errors)?;
+    categories.set_item("property_errors", property_errors)?;
+    categories.set_item("syntax_errors", syntax_errors)?;
+    categories.set_item("type_errors", type_errors)?;
+    result.set_item("categories", categories)?;
+
+    result.set_item("suggestions", suggestions)?;
+
+    Ok(result.into())
+}
+
+#[pyfunction]
 #[pyo3(text_signature = "(query, /)")]
 /// Parse a Cypher query into an Abstract Syntax Tree (AST).
 ///
@@ -677,6 +807,8 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PropertyType>()?;
     m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
     m.add_function(wrap_pyfunction!(get_validation_errors, m)?)?;
+    m.add_function(wrap_pyfunction!(has_valid_cypher, m)?)?;
+    m.add_function(wrap_pyfunction!(get_structured_errors, m)?)?;
     // `parse_query` is not implemented yet
     // m.add_function(wrap_pyfunction!(parse_query, m)?)?;
 
