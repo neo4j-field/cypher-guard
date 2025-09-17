@@ -5,6 +5,7 @@ use ::cypher_guard::{
     CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
     DbSchema as CoreDbSchema, DbSchemaProperty as CoreDbSchemaProperty,
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
+    DbSchemaMetadata as CoreDbSchemaMetadata,
     PropertyType as CorePropertyType,
 };
 use pyo3::create_exception;
@@ -93,6 +94,9 @@ fn convert_validation_error(_py: Python, err: CypherGuardValidationError) -> PyE
             "Invalid property type for '{}.{}': expected {}, got value '{}'",
             variable, property, expected_type, actual_value
         )),
+        CypherGuardValidationError::UndefinedVariable(var) => {
+            UndefinedVariable::new_err(format!("Undefined variable: {}", var))
+        }
     }
 }
 
@@ -342,6 +346,30 @@ impl DbSchemaRelationshipPattern {
     }
 }
 
+/// Python wrapper for DbSchemaMetadata
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DbSchemaMetadata {
+    #[pyo3(get)]
+    pub constraint: Vec<PyObject>,
+    #[pyo3(get)]
+    pub index: Vec<PyObject>,
+    inner: CoreDbSchemaMetadata,
+}
+
+#[pymethods]
+impl DbSchemaMetadata {
+    #[new]
+    fn new() -> Self {
+        let inner = CoreDbSchemaMetadata::new();
+        Self {
+            constraint: Vec::new(),
+            index: Vec::new(),
+            inner,
+        }
+    }
+}
+
 /// Python wrapper for DbSchema
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -349,7 +377,11 @@ pub struct DbSchema {
     #[pyo3(get)]
     pub node_props: std::collections::HashMap<String, Vec<DbSchemaProperty>>,
     #[pyo3(get)]
+    pub rel_props: std::collections::HashMap<String, Vec<DbSchemaProperty>>,
+    #[pyo3(get)]
     pub relationships: Vec<DbSchemaRelationshipPattern>,
+    #[pyo3(get)]
+    pub metadata: DbSchemaMetadata,
     inner: CoreDbSchema,
 }
 
@@ -360,7 +392,9 @@ impl DbSchema {
         let inner = CoreDbSchema::new();
         Self {
             node_props: std::collections::HashMap::new(),
+            rel_props: std::collections::HashMap::new(),
             relationships: Vec::new(),
+            metadata: DbSchemaMetadata::new(),
             inner,
         }
     }
@@ -411,7 +445,9 @@ impl DbSchema {
 
         Ok(Self {
             node_props,
+            rel_props: std::collections::HashMap::new(), // Empty for JSON string method
             relationships,
+            metadata: DbSchemaMetadata::new(), // Empty for JSON string method
             inner,
         })
     }
@@ -518,9 +554,59 @@ impl DbSchema {
             })
             .collect();
 
+        // Parse rel_props
+        let rel_props = core_schema
+            .rel_props
+            .iter()
+            .map(|(rel_type, core_properties)| {
+                let properties = core_properties
+                    .iter()
+                    .map(|core_prop| DbSchemaProperty {
+                        name: core_prop.name.clone(),
+                        neo4j_type: core_prop.neo4j_type.to_string(),
+                        enum_values: core_prop.enum_values.clone(),
+                        min_value: core_prop.min_value,
+                        max_value: core_prop.max_value,
+                        distinct_value_count: core_prop.distinct_value_count,
+                        example_values: core_prop.example_values.clone(),
+                        inner: core_prop.clone(),
+                    })
+                    .collect();
+                (rel_type.clone(), properties)
+            })
+            .collect();
+
+        // Parse metadata from the input dictionary
+        let metadata = if let Some(metadata_item) = dict.get_item("metadata")? {
+            let metadata_dict = metadata_item.downcast::<pyo3::types::PyDict>()?;
+            
+            // Extract constraint and index as raw PyObjects
+            let constraint = if let Some(constraint_item) = metadata_dict.get_item("constraint")? {
+                constraint_item.extract::<Vec<PyObject>>().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            
+            let index = if let Some(index_item) = metadata_dict.get_item("index")? {
+                index_item.extract::<Vec<PyObject>>().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            
+            DbSchemaMetadata {
+                constraint,
+                index,
+                inner: CoreDbSchemaMetadata::new(),
+            }
+        } else {
+            DbSchemaMetadata::new()
+        };
+
         Ok(Self {
             node_props,
+            rel_props,
             relationships,
+            metadata,
             inner: core_schema,
         })
     }
@@ -1034,6 +1120,7 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<DbSchemaRelationshipPattern>()?;
+    m.add_class::<DbSchemaMetadata>()?;
     m.add_class::<PropertyType>()?;
     m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
     m.add_function(wrap_pyfunction!(get_validation_errors, m)?)?;

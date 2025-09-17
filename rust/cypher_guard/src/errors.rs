@@ -85,6 +85,9 @@ pub enum CypherGuardValidationError {
         expected_type: String,
         actual_value: String,
     },
+
+    #[error("Undefined variable: {0}")]
+    UndefinedVariable(String),
 }
 
 impl CypherGuardValidationError {

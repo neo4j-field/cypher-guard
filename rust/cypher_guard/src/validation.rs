@@ -541,6 +541,15 @@ pub fn validate_query_elements(
     );
     let mut errors = Vec::new();
 
+    // Validate that all referenced variables are defined
+    for referenced_var in &elements.referenced_variables {
+        if !elements.defined_variables.contains(referenced_var) {
+            errors.push(CypherGuardValidationError::UndefinedVariable(
+                referenced_var.clone(),
+            ));
+        }
+    }
+
     // Validate node labels
     for label in &elements.node_labels {
         if !schema.has_label(label) {

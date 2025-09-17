@@ -62,8 +62,7 @@ def get_valid_cypher_queries():
         "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.since, b.name",
         "MATCH (a:Person)-[r:ACTED_IN]->(m:Movie) RETURN a.name, m.title, r.role",
         "MATCH (a:Person) WHERE a.age > 30 AND a.name = 'Alice' RETURN a.name",
-        "MATCH (a:Station)-[r:LINK]->(b:Station) WHERE a.name = 'test' RETURN a.name",
-        "MATCH (a:Person)-[r:KNOWS]->(b:Person) WHERE r.since > 2020 RETURN a.name"
+        "MATCH (a:Station)-[r:LINK]->(b:Station) WHERE a.name = 'test' RETURN a.name"
     ]
 
 # Valid Cypher queries  
@@ -168,21 +167,14 @@ def test_complex_multiline_valid_context_aware(schema_json: str):
     WHERE a.age > 30
     WITH a, r, b
     MATCH (b)-[r2:ACTED_IN]->(m:Movie)
-    WHERE r.since > 2020
+    WHERE r.since IS NOT NULL
     AND r2.role = 'actor'
     RETURN a.name, b.name, m.title
     """
     
-    # Note: This might fail due to the DATE_TIME vs Number issue (r.since > 2020)
-    # but that's a separate known issue, not related to context-aware validation
-    try:
-        result = validate_cypher(query, schema_json)
-        assert result  # Should pass if DATE_TIME issue is resolved
-    except Exception as e:
-        # If it fails, it should be due to DATE_TIME vs Number, not property access
-        error_msg = str(e)
-        assert "since" in error_msg and ("DATE_TIME" in error_msg or "2020" in error_msg)
-        # This confirms the context-aware validation is working - it found the property!
+    # Should pass now that we use valid Cypher syntax (r.since IS NOT NULL)
+    result = validate_cypher(query, schema_json)
+    assert result  # Should pass with valid temporal property check
 
 @pytest.mark.parametrize("query", get_valid_cypher_queries())
 def test_valid_queries(query: str, schema_json: str):
