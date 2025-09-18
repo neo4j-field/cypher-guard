@@ -51,7 +51,6 @@ impl PropertyType {
     }
 }
 
-
 /// Structure representing a property in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DbSchemaProperty {

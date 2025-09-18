@@ -103,8 +103,17 @@ jobs:
     - name: Install dependencies
       run: cd rust/js_bindings && npm ci
     
+    - name: Build workspace dependencies
+      run: cargo build --release --workspace
+    
     - name: Build JavaScript bindings
-      run: cd rust/js_bindings && npm run build
+      run: |
+        cd rust/js_bindings
+        echo "Building JavaScript bindings..."
+        npm run build
+        echo "Build completed. Checking for native modules..."
+        ls -la *.node || echo "No .node files found in root"
+        ls -la dist/*.node || echo "No .node files found in dist"
     
     - name: Run JavaScript tests
       run: cd rust/js_bindings && npm test
