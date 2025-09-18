@@ -114,6 +114,10 @@ jobs:
         echo "Build completed. Checking for native modules..."
         ls -la *.node || echo "No .node files found in root"
         ls -la dist/*.node || echo "No .node files found in dist"
+        echo "Copying Linux native module to dist..."
+        cp index.linux-x64-gnu.node dist/ || echo "Failed to copy Linux module"
+        echo "Final check:"
+        ls -la dist/*.node
     
     - name: Run JavaScript tests
       run: cd rust/js_bindings && npm test
