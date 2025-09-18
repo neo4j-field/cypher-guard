@@ -1,17 +1,28 @@
 {
   "name": "cypher-guard",
   "version": "0.1.18",
-  "description": "Cypher query validation for Neo4j",
+  "description": "Comprehensive Cypher query validation for Neo4j with schema support and LLM-optimized error reporting",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
     "build": "napi build --platform --release",
-    "test": "ts-node test.ts"
+    "test": "ts-node test.ts",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "format": "prettier --write *.ts *.js *.d.ts",
+    "format:check": "prettier --check *.ts *.js *.d.ts"
   },
   "keywords": [
     "neo4j",
     "cypher",
-    "validation"
+    "validation",
+    "schema",
+    "database",
+    "graph",
+    "llm",
+    "error-reporting",
+    "syntax-validation",
+    "query-analysis"
   ],
   "author": "",
   "license": "MIT",

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feat/validation-rewrite ]
+    branches: [ main, feat/validation-rewrite, feat/javascript-binding-pullforward ]
   pull_request:
-    branches: [ main, feat/validation-rewrite ]
+    branches: [ main, feat/validation-rewrite, feat/javascript-binding-pullforward ]
 
 env:
   PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
@@ -85,6 +85,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: stable
+    
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+    
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
@@ -95,8 +103,21 @@ jobs:
     - name: Install dependencies
       run: cd rust/js_bindings && npm ci
     
+    - name: Build workspace dependencies
+      run: cargo build --release --workspace
+    
     - name: Build JavaScript bindings
-      run: cd rust/js_bindings && npm run build
+      run: |
+        cd rust/js_bindings
+        echo "Building JavaScript bindings..."
+        npm run build
+        echo "Build completed. Checking for native modules..."
+        ls -la *.node || echo "No .node files found in root"
+        ls -la dist/*.node || echo "No .node files found in dist"
+        echo "Copying Linux native module to dist..."
+        cp index.linux-x64-gnu.node dist/ || echo "Failed to copy Linux module"
+        echo "Final check:"
+        ls -la dist/*.node
     
     - name: Run JavaScript tests
       run: cd rust/js_bindings && npm test

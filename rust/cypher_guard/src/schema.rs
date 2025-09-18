@@ -51,15 +51,6 @@ impl PropertyType {
     }
 }
 
-/// Structure representing a user-defined enum type for properties.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct EnumType {
-    /// Name of the enum type
-    name: String,
-    /// Possible values for the enum
-    values: Vec<String>,
-}
-
 /// Structure representing a property in the schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DbSchemaProperty {

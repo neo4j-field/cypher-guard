@@ -93,7 +93,7 @@ jobs:
         mkdir -p release-assets
         
         # Copy Rust binaries
-        cp rust/cypher_guard/target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
+        cp target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
         
         # Copy Python wheel  
         cp target/wheels/*.whl release-assets/

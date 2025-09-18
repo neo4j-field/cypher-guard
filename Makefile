@@ -21,6 +21,9 @@ help:
 	@echo "JavaScript targets:"
 	@echo "  build-js       - Build JavaScript bindings"
 	@echo "  test-js        - Run JavaScript tests"
+	@echo "  lint-js        - Lint JavaScript/TypeScript code"
+	@echo "  fmt-js         - Format JavaScript/TypeScript code"
+	@echo "  fmt-js-check   - Check JavaScript/TypeScript formatting"
 	@echo ""
 	@echo "Documentation targets:"
 	@echo "  docs           - Generate all API documentation"
@@ -71,6 +74,18 @@ build-js:
 
 test-js:
 	cd rust/js_bindings && npm test
+
+lint-js:
+	cd rust/js_bindings && npm run lint
+
+lint-js-fix:
+	cd rust/js_bindings && npm run lint:fix
+
+fmt-js:
+	cd rust/js_bindings && npm run format
+
+fmt-js-check:
+	cd rust/js_bindings && npm run format:check
 
 # Documentation targets
 docs: docs-rust docs-python docs-js
