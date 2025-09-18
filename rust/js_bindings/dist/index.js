@@ -310,7 +310,41 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { validateCypherJs, getValidationErrorsJs } = nativeBinding
+// Export all the new functions with their proper names
+const { 
+  validateCypher,
+  getValidationErrors,
+  parseQuery,
+  hasValidCypher,
+  dbSchemaFromJsonString,
+  dbSchemaNew,
+  dbSchemaMetadataNew,
+  dbSchemaConstraintNew,
+  dbSchemaIndexNew,
+  dbSchemaHasLabel,
+  dbSchemaHasNodeProperty,
+  dbSchemaPropertyNew,
+  dbSchemaRelationshipPatternNew,
+  getStructuredErrors
+} = nativeBinding
 
-module.exports.validateCypherJs = validateCypherJs
-module.exports.getValidationErrorsJs = getValidationErrorsJs
+module.exports = {
+  validateCypher,
+  getValidationErrors,
+  parseQuery,
+  hasValidCypher,
+  dbSchemaFromJsonString,
+  dbSchemaNew,
+  dbSchemaMetadataNew,
+  dbSchemaConstraintNew,
+  dbSchemaIndexNew,
+  dbSchemaHasLabel,
+  dbSchemaHasNodeProperty,
+  dbSchemaPropertyNew,
+  dbSchemaRelationshipPatternNew,
+  getStructuredErrors,
+  
+  // Legacy exports for backwards compatibility
+  validateCypherJs: validateCypher,
+  getValidationErrorsJs: getValidationErrors
+}

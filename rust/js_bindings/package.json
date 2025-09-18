@@ -1,7 +1,7 @@
 {
   "name": "cypher-guard",
   "version": "0.1.18",
-  "description": "Cypher query validation for Neo4j",
+  "description": "Comprehensive Cypher query validation for Neo4j with schema support and LLM-optimized error reporting",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
@@ -11,7 +11,14 @@
   "keywords": [
     "neo4j",
     "cypher",
-    "validation"
+    "validation",
+    "schema",
+    "database",
+    "graph",
+    "llm",
+    "error-reporting",
+    "syntax-validation",
+    "query-analysis"
   ],
   "author": "",
   "license": "MIT",

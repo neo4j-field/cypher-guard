@@ -310,7 +310,16 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { validateCypher, getValidationErrors } = nativeBinding
+const { validateCypher, getValidationErrors, parseQuery, hasValidCypher, dbSchemaFromJsonString, dbSchemaNew, dbSchemaHasLabel, dbSchemaHasNodeProperty, dbSchemaPropertyNew, dbSchemaRelationshipPatternNew, getStructuredErrors } = nativeBinding
 
 module.exports.validateCypher = validateCypher
 module.exports.getValidationErrors = getValidationErrors
+module.exports.parseQuery = parseQuery
+module.exports.hasValidCypher = hasValidCypher
+module.exports.dbSchemaFromJsonString = dbSchemaFromJsonString
+module.exports.dbSchemaNew = dbSchemaNew
+module.exports.dbSchemaHasLabel = dbSchemaHasLabel
+module.exports.dbSchemaHasNodeProperty = dbSchemaHasNodeProperty
+module.exports.dbSchemaPropertyNew = dbSchemaPropertyNew
+module.exports.dbSchemaRelationshipPatternNew = dbSchemaRelationshipPatternNew
+module.exports.getStructuredErrors = getStructuredErrors
