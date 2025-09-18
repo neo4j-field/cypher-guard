@@ -6,7 +6,11 @@
   "types": "index.d.ts",
   "scripts": {
     "build": "napi build --platform --release",
-    "test": "ts-node test.ts"
+    "test": "ts-node test.ts",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "format": "prettier --write *.ts *.js *.d.ts",
+    "format:check": "prettier --check *.ts *.js *.d.ts"
   },
   "keywords": [
     "neo4j",

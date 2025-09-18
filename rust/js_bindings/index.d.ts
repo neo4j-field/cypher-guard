@@ -11,7 +11,10 @@
  * @returns True if the query is valid according to the schema
  * @throws Error if validation fails due to schema violations or parsing errors
  */
-export declare function validateCypher(query: string, schemaJson: string): boolean
+export declare function validateCypher(
+  query: string,
+  schemaJson: string
+): boolean;
 /**
  * Get all validation errors for a Cypher query against a schema.
  *
@@ -19,7 +22,10 @@ export declare function validateCypher(query: string, schemaJson: string): boole
  * @param schema_json - JSON schema string
  * @returns Array of validation error messages. Empty array if query is valid.
  */
-export declare function getValidationErrors(query: string, schemaJson: string): Array<string>
+export declare function getValidationErrors(
+  query: string,
+  schemaJson: string
+): Array<string>;
 /**
  * Parse a Cypher query into an Abstract Syntax Tree (AST).
  *
@@ -27,7 +33,7 @@ export declare function getValidationErrors(query: string, schemaJson: string): 
  * @returns The parsed AST as a JavaScript object (currently returns empty object)
  * @throws Error if the query has syntax errors and cannot be parsed
  */
-export declare function parseQuery(query: string): NapiResult
+export declare function parseQuery(query: string): NapiResult;
 /**
  * Fast validation check - returns true if query is valid, false if it has any errors.
  * Optimized for validation loops where you only need to know if the query is valid.
@@ -36,54 +42,57 @@ export declare function parseQuery(query: string): NapiResult
  * @param schema_json - JSON schema string
  * @returns True if query is completely valid, false if it has any validation or parsing errors
  */
-export declare function hasValidCypher(query: string, schemaJson: string): boolean
+export declare function hasValidCypher(
+  query: string,
+  schemaJson: string
+): boolean;
 /** JavaScript wrapper for PropertyType enum */
 export interface PropertyType {
-  typeName: string
+  typeName: string;
 }
 /** JavaScript wrapper for DbSchemaProperty */
 export interface DbSchemaProperty {
-  name: string
-  neo4JType: string
-  enumValues?: Array<string>
-  minValue?: number
-  maxValue?: number
-  distinctValueCount?: number
-  exampleValues?: Array<string>
+  name: string;
+  neo4JType: string;
+  enumValues?: Array<string>;
+  minValue?: number;
+  maxValue?: number;
+  distinctValueCount?: number;
+  exampleValues?: Array<string>;
 }
 /** JavaScript wrapper for DbSchemaRelationshipPattern */
 export interface DbSchemaRelationshipPattern {
-  start: string
-  end: string
-  relType: string
+  start: string;
+  end: string;
+  relType: string;
 }
 /** JavaScript wrapper for DbSchemaConstraint */
 export interface DbSchemaConstraint {
-  id: number
-  name: string
-  constraintType: string
-  entityType: string
-  labels: Array<string>
-  properties: Array<string>
+  id: number;
+  name: string;
+  constraintType: string;
+  entityType: string;
+  labels: Array<string>;
+  properties: Array<string>;
 }
 /** JavaScript wrapper for DbSchemaIndex */
 export interface DbSchemaIndex {
-  label: string
-  properties: Array<string>
-  size: number
-  indexType: string
+  label: string;
+  properties: Array<string>;
+  size: number;
+  indexType: string;
 }
 /** JavaScript wrapper for DbSchemaMetadata */
 export interface DbSchemaMetadata {
-  constraint: Array<DbSchemaConstraint>
-  index: Array<DbSchemaIndex>
+  constraint: Array<DbSchemaConstraint>;
+  index: Array<DbSchemaIndex>;
 }
 /** JavaScript wrapper for DbSchema */
 export interface DbSchema {
-  nodeProps: Record<string, Array<DbSchemaProperty>>
-  relProps: Record<string, Array<DbSchemaProperty>>
-  relationships: Array<DbSchemaRelationshipPattern>
-  metadata: DbSchemaMetadata
+  nodeProps: Record<string, Array<DbSchemaProperty>>;
+  relProps: Record<string, Array<DbSchemaProperty>>;
+  relationships: Array<DbSchemaRelationshipPattern>;
+  metadata: DbSchemaMetadata;
 }
 /**
  * Create a new DbSchema from a JSON string
@@ -91,13 +100,13 @@ export interface DbSchema {
  * @param json_str - JSON string representing the schema
  * @returns DbSchema object
  */
-export declare function dbSchemaFromJsonString(jsonStr: string): DbSchema
+export declare function dbSchemaFromJsonString(jsonStr: string): DbSchema;
 /**
  * Create a new empty DbSchema
  *
  * @returns Empty DbSchema object
  */
-export declare function dbSchemaNew(): DbSchema
+export declare function dbSchemaNew(): DbSchema;
 /**
  * Check if a schema has a specific label
  *
@@ -105,7 +114,10 @@ export declare function dbSchemaNew(): DbSchema
  * @param label - Label to check for
  * @returns True if the label exists in the schema
  */
-export declare function dbSchemaHasLabel(schema: DbSchema, label: string): boolean
+export declare function dbSchemaHasLabel(
+  schema: DbSchema,
+  label: string
+): boolean;
 /**
  * Check if a schema has a specific node property
  *
@@ -114,7 +126,11 @@ export declare function dbSchemaHasLabel(schema: DbSchema, label: string): boole
  * @param property - Property name to check for
  * @returns True if the property exists on the label
  */
-export declare function dbSchemaHasNodeProperty(schema: DbSchema, label: string, property: string): boolean
+export declare function dbSchemaHasNodeProperty(
+  schema: DbSchema,
+  label: string,
+  property: string
+): boolean;
 /**
  * Create a new DbSchemaProperty
  *
@@ -122,7 +138,10 @@ export declare function dbSchemaHasNodeProperty(schema: DbSchema, label: string,
  * @param neo4j_type - Property type (STRING, INTEGER, etc.)
  * @returns DbSchemaProperty object
  */
-export declare function dbSchemaPropertyNew(name: string, neo4JType: string): DbSchemaProperty
+export declare function dbSchemaPropertyNew(
+  name: string,
+  neo4JType: string
+): DbSchemaProperty;
 /**
  * Create a new DbSchemaRelationshipPattern
  *
@@ -131,13 +150,17 @@ export declare function dbSchemaPropertyNew(name: string, neo4JType: string): Db
  * @param rel_type - Relationship type
  * @returns DbSchemaRelationshipPattern object
  */
-export declare function dbSchemaRelationshipPatternNew(start: string, end: string, relType: string): DbSchemaRelationshipPattern
+export declare function dbSchemaRelationshipPatternNew(
+  start: string,
+  end: string,
+  relType: string
+): DbSchemaRelationshipPattern;
 /**
  * Create a new empty DbSchemaMetadata
  *
  * @returns Empty DbSchemaMetadata object
  */
-export declare function dbSchemaMetadataNew(): DbSchemaMetadata
+export declare function dbSchemaMetadataNew(): DbSchemaMetadata;
 /**
  * Create a new DbSchemaConstraint
  *
@@ -156,7 +179,7 @@ export declare function dbSchemaConstraintNew(
   entityType: string,
   labels: Array<string>,
   properties: Array<string>
-): DbSchemaConstraint
+): DbSchemaConstraint;
 /**
  * Create a new DbSchemaIndex
  *
@@ -171,20 +194,20 @@ export declare function dbSchemaIndexNew(
   properties: Array<string>,
   size: number,
   indexType: string
-): DbSchemaIndex
+): DbSchemaIndex;
 export interface StructuredErrorCategories {
-  schemaErrors: Array<string>
-  propertyErrors: Array<string>
-  syntaxErrors: Array<string>
-  typeErrors: Array<string>
-  parsingErrors: Array<string>
+  schemaErrors: Array<string>;
+  propertyErrors: Array<string>;
+  syntaxErrors: Array<string>;
+  typeErrors: Array<string>;
+  parsingErrors: Array<string>;
 }
 export interface StructuredErrors {
-  hasErrors: boolean
-  errorCount: number
-  categories: StructuredErrorCategories
-  query: string
-  suggestions: Array<string>
+  hasErrors: boolean;
+  errorCount: number;
+  categories: StructuredErrorCategories;
+  query: string;
+  suggestions: Array<string>;
 }
 /**
  * Get structured validation errors optimized for LLM feedback.
@@ -194,4 +217,7 @@ export interface StructuredErrors {
  * @param schema_json - JSON schema string
  * @returns Structured error information with categories and suggestions
  */
-export declare function getStructuredErrors(query: string, schemaJson: string): StructuredErrors
+export declare function getStructuredErrors(
+  query: string,
+  schemaJson: string
+): StructuredErrors;
