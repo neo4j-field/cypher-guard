@@ -97,7 +97,7 @@ fn convert_schema_error(err: CypherGuardSchemaError) -> napi::Error {
 ///   "relationships": [],
 ///   "metadata": {"index": [], "constraint": []}
 /// });
-/// 
+///
 /// const isValid = validateCypher("MATCH (p:Person) RETURN p.name", schemaJson);
 /// console.log(isValid); // true
 /// ```
@@ -122,10 +122,10 @@ pub fn validate_cypher(query: String, schema_json: String) -> napi::Result<bool>
 ///   "relationships": [],
 ///   "metadata": {"index": [], "constraint": []}
 /// });
-/// 
+///
 /// const errors = getValidationErrors("MATCH (p:InvalidLabel) RETURN p.name", schemaJson);
 /// console.log(errors); // ['Invalid node label: InvalidLabel']
-/// 
+///
 /// const validErrors = getValidationErrors("MATCH (p:Person) RETURN p.name", schemaJson);
 /// console.log(validErrors); // []
 /// ```
@@ -164,7 +164,7 @@ pub fn parse_query(env: Env, query: String) -> NapiResult<JsObject> {
 ///   "relationships": [],
 ///   "metadata": {"index": [], "constraint": []}
 /// });
-/// 
+///
 /// console.log(hasValidCypher("MATCH (p:Person) RETURN p.name", schemaJson)); // true
 /// console.log(hasValidCypher("MATCH (p:InvalidLabel) RETURN p.name", schemaJson)); // false
 /// ```
@@ -390,17 +390,9 @@ impl DbSchemaMetadata {
     }
 
     fn to_core(&self) -> CoreDbSchemaMetadata {
-        let core_constraints = self
-            .constraint
-            .iter()
-            .map(|c| c.to_core())
-            .collect();
+        let core_constraints = self.constraint.iter().map(|c| c.to_core()).collect();
 
-        let core_indexes = self
-            .index
-            .iter()
-            .map(|i| i.to_core())
-            .collect();
+        let core_indexes = self.index.iter().map(|i| i.to_core()).collect();
 
         CoreDbSchemaMetadata {
             constraint: core_constraints,
@@ -715,7 +707,7 @@ fn get_structured_cypher_errors(
 ///   "relationships": [],
 ///   "metadata": {"index": [], "constraint": []}
 /// });
-/// 
+///
 /// const structuredErrors = getStructuredErrors("MATCH (p:InvalidLabel) RETURN p.invalid", schemaJson);
 /// console.log(structuredErrors);
 /// // {
@@ -733,16 +725,12 @@ fn get_structured_cypher_errors(
 /// // }
 /// ```
 #[napi]
-pub fn get_structured_errors(
-    query: String,
-    schema_json: String,
-) -> napi::Result<StructuredErrors> {
+pub fn get_structured_errors(query: String, schema_json: String) -> napi::Result<StructuredErrors> {
     let schema = CoreDbSchema::from_json_string(&schema_json)
         .map_err(|e| napi::Error::from_reason(format!("Failed to parse schema JSON: {}", e)))?;
 
     // Get structured errors (validation as strings, parsing as structured types)
-    let (validation_error_strings, parsing_errors) =
-        get_structured_cypher_errors(&query, &schema);
+    let (validation_error_strings, parsing_errors) = get_structured_cypher_errors(&query, &schema);
 
     // Categorize errors using enhanced string matching with better patterns
     let mut schema_errors = Vec::new();
