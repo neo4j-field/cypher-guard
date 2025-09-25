@@ -1,6 +1,13 @@
+# 🚨 REQUIRED: Please fill out this template completely
+
 ## Description
 
-<!-- Please provide a detailed description of the work completed in this PR -->
+**⚠️ This section is required and must be filled out completely.**
+
+Please provide a detailed description of the work completed in this PR. Include:
+- What was changed
+- Why it was changed  
+- Any important context or decisions made
 
 ## Type of Change
 

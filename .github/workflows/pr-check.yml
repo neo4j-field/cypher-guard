@@ -1,0 +1,26 @@
+name: PR Description Check
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  check-description:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR Description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            
+            // Check if description is too short or just template text
+            if (body.length < 50 || body.includes('Please provide a description')) {
+              core.setFailed('PR description is too short or appears to be template text. Please provide a meaningful description.');
+            }
+            
+            // Check if required sections are filled
+            if (!body.includes('## Type of Change') || !body.includes('## How Has This Been Tested?')) {
+              core.setFailed('PR description is missing required sections. Please use the PR template.');
+            }
