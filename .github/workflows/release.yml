@@ -60,7 +60,13 @@ jobs:
         cd rust/python_bindings
         uv sync
         uv run maturin build --release
+        
+        # Debug: List all files in target/wheels/
+        echo "Files in target/wheels/:"
+        ls -la ../../target/wheels/ || echo "target/wheels/ directory not found"
+        
         WHEEL_FILE=$(find ../../target/wheels/ -name "cypher_guard-*-cp*-*.whl" | head -1)
+        echo "Found wheel file: $WHEEL_FILE"
         uv pip install --force-reinstall "$WHEEL_FILE"
     
     # Build JavaScript bindings
@@ -95,8 +101,15 @@ jobs:
         # Copy Rust binaries
         cp target/release/cypher_guard release-assets/cypher_guard-x86_64-unknown-linux-gnu
         
-        # Copy Python wheel  
-        cp target/wheels/*.whl release-assets/
+        # Copy Python wheel (find the actual wheel file)
+        WHEEL_FILE=$(find target/wheels/ -name "cypher_guard-*-cp*-*.whl" | head -1)
+        if [ -n "$WHEEL_FILE" ]; then
+          cp "$WHEEL_FILE" release-assets/
+          echo "wheel_file=$WHEEL_FILE" >> $GITHUB_OUTPUT
+        else
+          echo "No wheel file found!"
+          exit 1
+        fi
         
         # Copy JavaScript package
         cp rust/js_bindings/cypher_guard-*.tgz release-assets/ 2>/dev/null || true
@@ -111,14 +124,10 @@ jobs:
     # Create GitHub release
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.get_version.outputs.tag }}
-        release_name: Cypher Guard ${{ steps.get_version.outputs.version }}
-        body: |
-          ## Cypher Guard ${{ steps.get_version.outputs.version }}
+      run: |
+        gh release create ${{ steps.get_version.outputs.tag }} \
+          --title "Cypher Guard ${{ steps.get_version.outputs.version }}" \
+          --notes "## Cypher Guard ${{ steps.get_version.outputs.version }}
           
           ### What's New
           - Enhanced Cypher query validation
@@ -127,77 +136,61 @@ jobs:
           - Python and JavaScript bindings with proper exception handling
           
           ### Downloads
-          - **Rust Library**: `cypher_guard-x86_64-unknown-linux-gnu`
-          - **Python Package**: `cypher_guard-*.whl`
-          - **JavaScript Package**: `cypher_guard-*.tgz`
-          - **Evaluation Tool**: `cypher_guard_eval-x86_64-unknown-linux-gnu`
+          - **Rust Library**: \`cypher_guard-x86_64-unknown-linux-gnu\`
+          - **Python Package**: \`cypher_guard-*.whl\`
+          - **JavaScript Package**: \`cypher_guard-*.tgz\`
+          - **Evaluation Tool**: \`cypher_guard_eval-x86_64-unknown-linux-gnu\`
           
           ### Installation
           
           **Python:**
-          ```bash
+          \`\`\`bash
           pip install cypher_guard-*.whl
-          ```
+          \`\`\`
           
           **JavaScript:**
-          ```bash
+          \`\`\`bash
           npm install cypher_guard-*.tgz
-          ```
+          \`\`\`
           
           **Rust:**
-          ```bash
+          \`\`\`bash
           cargo add cypher-guard
-          ```
+          \`\`\`
           
           ### Usage
-          ```python
+          \`\`\`python
           from cypher_guard import validate_query, DbSchema
           
-          schema = DbSchema.from_json_file("schema.json")
-          result = validate_query("MATCH (n:Person) RETURN n", schema)
-          ```
+          schema = DbSchema.from_json_file(\"schema.json\")
+          result = validate_query(\"MATCH (n:Person) RETURN n\", schema)
+          \`\`\`
           
-          See the [README](https://github.com/neo4j-field/cypher-guard) for more details.
-        draft: false
-        prerelease: false
+          See the [README](https://github.com/neo4j-field/cypher-guard) for more details." \
+          --draft
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     # Upload release assets
     - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
+      run: |
+        gh release upload ${{ steps.get_version.outputs.tag }} ./release-assets/checksums.txt
+        gh release upload ${{ steps.get_version.outputs.tag }} ./release-assets/cypher_guard-x86_64-unknown-linux-gnu
+        gh release upload ${{ steps.get_version.outputs.tag }} ./release-assets/cypher_guard_eval-x86_64-unknown-linux-gnu
+        
+        # Upload Python wheel
+        WHEEL_FILE=$(find ./release-assets/ -name "cypher_guard-*.whl" | head -1)
+        if [ -n "$WHEEL_FILE" ]; then
+          gh release upload ${{ steps.get_version.outputs.tag }} "$WHEEL_FILE"
+        else
+          echo "No wheel file found to upload!"
+          exit 1
+        fi
+        
+        # Upload JavaScript package if it exists
+        JS_FILE=$(find ./release-assets/ -name "cypher_guard-*.tgz" | head -1)
+        if [ -n "$JS_FILE" ]; then
+          gh release upload ${{ steps.get_version.outputs.tag }} "$JS_FILE"
+        fi
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/checksums.txt
-        asset_name: checksums.txt
-        asset_content_type: text/plain
-    
-    - name: Upload Rust Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/cypher_guard-x86_64-unknown-linux-gnu
-        asset_name: cypher_guard-x86_64-unknown-linux-gnu
-        asset_content_type: application/octet-stream
-    
-    - name: Upload Python Wheel
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/*.whl
-        asset_name: cypher_guard-python.whl
-        asset_content_type: application/zip
-    
-    - name: Upload Evaluation Tool
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/cypher_guard_eval-x86_64-unknown-linux-gnu
-        asset_name: cypher_guard_eval-x86_64-unknown-linux-gnu
-        asset_content_type: application/octet-stream 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
