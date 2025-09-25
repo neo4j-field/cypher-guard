@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.0.0"
+version = "3.0.0"
 edition = "2021"
 description = "A tool for validating Cypher queries against a Neo4j schema"
 
