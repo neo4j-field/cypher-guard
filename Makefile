@@ -1,6 +1,6 @@
 # Makefile for cypher-guard Python bindings
 
-.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all eval-rust docs docs-rust docs-python docs-js
+.PHONY: all poetry-install build install clean build-python test-python build-js test-js build-rust test-rust fmt clippy clippy-all eval-rust docs docs-rust docs-python docs-js release-notes
 
 all: build-python
 
@@ -28,6 +28,9 @@ help:
 	@echo "Documentation targets:"
 	@echo "  docs           - Generate all API documentation"
 	@echo "  docs-rust      - Generate Rust API documentation"
+	@echo ""
+	@echo "Release targets:"
+	@echo "  release-notes  - Generate release notes from merged PRs"
 	@echo "  docs-python    - Generate Python API documentation"
 	@echo "  docs-js        - Generate JavaScript API documentation"
 	@echo ""
@@ -132,3 +135,44 @@ eval-rust: build-rust
 		--queries data/queries \
 		--verbose \
 		--detailed
+
+# Release targets
+release-notes:
+	@echo "Generating release notes from merged PRs..."
+	@PREVIOUS_TAG=$$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo ""); \
+	if [ -n "$$PREVIOUS_TAG" ]; then \
+		PRS=$$(gh pr list --state merged --search "merged:>$$PREVIOUS_TAG" --json number,title,body,labels); \
+	else \
+		PRS=$$(gh pr list --state merged --json number,title,body,labels); \
+	fi; \
+	echo "# Release Notes"; \
+	echo ""; \
+	echo "## What's New"; \
+	echo ""; \
+	echo "$$PRS" | jq -r '.[] | "### PR #\(.number): \(.title)\n\n\(.body // "No description provided")\n"'; \
+	echo "## Detailed Changes"; \
+	echo ""; \
+	echo "$$PRS" | jq -r '.[] | select(.body | contains("## Release Notes")) | .body' | \
+		sed -n '/## Release Notes/,/##/p' | \
+		sed '1d;$$d' || echo "No detailed release notes found in PR descriptions."
+
+update-changelog:
+	@echo "Updating CHANGELOG.md with recent PRs..."
+	@PREVIOUS_TAG=$$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo ""); \
+	if [ -n "$$PREVIOUS_TAG" ]; then \
+		PRS=$$(gh pr list --state merged --search "merged:>$$PREVIOUS_TAG" --json number,title,body,labels); \
+	else \
+		PRS=$$(gh pr list --state merged --json number,title,body,labels); \
+	fi; \
+	echo "### Added" > temp_changelog.md; \
+	echo "$$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and contains("New feature")) | "- \(.title) (#\(.number))"' >> temp_changelog.md; \
+	echo "" >> temp_changelog.md; \
+	echo "### Changed" >> temp_changelog.md; \
+	echo "$$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and (contains("Bug fix") or contains("Documentation update") or contains("Performance improvement"))) | "- \(.title) (#\(.number))"' >> temp_changelog.md; \
+	echo "" >> temp_changelog.md; \
+	echo "### Fixed" >> temp_changelog.md; \
+	echo "$$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and contains("Bug fix")) | "- \(.title) (#\(.number))"' >> temp_changelog.md; \
+	echo ""; \
+	echo "Add this to CHANGELOG.md under [Unreleased]:"; \
+	cat temp_changelog.md; \
+	rm temp_changelog.md

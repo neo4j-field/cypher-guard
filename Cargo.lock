@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "cypher-guard"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "nom",
  "serde",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "cypher-guard-eval"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "clap",
  "colored",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "cypher_guard_js_bindings"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "cypher-guard",
  "napi",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "cypher_guard_python_bindings"
-version = "0.1.19"
+version = "0.1.20"
 dependencies = [
  "cypher-guard",
  "pyo3",
