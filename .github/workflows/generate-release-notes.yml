@@ -1,0 +1,97 @@
+name: Generate Release Notes
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # Get the previous release tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          
+          # Get PRs merged since last release
+          if [ -n "$PREVIOUS_TAG" ]; then
+            PRS=$(gh pr list --state merged --search "merged:>$PREVIOUS_TAG" --json number,title,body,labels)
+          else
+            PRS=$(gh pr list --state merged --json number,title,body,labels)
+          fi
+          
+          # Generate release notes
+          echo "## What's New" > release_notes.md
+          echo "" >> release_notes.md
+          
+          # Add PR summaries
+          echo "$PRS" | jq -r '.[] | "### PR #\(.number): \(.title)\n\n\(.body // "No description provided")\n"' >> release_notes.md
+          
+          # Extract release notes from PR descriptions if they exist
+          echo "## Detailed Changes" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          echo "$PRS" | jq -r '.[] | select(.body | contains("## Release Notes")) | .body' | \
+            sed -n '/## Release Notes/,/##/p' | \
+            sed '1d;$d' >> release_notes.md || echo "No detailed release notes found in PR descriptions." >> release_notes.md
+          
+          # Output for next step
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update CHANGELOG.md
+        run: |
+          # Get current version from release
+          VERSION="${{ github.event.release.tag_name }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # Create new changelog entry
+          echo "## [$VERSION] - $DATE" > new_changelog_entry.md
+          echo "" >> new_changelog_entry.md
+          
+          # Get PRs for this release
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            PRS=$(gh pr list --state merged --search "merged:>$PREVIOUS_TAG" --json number,title,body,labels)
+          else
+            PRS=$(gh pr list --state merged --json number,title,body,labels)
+          fi
+          
+          # Categorize changes
+          echo "### Added" >> new_changelog_entry.md
+          echo "$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and contains("New feature")) | "- \(.title) (#\(.number))"' >> new_changelog_entry.md
+          
+          echo "" >> new_changelog_entry.md
+          echo "### Changed" >> new_changelog_entry.md
+          echo "$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and (contains("Bug fix") or contains("Documentation update") or contains("Performance improvement"))) | "- \(.title) (#\(.number))"' >> new_changelog_entry.md
+          
+          echo "" >> new_changelog_entry.md
+          echo "### Fixed" >> new_changelog_entry.md
+          echo "$PRS" | jq -r '.[] | select(.body | contains("Type of Change") and contains("Bug fix")) | "- \(.title) (#\(.number))"' >> new_changelog_entry.md
+          
+          # Update CHANGELOG.md
+          sed -i "s/## \[Unreleased\]/## [$VERSION] - $DATE\n\n$(cat new_changelog_entry.md)\n\n## [Unreleased]/" CHANGELOG.md
+          
+          # Commit the changes
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add CHANGELOG.md
+          git commit -m "Update CHANGELOG.md for $VERSION" || exit 0
+          git push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Release
+        run: |
+          gh release edit ${{ github.event.release.tag_name }} --notes "${{ steps.release_notes.outputs.notes }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
