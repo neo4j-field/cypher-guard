@@ -895,7 +895,7 @@ pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> P
         return Err(convert_schema_error(
             py,
             CypherGuardSchemaError::invalid_format(
-            "schema must be either a JSON string or DbSchema object",
+                "schema must be either a JSON string or DbSchema object",
             ),
         ));
     };
@@ -980,7 +980,7 @@ pub fn validate_cypher(
         return Err(convert_schema_error(
             py,
             CypherGuardSchemaError::invalid_format(
-            "schema must be either a JSON string or DbSchema object",
+                "schema must be either a JSON string or DbSchema object",
             ),
         ));
     };
@@ -989,7 +989,7 @@ pub fn validate_cypher(
     match parse_query_rust(query) {
         Ok(_) => {
             // If parsing succeeds, get validation errors
-    Ok(get_cypher_validation_errors(query, &db_schema.inner))
+            Ok(get_cypher_validation_errors(query, &db_schema.inner))
         }
         Err(e) => {
             // If parsing fails, raise syntax error
