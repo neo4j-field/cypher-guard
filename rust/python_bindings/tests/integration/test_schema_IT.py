@@ -1,7 +1,7 @@
 from neo4j_graphrag.schema import get_structured_schema
 from neo4j import Driver
 
-from cypher_guard import DbSchema, validate_cypher, get_validation_errors
+from cypher_guard import DbSchema, validate_cypher
 
 def test_load_DbSchema_from_neo4j_graphrag_package(init_data: None, neo4j_driver: Driver):
     schema = get_structured_schema(neo4j_driver, is_enhanced=True)
@@ -29,15 +29,15 @@ def test_validate_cypher_with_schema_from_neo4j_graphrag_package(init_data: None
 
     query = "MATCH (p:Person) RETURN p.name"
     result = validate_cypher(query, db_schema)
-    assert result is True
+    assert len(result) == 0
     
     
-def test_get_validation_errors_with_schema_from_neo4j_graphrag_package(init_data: None, neo4j_driver: Driver):
+def test_validate_cypher_errors_with_schema_from_neo4j_graphrag_package(init_data: None, neo4j_driver: Driver):
     schema = get_structured_schema(neo4j_driver, is_enhanced=True)
     db_schema = DbSchema.from_dict(schema)
 
     query = "MATCH (p:Person) RETURN p.wrong"
-    result = get_validation_errors(query, db_schema)
+    result = validate_cypher(query, db_schema)
     assert len(result) == 1
 
 

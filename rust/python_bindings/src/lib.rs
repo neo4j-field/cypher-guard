@@ -1,8 +1,8 @@
 #![allow(deprecated)]
 
 use ::cypher_guard::{
-    get_cypher_validation_errors, parse_query as parse_query_rust, validate_cypher_with_schema,
-    CypherGuardError, CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
+    get_cypher_validation_errors, parse_query as parse_query_rust, CypherGuardError,
+    CypherGuardParsingError, CypherGuardSchemaError, CypherGuardValidationError,
     DbSchema as CoreDbSchema, DbSchemaMetadata as CoreDbSchemaMetadata,
     DbSchemaProperty as CoreDbSchemaProperty,
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
@@ -11,7 +11,7 @@ use ::cypher_guard::{
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyDict};
+use pyo3::types::PyAny;
 
 // Base exception for all validation errors
 create_exception!(cypher_guard, CypherValidationError, PyException);
@@ -31,6 +31,69 @@ create_exception!(cypher_guard, InvalidRelationship, CypherValidationError);
 create_exception!(cypher_guard, InvalidLabel, CypherValidationError);
 create_exception!(cypher_guard, InvalidPropertyType, CypherValidationError);
 
+// Parsing-specific exceptions
+create_exception!(cypher_guard, CypherParsingError, PyException);
+create_exception!(cypher_guard, NomParsingError, CypherParsingError);
+create_exception!(cypher_guard, UnexpectedEndOfInput, CypherParsingError);
+create_exception!(cypher_guard, ExpectedToken, CypherParsingError);
+create_exception!(cypher_guard, InvalidSyntax, CypherParsingError);
+create_exception!(cypher_guard, ParsingUndefinedVariable, CypherParsingError);
+create_exception!(cypher_guard, MissingRequiredClause, CypherParsingError);
+create_exception!(cypher_guard, InvalidClauseOrder, CypherParsingError);
+create_exception!(cypher_guard, ReturnBeforeOtherClauses, CypherParsingError);
+create_exception!(cypher_guard, MatchAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, CreateAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, MergeAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, DeleteAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, SetAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, WhereAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, WithAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, UnwindAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, WhereBeforeMatch, CypherParsingError);
+create_exception!(cypher_guard, ReturnAfterReturn, CypherParsingError);
+create_exception!(cypher_guard, OrderByBeforeReturn, CypherParsingError);
+create_exception!(cypher_guard, SkipBeforeReturn, CypherParsingError);
+create_exception!(cypher_guard, LimitBeforeReturn, CypherParsingError);
+create_exception!(cypher_guard, InvalidPattern, CypherParsingError);
+create_exception!(cypher_guard, InvalidWhereCondition, CypherParsingError);
+create_exception!(cypher_guard, InvalidExpression, CypherParsingError);
+
+// Schema-specific exceptions
+create_exception!(cypher_guard, CypherSchemaError, PyException);
+create_exception!(cypher_guard, InvalidSchemaFormat, CypherSchemaError);
+create_exception!(cypher_guard, MissingSchemaField, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaPropertyType, CypherSchemaError);
+create_exception!(cypher_guard, DuplicateSchemaDefinition, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaPropertyName, CypherSchemaError);
+create_exception!(
+    cypher_guard,
+    InvalidSchemaRelationshipPattern,
+    CypherSchemaError
+);
+create_exception!(cypher_guard, InvalidSchemaConstraint, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaIndex, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaMetadata, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaEnumValues, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaValueRange, CypherSchemaError);
+create_exception!(
+    cypher_guard,
+    InvalidSchemaDistinctValueCount,
+    CypherSchemaError
+);
+create_exception!(cypher_guard, InvalidSchemaExampleValues, CypherSchemaError);
+create_exception!(cypher_guard, InvalidSchemaJson, CypherSchemaError);
+create_exception!(cypher_guard, SchemaIoError, CypherSchemaError);
+create_exception!(cypher_guard, SchemaLabelNotFound, CypherSchemaError);
+create_exception!(cypher_guard, DuplicateSchemaLabel, CypherSchemaError);
+create_exception!(cypher_guard, SchemaRelationshipNotFound, CypherSchemaError);
+create_exception!(cypher_guard, DuplicateSchemaRelationship, CypherSchemaError);
+create_exception!(cypher_guard, SchemaPropertyNotFound, CypherSchemaError);
+create_exception!(cypher_guard, DuplicateSchemaProperty, CypherSchemaError);
+create_exception!(cypher_guard, SchemaFileOpenError, CypherSchemaError);
+create_exception!(cypher_guard, SchemaFileCreateError, CypherSchemaError);
+create_exception!(cypher_guard, SchemaJsonReadError, CypherSchemaError);
+create_exception!(cypher_guard, SchemaSerializationError, CypherSchemaError);
+
 // === Error Conversion Helpers ===
 fn convert_cypher_error(py: Python, err: CypherGuardError) -> PyErr {
     match err {
@@ -42,7 +105,113 @@ fn convert_cypher_error(py: Python, err: CypherGuardError) -> PyErr {
 }
 
 fn convert_parsing_error(_py: Python, err: CypherGuardParsingError) -> PyErr {
-    PyErr::new::<pyo3::exceptions::PyValueError, _>(err.to_string())
+    match err {
+        CypherGuardParsingError::Nom(nom_err) => {
+            NomParsingError::new_err(format!("Nom parsing error: {}", nom_err))
+        }
+        CypherGuardParsingError::UnexpectedEnd => {
+            UnexpectedEndOfInput::new_err("Unexpected end of input")
+        }
+        CypherGuardParsingError::ExpectedToken { expected, found } => {
+            ExpectedToken::new_err(format!("Expected {}, found {}", expected, found))
+        }
+        CypherGuardParsingError::InvalidSyntax(msg) => {
+            InvalidSyntax::new_err(format!("Invalid syntax: {}", msg))
+        }
+        CypherGuardParsingError::UndefinedVariable(var) => {
+            ParsingUndefinedVariable::new_err(format!("Undefined variable: {}", var))
+        }
+        CypherGuardParsingError::MissingRequiredClause { clause } => {
+            MissingRequiredClause::new_err(format!("Missing required clause: {}", clause))
+        }
+        CypherGuardParsingError::InvalidClauseOrder { context, details } => {
+            InvalidClauseOrder::new_err(format!("Invalid clause order: {} - {}", context, details))
+        }
+        CypherGuardParsingError::ReturnBeforeOtherClauses { line, column } => {
+            ReturnBeforeOtherClauses::new_err(format!(
+                "RETURN clause must come after all other clauses except ORDER BY, SKIP, LIMIT, and writing clauses (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::MatchAfterReturn { line, column } => {
+            MatchAfterReturn::new_err(format!(
+                "MATCH clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::CreateAfterReturn { line, column } => {
+            CreateAfterReturn::new_err(format!(
+                "CREATE clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::MergeAfterReturn { line, column } => {
+            MergeAfterReturn::new_err(format!(
+                "MERGE clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::DeleteAfterReturn { line, column } => {
+            DeleteAfterReturn::new_err(format!(
+                "DELETE clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::SetAfterReturn { line, column } => {
+            SetAfterReturn::new_err(format!(
+                "SET clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::WhereAfterReturn { line, column } => {
+            WhereAfterReturn::new_err(format!(
+                "WHERE clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::WithAfterReturn { line, column } => {
+            WithAfterReturn::new_err(format!(
+                "WITH clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::UnwindAfterReturn { line, column } => {
+            UnwindAfterReturn::new_err(format!(
+                "UNWIND clause cannot come after RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::WhereBeforeMatch { line, column } => {
+            WhereBeforeMatch::new_err(format!(
+                "WHERE clause must come after MATCH, UNWIND, or WITH clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::ReturnAfterReturn { line, column } => {
+            ReturnAfterReturn::new_err(format!(
+                "RETURN clause cannot appear after another RETURN clause (found at line {}, column {})",
+                line, column
+            ))
+        }
+        CypherGuardParsingError::OrderByBeforeReturn => {
+            OrderByBeforeReturn::new_err("ORDER BY clause must come after RETURN or WITH clause")
+        }
+        CypherGuardParsingError::SkipBeforeReturn => {
+            SkipBeforeReturn::new_err("SKIP clause must come after RETURN, WITH, or ORDER BY clause")
+        }
+        CypherGuardParsingError::LimitBeforeReturn => {
+            LimitBeforeReturn::new_err("LIMIT clause must come after RETURN, WITH, ORDER BY, or SKIP clause")
+        }
+        CypherGuardParsingError::InvalidPattern { context, details } => {
+            InvalidPattern::new_err(format!("Invalid pattern: {} - {}", context, details))
+        }
+        CypherGuardParsingError::InvalidWhereCondition { context, details } => {
+            InvalidWhereCondition::new_err(format!("Invalid WHERE condition: {} - {}", context, details))
+        }
+        CypherGuardParsingError::InvalidExpression { context, details } => {
+            InvalidExpression::new_err(format!("Invalid expression: {} - {}", context, details))
+        }
+    }
 }
 
 fn convert_validation_error(_py: Python, err: CypherGuardValidationError) -> PyErr {
@@ -101,48 +270,95 @@ fn convert_validation_error(_py: Python, err: CypherGuardValidationError) -> PyE
 }
 
 fn convert_schema_error(_py: Python, err: CypherGuardSchemaError) -> PyErr {
-    PyErr::new::<pyo3::exceptions::PyValueError, _>(err.to_string())
+    match err {
+        CypherGuardSchemaError::InvalidFormat(msg) => {
+            InvalidSchemaFormat::new_err(format!("Invalid schema format: {}", msg))
+        }
+        CypherGuardSchemaError::MissingField(field) => {
+            MissingSchemaField::new_err(format!("Missing required field: {}", field))
+        }
+        CypherGuardSchemaError::InvalidPropertyType(prop_type) => {
+            InvalidSchemaPropertyType::new_err(format!("Invalid property type: {}", prop_type))
+        }
+        CypherGuardSchemaError::DuplicateDefinition(def) => {
+            DuplicateSchemaDefinition::new_err(format!("Duplicate definition: {}", def))
+        }
+        CypherGuardSchemaError::InvalidPropertyName(name) => {
+            InvalidSchemaPropertyName::new_err(format!("Invalid property name: {}", name))
+        }
+        CypherGuardSchemaError::InvalidRelationshipPattern(pattern) => {
+            InvalidSchemaRelationshipPattern::new_err(format!(
+                "Invalid relationship pattern: {}",
+                pattern
+            ))
+        }
+        CypherGuardSchemaError::InvalidConstraint(constraint) => {
+            InvalidSchemaConstraint::new_err(format!("Invalid constraint: {}", constraint))
+        }
+        CypherGuardSchemaError::InvalidIndex(index) => {
+            InvalidSchemaIndex::new_err(format!("Invalid index: {}", index))
+        }
+        CypherGuardSchemaError::InvalidMetadata(metadata) => {
+            InvalidSchemaMetadata::new_err(format!("Invalid metadata: {}", metadata))
+        }
+        CypherGuardSchemaError::InvalidEnumValues(enum_vals) => {
+            InvalidSchemaEnumValues::new_err(format!("Invalid enum values: {}", enum_vals))
+        }
+        CypherGuardSchemaError::InvalidValueRange { min, max } => {
+            InvalidSchemaValueRange::new_err(format!(
+                "Invalid value range: min {} is greater than max {}",
+                min, max
+            ))
+        }
+        CypherGuardSchemaError::InvalidDistinctValueCount(count) => {
+            InvalidSchemaDistinctValueCount::new_err(format!(
+                "Invalid distinct value count: {}",
+                count
+            ))
+        }
+        CypherGuardSchemaError::InvalidExampleValues(examples) => {
+            InvalidSchemaExampleValues::new_err(format!("Invalid example values: {}", examples))
+        }
+        CypherGuardSchemaError::InvalidJson(json_err) => {
+            InvalidSchemaJson::new_err(format!("Invalid JSON format: {}", json_err))
+        }
+        CypherGuardSchemaError::IoError(io_err) => {
+            SchemaIoError::new_err(format!("IO error: {}", io_err))
+        }
+        CypherGuardSchemaError::LabelNotFound(label) => {
+            SchemaLabelNotFound::new_err(format!("Label not found: {}", label))
+        }
+        CypherGuardSchemaError::DuplicateLabel(label) => {
+            DuplicateSchemaLabel::new_err(format!("Duplicate label: {}", label))
+        }
+        CypherGuardSchemaError::RelationshipNotFound(rel) => {
+            SchemaRelationshipNotFound::new_err(format!("Relationship not found: {}", rel))
+        }
+        CypherGuardSchemaError::DuplicateRelationship(rel) => {
+            DuplicateSchemaRelationship::new_err(format!("Duplicate relationship: {}", rel))
+        }
+        CypherGuardSchemaError::PropertyNotFound(prop) => {
+            SchemaPropertyNotFound::new_err(format!("Property not found: {}", prop))
+        }
+        CypherGuardSchemaError::DuplicateProperty(prop) => {
+            DuplicateSchemaProperty::new_err(format!("Duplicate property: {}", prop))
+        }
+        CypherGuardSchemaError::FileOpenError(file_err) => {
+            SchemaFileOpenError::new_err(format!("File open error: {}", file_err))
+        }
+        CypherGuardSchemaError::FileCreateError(file_err) => {
+            SchemaFileCreateError::new_err(format!("File create error: {}", file_err))
+        }
+        CypherGuardSchemaError::JsonReadError(json_err) => {
+            SchemaJsonReadError::new_err(format!("JSON read error: {}", json_err))
+        }
+        CypherGuardSchemaError::SerializationError(ser_err) => {
+            SchemaSerializationError::new_err(format!("Serialization error: {}", ser_err))
+        }
+    }
 }
 
 // === Python Wrapper Types ===
-
-/// Python wrapper for PropertyType enum
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct PropertyType {
-    inner: CorePropertyType,
-}
-
-#[pymethods]
-impl PropertyType {
-    #[new]
-    fn new(type_str: &str) -> PyResult<Self> {
-        let inner = match type_str.to_uppercase().as_str() {
-            "STRING" => CorePropertyType::STRING,
-            "INTEGER" => CorePropertyType::INTEGER,
-            "FLOAT" => CorePropertyType::FLOAT,
-            "BOOLEAN" => CorePropertyType::BOOLEAN,
-            "POINT" => CorePropertyType::POINT,
-            "DATE_TIME" => CorePropertyType::DATE_TIME,
-            "LIST" => CorePropertyType::LIST,
-            _ => {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Invalid property type: {}",
-                    type_str
-                )))
-            }
-        };
-        Ok(Self { inner })
-    }
-
-    fn __str__(&self) -> String {
-        self.inner.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("PropertyType({})", self.inner)
-    }
-}
 
 /// Python wrapper for DbSchemaProperty
 #[pyclass]
@@ -354,6 +570,7 @@ pub struct DbSchemaMetadata {
     pub constraint: Vec<PyObject>,
     #[pyo3(get)]
     pub index: Vec<PyObject>,
+    #[allow(dead_code)]
     inner: CoreDbSchemaMetadata,
 }
 
@@ -403,10 +620,13 @@ impl DbSchema {
     #[pyo3(name = "from_json_string")]
     fn py_from_json_string(
         _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python,
         json_str: &str,
     ) -> PyResult<Self> {
-        let inner = CoreDbSchema::from_json_string(json_str)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        let inner = CoreDbSchema::from_json_string(json_str).map_err(|e| match e {
+            CypherGuardError::Schema(schema_err) => convert_schema_error(py, schema_err),
+            other => convert_cypher_error(py, other),
+        })?;
 
         // Convert core node_props to Python wrapper node_props
         let node_props = inner
@@ -647,88 +867,7 @@ impl DbSchema {
     }
 }
 
-// === Python API Functions ===
-
-/// Validate a Cypher query against a schema.
-///
-/// Args:
-///     query (str): The Cypher query string to validate
-///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
-///
-/// Returns:
-///     bool: True if the query is valid according to the schema, False otherwise
-///
-/// Raises:
-///     CypherValidationError: If validation fails due to schema violations
-///     TypeError: If schema is neither a string nor DbSchema object
-///
-/// Examples:
-///     >>> schema_json = '{"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}}'
-///     >>> validate_cypher("MATCH (p:Person) RETURN p.name", schema_json)
-///     True
-///     
-///     >>> schema = DbSchema.from_dict({"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}})
-///     >>> validate_cypher("MATCH (p:Person) RETURN p.name", schema)
-///     True
-#[pyfunction]
-#[pyo3(text_signature = "(query, schema, /)")]
-pub fn validate_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        // Schema provided as JSON string
-        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        // Schema provided as DbSchema object
-        schema_obj
-    } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object",
-        ));
-    };
-
-    validate_cypher_with_schema(query, &db_schema.inner).map_err(|e| convert_cypher_error(py, e))
-}
-
-#[pyfunction]
-#[pyo3(text_signature = "(query, schema, /)")]
-/// Get all validation errors for a Cypher query against a schema.
-///
-/// Args:
-///     query (str): The Cypher query string to validate
-///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
-///
-/// Returns:
-///     List[str]: List of validation error messages. Empty list if query is valid.
-///
-/// Raises:
-///     TypeError: If schema is neither a string nor DbSchema object
-///
-/// Examples:
-///     >>> schema_json = '{"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}}'
-///     >>> get_validation_errors("MATCH (p:InvalidLabel) RETURN p.name", schema_json)
-///     ['Invalid node label: InvalidLabel']
-///     
-///     >>> schema = DbSchema.from_dict({"node_props": {"Person": [{"name": "name", "neo4j_type": "STRING"}]}, "rel_props": {}, "relationships": [], "metadata": {"index": [], "constraint": []}})
-///     >>> get_validation_errors("MATCH (p:Person) RETURN p.name", schema)
-///     []
-pub fn get_validation_errors(
-    py: Python,
-    query: &str,
-    schema: &Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        // Schema provided as JSON string
-        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        // Schema provided as DbSchema object
-        schema_obj
-    } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object",
-        ));
-    };
-
-    Ok(get_cypher_validation_errors(query, &db_schema.inner))
-}
+// === CORE PYTHON API FUNCTIONS ===
 
 #[pyfunction]
 #[pyo3(text_signature = "(query, schema, /)")]
@@ -749,12 +888,15 @@ pub fn get_validation_errors(
 ///     False
 pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
     let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), py, schema_str)?
     } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
         schema_obj
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object",
+        return Err(convert_schema_error(
+            py,
+            CypherGuardSchemaError::invalid_format(
+                "schema must be either a JSON string or DbSchema object",
+            ),
         ));
     };
 
@@ -763,373 +905,264 @@ pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> P
     Ok(errors.is_empty())
 }
 
-/// Internal function that separates parsing errors from validation errors properly
-fn get_structured_cypher_errors(
-    query: &str,
-    schema: &CoreDbSchema,
-) -> (Vec<String>, Vec<CypherGuardParsingError>) {
-    // First, check for parsing errors
-    let parsing_errors = match parse_query_rust(query) {
-        Ok(_) => Vec::new(), // No parsing errors, proceed to validation
-        Err(parsing_error) => vec![parsing_error], // Parsing failed, return parsing error
-    };
-
-    // Only run validation if parsing succeeded
-    let validation_error_strings = if parsing_errors.is_empty() {
-        get_cypher_validation_errors(query, schema)
-    } else {
-        Vec::new() // Skip validation if parsing failed
-    };
-
-    (validation_error_strings, parsing_errors)
+/// Check if a Cypher query has valid syntax.
+///
+/// **Note**: The parser fails fast on the first syntax error encountered.
+/// If there are multiple syntax errors, you'll need to fix them iteratively:
+/// 1. Call check_syntax() to find the first error
+/// 2. Fix that error
+/// 3. Call check_syntax() again to find the next error
+/// 4. Repeat until no more errors
+///
+/// Args:
+///     query (str): The Cypher query string to check
+///
+/// Returns:
+///     bool: True if the query has valid syntax, False otherwise
+///
+/// Raises:
+///     Various parsing errors: If there's a syntax error (e.g., NomParsingError, UnexpectedEndOfInput, etc.)
+///
+/// Examples:
+///     >>> check_syntax("MATCH (n) RETURN n")
+///     True
+///     >>> check_syntax("INVALID SYNTAX")
+///     False
+#[pyfunction]
+#[pyo3(text_signature = "(query, /)")]
+pub fn check_syntax(py: Python, query: &str) -> PyResult<bool> {
+    // Check if the query can be parsed (syntax check)
+    // Schema is not needed for syntax checking - only for validation
+    match parse_query_rust(query) {
+        Ok(_) => {
+            // If parsing succeeds, syntax is valid
+            Ok(true)
+        }
+        Err(e) => {
+            // If parsing fails, syntax is invalid
+            // Convert parsing error to specific error type
+            Err(convert_parsing_error(py, e))
+        }
+    }
 }
 
-#[pyfunction]
-#[pyo3(text_signature = "(query, schema, /)")]
-/// Get structured validation errors optimized for LLM feedback.
-/// Returns categorized error information to help LLMs generate better corrections.
+/// Validate a Cypher query against a schema and return validation errors.
 ///
 /// Args:
 ///     query (str): The Cypher query string to validate
 ///     schema (str | DbSchema): Either a JSON schema string or a DbSchema object
 ///
 /// Returns:
-///     dict: Structured error information with categories and suggestions
+///     List[str]: List of validation error messages. Empty list if query is valid.
+///
+/// Raises:
+///     ValueError: If there's a parsing error (syntax error)
 ///
 /// Examples:
-///     >>> get_structured_errors("MATCH (p:InvalidLabel) RETURN p.invalid", schema)
-///     {
-///         'has_errors': True,
-///         'error_count': 2,
-///         'categories': {
-///             'schema_errors': ['Invalid node label: InvalidLabel'],
-///             'property_errors': ['Invalid property: p.invalid'],
-///             'syntax_errors': [],
-///             'type_errors': [],
-///             'parsing_errors': []
-///         },
-///         'query': 'MATCH (p:InvalidLabel) RETURN p.invalid',
-///         'suggestions': ['Check available node labels in schema', 'Verify property names']
-///     }
-pub fn get_structured_errors(
+///     >>> validate_cypher("MATCH (n:InvalidLabel) RETURN n", schema_json)
+///     ['Invalid node label: InvalidLabel']
+///     >>> validate_cypher("MATCH (n:Person) RETURN n", schema_json)
+///     []
+#[pyfunction]
+#[pyo3(text_signature = "(query, schema, /)")]
+pub fn validate_cypher(
     py: Python,
     query: &str,
     schema: &Bound<'_, PyAny>,
-) -> PyResult<PyObject> {
+) -> PyResult<Vec<String>> {
     let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), schema_str)?
+        // Schema provided as JSON string
+        DbSchema::py_from_json_string(&py.get_type_bound::<DbSchema>(), py, schema_str)?
     } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
+        // Schema provided as DbSchema object
         schema_obj
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "schema must be either a JSON string or DbSchema object",
+        return Err(convert_schema_error(
+            py,
+            CypherGuardSchemaError::invalid_format(
+                "schema must be either a JSON string or DbSchema object",
+            ),
         ));
     };
 
-    // Get structured errors (validation as strings, parsing as structured types)
-    let (validation_error_strings, parsing_errors) =
-        get_structured_cypher_errors(query, &db_schema.inner);
-
-    // Categorize errors using enhanced string matching with better patterns
-    let mut schema_errors = Vec::new();
-    let mut property_errors = Vec::new();
-    let mut syntax_errors = Vec::new();
-    let mut type_errors = Vec::new();
-    let mut parsing_error_list = Vec::new();
-    let mut suggestions = Vec::new();
-
-    // Handle validation errors with improved categorization
-    for error_str in &validation_error_strings {
-        // Skip generic parsing errors if we have specific parsing errors to process
-        if error_str == "Invalid Cypher syntax" && !parsing_errors.is_empty() {
-            continue; // Skip generic messages when we have specific parsing errors
+    // First check if the query can be parsed (syntax check)
+    match parse_query_rust(query) {
+        Ok(_) => {
+            // If parsing succeeds, get validation errors
+            Ok(get_cypher_validation_errors(query, &db_schema.inner))
         }
-
-        if error_str.contains("Invalid node label") {
-            schema_errors.push(error_str.clone());
-            suggestions.push("Check available node labels in your schema".to_string());
-        } else if error_str.contains("Invalid relationship type") {
-            schema_errors.push(error_str.clone());
-            suggestions.push("Check available relationship types in your schema".to_string());
-        } else if error_str.contains("Invalid label") {
-            schema_errors.push(error_str.clone());
-            suggestions.push("Verify the label exists in your schema definition".to_string());
-        } else if error_str.contains("Invalid relationship") {
-            schema_errors.push(error_str.clone());
-            suggestions.push("Verify the relationship type exists in your schema".to_string());
-        } else if error_str.contains("Invalid property access")
-            || error_str.contains("property access")
-        {
-            property_errors.push(error_str.clone());
-            suggestions.push(
-                "Ensure the variable is defined and the property exists on the bound type"
-                    .to_string(),
-            );
-        } else if error_str.contains("Invalid node property") {
-            property_errors.push(error_str.clone());
-            suggestions
-                .push("Check that the property exists on the specified node label".to_string());
-        } else if error_str.contains("Invalid relationship property") {
-            property_errors.push(error_str.clone());
-            suggestions.push(
-                "Check that the property exists on the specified relationship type".to_string(),
-            );
-        } else if error_str.contains("Invalid property name") {
-            property_errors.push(error_str.clone());
-            suggestions
-                .push("Verify the property name follows Neo4j naming conventions".to_string());
-        } else if error_str.contains("Invalid property type") || error_str.contains("property type")
-        {
-            type_errors.push(error_str.clone());
-            suggestions.push("Ensure the value type matches the property's expected type (STRING, INTEGER, etc.)".to_string());
-        } else if error_str.contains("Type mismatch") || error_str.contains("expected") {
-            type_errors.push(error_str.clone());
-            suggestions.push(
-                "Check that the data types are compatible in the comparison or assignment"
-                    .to_string(),
-            );
-        } else if !parsing_errors.is_empty() {
-            // If we have specific parsing errors, don't add generic suggestions for unknown validation errors
-            syntax_errors.push(error_str.clone());
-        } else {
-            // Only add generic suggestions when there are no specific parsing errors
-            syntax_errors.push(error_str.clone());
-            suggestions.push("Review query structure and validation requirements".to_string());
+        Err(e) => {
+            // If parsing fails, raise syntax error
+            Err(convert_parsing_error(py, e))
         }
     }
-
-    // Handle parsing errors with precise type matching for much better LLM guidance
-    for error in &parsing_errors {
-        let error_str = error.to_string();
-        parsing_error_list.push(error_str.clone());
-
-        match error {
-            // Specific clause order errors (17 variants) with targeted suggestions
-            CypherGuardParsingError::ReturnBeforeOtherClauses { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push("Move RETURN clause to the end of the query, after MATCH, WHERE, and WITH clauses".to_string());
-            }
-            CypherGuardParsingError::MatchAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "MATCH clauses must come before RETURN - reorganize your query structure"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::CreateAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "CREATE clauses must come before RETURN - move CREATE earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::MergeAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "MERGE clauses must come before RETURN - move MERGE earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::DeleteAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "DELETE clauses must come before RETURN - move DELETE earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::SetAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "SET clauses must come before RETURN - move SET earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::WhereAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "WHERE clauses must come before RETURN - move WHERE after MATCH".to_string(),
-                );
-            }
-            CypherGuardParsingError::WithAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "WITH clauses must come before RETURN - move WITH earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::UnwindAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "UNWIND clauses must come before RETURN - move UNWIND earlier in the query"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::WhereBeforeMatch { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "WHERE must come after MATCH, UNWIND, or WITH - add a MATCH clause first"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::ReturnAfterReturn { .. } => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "Only one RETURN clause is allowed per query - combine into a single RETURN"
-                        .to_string(),
-                );
-            }
-            CypherGuardParsingError::OrderByBeforeReturn => {
-                syntax_errors.push(error_str);
-                suggestions.push("ORDER BY must come after RETURN or WITH clause".to_string());
-            }
-            CypherGuardParsingError::SkipBeforeReturn => {
-                syntax_errors.push(error_str);
-                suggestions
-                    .push("SKIP must come after RETURN, WITH, or ORDER BY clause".to_string());
-            }
-            CypherGuardParsingError::LimitBeforeReturn => {
-                syntax_errors.push(error_str);
-                suggestions.push(
-                    "LIMIT must come after RETURN, WITH, ORDER BY, or SKIP clause".to_string(),
-                );
-            }
-
-            // Structure and clause errors
-            CypherGuardParsingError::MissingRequiredClause { clause } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Add the required {} clause to complete your query",
-                    clause
-                ));
-            }
-            CypherGuardParsingError::InvalidClauseOrder { context, details } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!("Fix clause order in {}: {}", context, details));
-            }
-
-            // Variable errors
-            CypherGuardParsingError::UndefinedVariable(var_name) => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Define variable '{}' in a MATCH, WITH, or other clause before using it",
-                    var_name
-                ));
-            }
-
-            // Basic syntax errors
-            CypherGuardParsingError::ExpectedToken { expected, found } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Expected '{}' but found '{}' - check syntax around this area",
-                    expected, found
-                ));
-            }
-            CypherGuardParsingError::InvalidSyntax(msg) => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Invalid syntax: {} - review Cypher syntax rules",
-                    msg
-                ));
-            }
-            CypherGuardParsingError::UnexpectedEnd => {
-                syntax_errors.push(error_str);
-                suggestions.push("Query appears incomplete - check for missing closing parentheses, brackets, or clauses".to_string());
-            }
-
-            // Pattern and expression errors
-            CypherGuardParsingError::InvalidPattern { context, details } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Invalid pattern in {}: {} - check node/relationship syntax",
-                    context, details
-                ));
-            }
-            CypherGuardParsingError::InvalidWhereCondition { context, details } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!("Invalid WHERE condition in {}: {} - check comparison operators and expressions", context, details));
-            }
-            CypherGuardParsingError::InvalidExpression { context, details } => {
-                syntax_errors.push(error_str);
-                suggestions.push(format!(
-                    "Invalid expression in {}: {} - check function calls and syntax",
-                    context, details
-                ));
-            }
-
-            // Low-level parsing errors
-            CypherGuardParsingError::Nom(_) => {
-                syntax_errors.push(error_str);
-                suggestions.push("Fundamental parsing error - check basic query structure, parentheses, and syntax".to_string());
-            }
-        }
-    }
-
-    // Remove duplicate suggestions
-    suggestions.sort();
-    suggestions.dedup();
-
-    // Calculate total error count
-    let total_errors = validation_error_strings.len() + parsing_errors.len();
-
-    // Build result dictionary
-    let result = PyDict::new_bound(py);
-    result.set_item("has_errors", total_errors > 0)?;
-    result.set_item("error_count", total_errors)?;
-    result.set_item("query", query)?;
-
-    let categories = PyDict::new_bound(py);
-    categories.set_item("schema_errors", schema_errors)?;
-    categories.set_item("property_errors", property_errors)?;
-    categories.set_item("syntax_errors", syntax_errors)?;
-    categories.set_item("type_errors", type_errors)?;
-    categories.set_item("parsing_errors", parsing_error_list)?;
-    result.set_item("categories", categories)?;
-
-    result.set_item("suggestions", suggestions)?;
-
-    Ok(result.into())
 }
 
-#[pyfunction]
-#[pyo3(text_signature = "(query, /)")]
-/// Parse a Cypher query into an Abstract Syntax Tree (AST).
+/// Check if a Cypher query contains write operations (CREATE, MERGE, DELETE, SET, REMOVE).
 ///
 /// Args:
-///     query (str): The Cypher query string to parse
+///     query (str): The Cypher query string to check
 ///
 /// Returns:
-///     dict: The parsed AST as a Python dictionary (currently returns empty dict)
+///     bool: True if the query contains write operations, False otherwise
 ///
 /// Raises:
-///     ValueError: If the query has syntax errors and cannot be parsed
+///     ValueError: If there's a parsing error (syntax error)
 ///
 /// Examples:
-///     >>> parse_query("MATCH (n) RETURN n")
-///     {}
-///
-/// Note:
-///     This function currently returns an empty dictionary. Full AST serialization
-///     to Python dictionaries is planned for future versions.
-pub fn parse_query(py: Python, query: &str) -> PyResult<PyObject> {
+///     >>> is_write("MATCH (n) RETURN n")
+///     False
+///     >>> is_write("CREATE (n:Person {name: 'Alice'})")
+///     True
+///     >>> is_write("MATCH (n) SET n.name = 'Bob'")
+///     True
+#[pyfunction]
+#[pyo3(text_signature = "(query, /)")]
+pub fn is_write(py: Python, query: &str) -> PyResult<bool> {
+    // First check if the query can be parsed (syntax check)
     match parse_query_rust(query) {
-        Ok(_ast) => Ok(PyDict::new_bound(py).into()),
-        Err(e) => Err(convert_parsing_error(py, e)),
+        Ok(ast) => {
+            // Check AST for write operations
+            let has_ast_write_ops = !ast.create_clauses.is_empty()
+                || !ast.merge_clauses.is_empty()
+                || !ast.call_clauses.is_empty(); // CALL can contain write operations
+
+            // Check for SET operations in MERGE clauses
+            let has_set_ops = ast.merge_clauses.iter().any(|merge| {
+                merge
+                    .on_create
+                    .as_ref()
+                    .is_some_and(|on_create| !on_create.set_clauses.is_empty())
+                    || merge
+                        .on_match
+                        .as_ref()
+                        .is_some_and(|on_match| !on_match.set_clauses.is_empty())
+            });
+
+            // For now, we need to fall back to string matching for DELETE/REMOVE
+            // since they're not implemented as separate clauses yet
+            let query_upper = query.to_uppercase();
+            let has_string_write_ops = query_upper.contains("DELETE")
+                || query_upper.contains("DETACH DELETE")
+                || query_upper.contains("REMOVE");
+
+            Ok(has_ast_write_ops || has_set_ops || has_string_write_ops)
+        }
+        Err(e) => {
+            // If parsing fails, raise syntax error
+            Err(convert_parsing_error(py, e))
+        }
     }
+}
+
+/// Check if a Cypher query is a read-only query (no write operations).
+///
+/// Args:
+///     query (str): The Cypher query string to check
+///
+/// Returns:
+///     bool: True if the query is read-only, False if it contains write operations
+///
+/// Raises:
+///     ValueError: If there's a parsing error (syntax error)
+///
+/// Examples:
+///     >>> is_read("MATCH (n) RETURN n")
+///     True
+///     >>> is_read("CREATE (n:Person {name: 'Alice'})")
+///     False
+///     >>> is_read("MATCH (n) SET n.name = 'Bob'")
+///     False
+#[pyfunction]
+#[pyo3(text_signature = "(query, /)")]
+pub fn is_read(py: Python, query: &str) -> PyResult<bool> {
+    // First check if the query can be parsed (syntax check)
+    match parse_query_rust(query) {
+        Ok(ast) => {
+            // Check AST for write operations
+            let has_ast_write_ops = !ast.create_clauses.is_empty()
+                || !ast.merge_clauses.is_empty()
+                || !ast.call_clauses.is_empty(); // CALL can contain write operations
+
+            // Check for SET operations in MERGE clauses
+            let has_set_ops = ast.merge_clauses.iter().any(|merge| {
+                merge
+                    .on_create
+                    .as_ref()
+                    .is_some_and(|on_create| !on_create.set_clauses.is_empty())
+                    || merge
+                        .on_match
+                        .as_ref()
+                        .is_some_and(|on_match| !on_match.set_clauses.is_empty())
+            });
+
+            // For now, we need to fall back to string matching for DELETE/REMOVE
+            // since they're not implemented as separate clauses yet
+            let query_upper = query.to_uppercase();
+            let has_string_write_ops = query_upper.contains("DELETE")
+                || query_upper.contains("DETACH DELETE")
+                || query_upper.contains("REMOVE");
+
+            // Return True if it's read-only (no write operations)
+            Ok(!(has_ast_write_ops || has_set_ops || has_string_write_ops))
+        }
+        Err(e) => {
+            // If parsing fails, raise syntax error
+            Err(convert_parsing_error(py, e))
+        }
+    }
+}
+
+/// Check if a Cypher query has any parsing errors (syntax errors).
+///
+/// Args:
+///     query (str): The Cypher query string to check
+///
+/// Returns:
+///     bool: True if the query has parsing errors, False if it parses successfully
+///
+/// Examples:
+///     >>> has_parser_errors("MATCH (n) RETURN n")
+///     False
+///     >>> has_parser_errors("INVALID SYNTAX")
+///     True
+///     >>> has_parser_errors("MATCH (n RETURN n")  # Missing closing parenthesis
+///     True
+#[pyfunction]
+#[pyo3(text_signature = "(query, /)")]
+pub fn has_parser_errors(query: &str) -> bool {
+    // Simply check if parsing fails
+    parse_query_rust(query).is_err()
 }
 
 #[pymodule]
 fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add(
+        "__doc__",
+        "Cypher Guard: Cypher query validation and parsing library.
+    
+    **Parser Behavior**: The parser fails fast on the first syntax error encountered.
+    If there are multiple syntax errors, you'll need to fix them iteratively:
+    1. Call check_syntax() to find the first error
+    2. Fix that error
+    3. Call check_syntax() again to find the next error
+    4. Repeat until no more errors
+    
+    For more information, see: https://github.com/neo4j-contrib/cypher-guard
+    ",
+    )?;
     m.add_class::<DbSchema>()?;
     m.add_class::<DbSchemaProperty>()?;
     m.add_class::<DbSchemaRelationshipPattern>()?;
     m.add_class::<DbSchemaMetadata>()?;
-    m.add_class::<PropertyType>()?;
-    m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
-    m.add_function(wrap_pyfunction!(get_validation_errors, m)?)?;
     m.add_function(wrap_pyfunction!(has_valid_cypher, m)?)?;
-    m.add_function(wrap_pyfunction!(get_structured_errors, m)?)?;
-    // `parse_query` is not implemented yet
-    // m.add_function(wrap_pyfunction!(parse_query, m)?)?;
+
+    // Core API functions
+    m.add_function(wrap_pyfunction!(check_syntax, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
+    m.add_function(wrap_pyfunction!(is_write, m)?)?;
+    m.add_function(wrap_pyfunction!(is_read, m)?)?;
+    m.add_function(wrap_pyfunction!(has_parser_errors, m)?)?;
 
     // Expose error classes using the simpler approach from PyO3 docs
     m.add(
@@ -1156,6 +1189,127 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("InvalidRelationship", py.get_type::<InvalidRelationship>())?;
     m.add("InvalidLabel", py.get_type::<InvalidLabel>())?;
     m.add("InvalidPropertyType", py.get_type::<InvalidPropertyType>())?;
+
+    // Parsing error classes
+    m.add("CypherParsingError", py.get_type::<CypherParsingError>())?;
+    m.add("NomParsingError", py.get_type::<NomParsingError>())?;
+    m.add(
+        "UnexpectedEndOfInput",
+        py.get_type::<UnexpectedEndOfInput>(),
+    )?;
+    m.add("ExpectedToken", py.get_type::<ExpectedToken>())?;
+    m.add("InvalidSyntax", py.get_type::<InvalidSyntax>())?;
+    m.add(
+        "ParsingUndefinedVariable",
+        py.get_type::<ParsingUndefinedVariable>(),
+    )?;
+    m.add(
+        "MissingRequiredClause",
+        py.get_type::<MissingRequiredClause>(),
+    )?;
+    m.add("InvalidClauseOrder", py.get_type::<InvalidClauseOrder>())?;
+    m.add(
+        "ReturnBeforeOtherClauses",
+        py.get_type::<ReturnBeforeOtherClauses>(),
+    )?;
+    m.add("MatchAfterReturn", py.get_type::<MatchAfterReturn>())?;
+    m.add("CreateAfterReturn", py.get_type::<CreateAfterReturn>())?;
+    m.add("MergeAfterReturn", py.get_type::<MergeAfterReturn>())?;
+    m.add("DeleteAfterReturn", py.get_type::<DeleteAfterReturn>())?;
+    m.add("SetAfterReturn", py.get_type::<SetAfterReturn>())?;
+    m.add("WhereAfterReturn", py.get_type::<WhereAfterReturn>())?;
+    m.add("WithAfterReturn", py.get_type::<WithAfterReturn>())?;
+    m.add("UnwindAfterReturn", py.get_type::<UnwindAfterReturn>())?;
+    m.add("WhereBeforeMatch", py.get_type::<WhereBeforeMatch>())?;
+    m.add("ReturnAfterReturn", py.get_type::<ReturnAfterReturn>())?;
+    m.add("OrderByBeforeReturn", py.get_type::<OrderByBeforeReturn>())?;
+    m.add("SkipBeforeReturn", py.get_type::<SkipBeforeReturn>())?;
+    m.add("LimitBeforeReturn", py.get_type::<LimitBeforeReturn>())?;
+    m.add("InvalidPattern", py.get_type::<InvalidPattern>())?;
+    m.add(
+        "InvalidWhereCondition",
+        py.get_type::<InvalidWhereCondition>(),
+    )?;
+    m.add("InvalidExpression", py.get_type::<InvalidExpression>())?;
+
+    // Schema error classes
+    m.add("CypherSchemaError", py.get_type::<CypherSchemaError>())?;
+    m.add("InvalidSchemaFormat", py.get_type::<InvalidSchemaFormat>())?;
+    m.add("MissingSchemaField", py.get_type::<MissingSchemaField>())?;
+    m.add(
+        "InvalidSchemaPropertyType",
+        py.get_type::<InvalidSchemaPropertyType>(),
+    )?;
+    m.add(
+        "DuplicateSchemaDefinition",
+        py.get_type::<DuplicateSchemaDefinition>(),
+    )?;
+    m.add(
+        "InvalidSchemaPropertyName",
+        py.get_type::<InvalidSchemaPropertyName>(),
+    )?;
+    m.add(
+        "InvalidSchemaRelationshipPattern",
+        py.get_type::<InvalidSchemaRelationshipPattern>(),
+    )?;
+    m.add(
+        "InvalidSchemaConstraint",
+        py.get_type::<InvalidSchemaConstraint>(),
+    )?;
+    m.add("InvalidSchemaIndex", py.get_type::<InvalidSchemaIndex>())?;
+    m.add(
+        "InvalidSchemaMetadata",
+        py.get_type::<InvalidSchemaMetadata>(),
+    )?;
+    m.add(
+        "InvalidSchemaEnumValues",
+        py.get_type::<InvalidSchemaEnumValues>(),
+    )?;
+    m.add(
+        "InvalidSchemaValueRange",
+        py.get_type::<InvalidSchemaValueRange>(),
+    )?;
+    m.add(
+        "InvalidSchemaDistinctValueCount",
+        py.get_type::<InvalidSchemaDistinctValueCount>(),
+    )?;
+    m.add(
+        "InvalidSchemaExampleValues",
+        py.get_type::<InvalidSchemaExampleValues>(),
+    )?;
+    m.add("InvalidSchemaJson", py.get_type::<InvalidSchemaJson>())?;
+    m.add("SchemaIoError", py.get_type::<SchemaIoError>())?;
+    m.add("SchemaLabelNotFound", py.get_type::<SchemaLabelNotFound>())?;
+    m.add(
+        "DuplicateSchemaLabel",
+        py.get_type::<DuplicateSchemaLabel>(),
+    )?;
+    m.add(
+        "SchemaRelationshipNotFound",
+        py.get_type::<SchemaRelationshipNotFound>(),
+    )?;
+    m.add(
+        "DuplicateSchemaRelationship",
+        py.get_type::<DuplicateSchemaRelationship>(),
+    )?;
+    m.add(
+        "SchemaPropertyNotFound",
+        py.get_type::<SchemaPropertyNotFound>(),
+    )?;
+    m.add(
+        "DuplicateSchemaProperty",
+        py.get_type::<DuplicateSchemaProperty>(),
+    )?;
+    m.add("SchemaFileOpenError", py.get_type::<SchemaFileOpenError>())?;
+    m.add(
+        "SchemaFileCreateError",
+        py.get_type::<SchemaFileCreateError>(),
+    )?;
+    m.add("SchemaJsonReadError", py.get_type::<SchemaJsonReadError>())?;
+    m.add(
+        "SchemaSerializationError",
+        py.get_type::<SchemaSerializationError>(),
+    )?;
 
     Ok(())
 }

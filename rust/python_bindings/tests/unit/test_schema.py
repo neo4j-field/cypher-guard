@@ -1,35 +1,5 @@
-from cypher_guard import DbSchema, DbSchemaProperty, PropertyType, DbSchemaRelationshipPattern
+from cypher_guard import DbSchema, DbSchemaProperty, DbSchemaRelationshipPattern
 import pytest
-
-def test_PropertyType_init_valid():
-    prop = PropertyType("STRING")
-    assert prop is not None
-    assert str(prop) == "STRING"
-
-def test_PropertyType_repr():
-    prop = PropertyType("STRING")
-    assert repr(prop) == "PropertyType(STRING)"
-
-def test_PropertyType_str():
-    prop = PropertyType("STRING")
-    assert str(prop) == "STRING"
-
-def test_PropertyType_all_types():
-    types = ["STRING", "INTEGER", "FLOAT", "BOOLEAN", "POINT", "DATE_TIME", "LIST"]
-    for type_name in types:
-        pt = PropertyType(type_name)
-        assert str(pt) == type_name
-
-def test_PropertyType_equality():
-    pt1 = PropertyType("STRING")
-    pt2 = PropertyType("STRING")
-    pt3 = PropertyType("INTEGER")
-    assert str(pt1) == str(pt2)
-    assert str(pt1) != str(pt3)
-
-def test_PropertyType_from_string():
-    pt = PropertyType("STRING")
-    assert str(pt) == "STRING"
 
 def test_DbSchemaProperty_init_from_dict_valid():
     prop = DbSchemaProperty.from_dict({"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]})
