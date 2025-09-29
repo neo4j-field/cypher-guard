@@ -60,21 +60,33 @@ build-rust:
 
 # Python targets
 uv-install:
-	uv sync
+	uv sync --no-install-project
 
 build: build-python
 
-build-python: uv-install
-	cargo clean
-	cargo build --verbose
+build-python: pre-clean-for-python-build
+	uv sync --no-install-project
 	uv run maturin build --release
-	uv pip install --force-reinstall target/wheels/*.whl
+	uv pip install --reinstall-package cypher-guard target/wheels/cypher_guard-*.whl
+
+build-python-dev: pre-clean-for-python-build
+	maturin develop --release
+
+pre-clean-for-python-build:
+	cargo clean
+	rm -rf target/
+	rm -rf dist/
+	rm -rf *.egg-info
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.so" -delete
+
 
 test-python:
-	uv run pytest rust/python_bindings/tests/ -vv
+	uv run --no-sync pytest rust/python_bindings/tests/ -vv
 
 test-python-unit:
-	uv run pytest rust/python_bindings/tests/unit/ -vv
+	uv run --no-sync pytest rust/python_bindings/tests/unit/ -vv
 
 # JavaScript targets
 build-js:
