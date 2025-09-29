@@ -60,16 +60,19 @@ build-rust:
 
 # Python targets
 uv-install:
-	cd rust/python_bindings && uv sync
+	uv sync
 
 build: build-python
 
 build-python: uv-install
-	cd rust/python_bindings && uv run maturin build --release
-	cd rust/python_bindings && uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl
+	uv run maturin build --release
+	uv pip install --force-reinstall target/wheels/*.whl
 
 test-python: uv-install
-	cd rust/python_bindings && uv run pytest tests/ -vv
+	uv run pytest rust/python_bindings/tests/ -vv
+
+test-python-unit: uv-install
+	uv run pytest rust/python_bindings/tests/unit/ -vv
 
 # JavaScript targets
 build-js:
@@ -103,8 +106,8 @@ docs-rust:
 
 docs-python: uv-install
 	@echo "Generating Python API documentation..."
-	cd rust/python_bindings && uv add --dev pdoc3
-	cd rust/python_bindings && uv run pdoc --html --output-dir ../../docs/api/python cypher_guard
+	uv add --dev pdoc3
+	uv run pdoc --html --output-dir docs/api/python cypher_guard
 	@echo "Python documentation generated at docs/api/python/"
 
 docs-js:
