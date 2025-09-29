@@ -7,6 +7,7 @@ use ::cypher_guard::{
     DbSchemaIndex as CoreDbSchemaIndex, DbSchemaMetadata as CoreDbSchemaMetadata,
     DbSchemaProperty as CoreDbSchemaProperty,
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
+    DbSchemaConstraint as CoreDbSchemaConstraint, DbSchemaIndex as CoreDbSchemaIndex,
     PropertyType as CorePropertyType,
 };
 use pyo3::create_exception;
@@ -480,7 +481,9 @@ impl DbSchemaProperty {
             example_values: example_values.clone(),
         };
 
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+        })
     }
 
     #[classmethod]
@@ -786,6 +789,320 @@ impl DbSchemaRelationshipPattern {
         format!(
             "DbSchemaRelationshipPattern(start={}, end={}, rel_type={})",
             self.start, self.end, self.rel_type
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!("(:{})-[:{}]->(:{})", self.start, self.rel_type, self.end)
+    }
+}
+
+/// Python wrapper for DbSchemaConstraint
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DbSchemaConstraint {
+    #[pyo3(get)]
+    pub id: i64,
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub constraint_type: String,
+    #[pyo3(get)]
+    pub entity_type: String,
+    #[pyo3(get)]
+    pub labels_or_types: Vec<String>,
+    #[pyo3(get)]
+    pub properties: Vec<String>,
+    #[pyo3(get)]
+    pub owned_index: String,
+    #[pyo3(get)]
+    pub property_type: Option<String>,
+    inner: CoreDbSchemaConstraint,
+}
+
+#[pymethods]
+impl DbSchemaConstraint {
+    #[new]
+    #[pyo3(signature = (id, name, constraint_type, entity_type, labels_or_types, properties, owned_index=None, property_type=None))]
+    fn new(
+        id: i64,
+        name: String,
+        constraint_type: String,
+        entity_type: String,
+        labels_or_types: Vec<String>,
+        properties: Vec<String>,
+        owned_index: Option<String>,
+        property_type: Option<String>,
+    ) -> Self {
+        let inner = CoreDbSchemaConstraint::new(
+            id,
+            name.clone(),
+            constraint_type.clone(),
+            entity_type.clone(),
+            labels_or_types.clone(),
+            properties.clone(),
+        );
+
+        Self {
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index: owned_index.unwrap_or_default(),
+            property_type,
+            inner,
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict")]
+    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+        let id = dict
+            .get_item("id")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'id' field"))?
+            .extract::<i64>()?;
+        let name = dict
+            .get_item("name")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'name' field"))?
+            .extract::<String>()?;
+        let constraint_type = match dict.get_item("constraint_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("type")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'constraint_type' or 'type' field",
+                    ))
+                }
+            },
+        };
+        let entity_type = match dict.get_item("entity_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("entityType")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'entity_type' or 'entityType' field",
+                    ))
+                }
+            },
+        };
+        let labels_or_types = match dict.get_item("labels_or_types")? {
+            Some(value) => value.extract::<Vec<String>>()?,
+            None => match dict.get_item("labelsOrTypes")? {
+                Some(value) => value.extract::<Vec<String>>()?,
+                None => match dict.get_item("labels")? {
+                    Some(value) => value.extract::<Vec<String>>()?,
+                    None => {
+                        return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                            "Missing 'labels_or_types', 'labelsOrTypes', or 'labels' field",
+                        ))
+                    }
+                },
+            },
+        };
+
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field"))?
+            .extract::<Vec<String>>()?;
+        let owned_index = match dict.get_item("owned_index")? {
+            Some(value) => Some(value.extract::<String>()?),
+            None => match dict.get_item("ownedIndex")? {
+                Some(value) => Some(value.extract::<String>()?),
+                None => None,
+            },
+        };
+        let property_type = match dict.get_item("property_type")? {
+            Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+            _ => match dict.get_item("propertyType")? {
+                Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+                _ => None,
+            },
+        };
+
+        Ok(Self::new(
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index,
+            property_type,
+        ))
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("id", self.id)?;
+        dict.set_item("name", &self.name)?;
+        dict.set_item("constraint_type", &self.constraint_type)?;
+        dict.set_item("entity_type", &self.entity_type)?;
+        dict.set_item("labels_or_types", &self.labels_or_types)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("owned_index", &self.owned_index)?;
+        if let Some(property_type) = &self.property_type {
+            dict.set_item("property_type", property_type)?;
+        }
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={}, property_type={})",
+            self.id,
+            self.name,
+            self.constraint_type,
+            self.entity_type,
+            self.labels_or_types.join(", "),
+            self.properties.join(", "),
+            self.owned_index,
+            self.property_type.as_ref().map_or("None".to_string(), |pt| pt.clone())
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} CONSTRAINT {} ON {} ({}).{{{}}}",
+            self.constraint_type,
+            self.name,
+            self.entity_type,
+            self.labels_or_types.join(", "),
+            self.properties.join(", "),
+        )
+    }
+}
+
+/// Python wrapper for DbSchemaIndex
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DbSchemaIndex {
+    #[pyo3(get)]
+    pub label: String,
+    #[pyo3(get)]
+    pub properties: Vec<String>,
+    #[pyo3(get)]
+    pub size: i64,
+    #[pyo3(get)]
+    pub index_type: String,
+    #[pyo3(get)]
+    pub values_selectivity: f64,
+    #[pyo3(get)]
+    pub distinct_values: f64,
+    inner: CoreDbSchemaIndex,
+}
+
+#[pymethods]
+impl DbSchemaIndex {
+    #[new]
+    #[pyo3(signature = (label, properties, size, index_type, values_selectivity=0.0, distinct_values=0.0))]
+    fn new(
+        label: String,
+        properties: Vec<String>,
+        size: i64,
+        index_type: String,
+        values_selectivity: f64,
+        distinct_values: f64,
+    ) -> Self {
+        let inner = CoreDbSchemaIndex::new(
+            label.clone(),
+            properties.clone(),
+            size,
+            index_type.clone(),
+        );
+
+        Self {
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
+            inner,
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict")]
+    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+        let label = dict
+            .get_item("label")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'label' field"))?
+            .extract::<String>()?;
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field"))?
+            .extract::<Vec<String>>()?;
+        let size = dict
+            .get_item("size")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'size' field"))?
+            .extract::<i64>()?;
+        let index_type = match dict.get_item("index_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => dict
+                .get_item("type")?
+                .ok_or_else(|| {
+                    PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'index_type' or 'type' field")
+                })?
+                .extract::<String>()?,
+        };
+        let values_selectivity = match dict.get_item("values_selectivity")? {
+            Some(value) => value.extract::<f64>()?,
+            None => match dict.get_item("valuesSelectivity")? {
+                Some(value) => value.extract::<f64>()?,
+                None => 0.0,
+            },
+        };
+        let distinct_values = match dict.get_item("distinct_values")? {
+            Some(value) => value.extract::<f64>()?,
+            None => match dict.get_item("distinctValues")? {
+                Some(value) => value.extract::<f64>()?,
+                None => 0.0,
+            },
+        };
+
+        Ok(Self::new(
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
+        ))
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("label", &self.label)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("size", self.size)?;
+        dict.set_item("index_type", &self.index_type)?;
+        dict.set_item("values_selectivity", self.values_selectivity)?;
+        dict.set_item("distinct_values", self.distinct_values)?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaIndex(label={}, properties=[{}], size={}, index_type={}, values_selectivity={}, distinct_values={})",
+            self.label,
+            self.properties.join(", "),
+            self.size,
+            self.index_type,
+            self.values_selectivity,
+            self.distinct_values
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "INDEX {} ON {} ({})",
+            self.index_type,
+            self.label,
+            self.properties.join(", ")
         )
     }
 
@@ -1121,7 +1438,9 @@ impl DbSchemaIndex {
 pub struct DbSchemaMetadata {
     #[pyo3(get)]
     pub constraint: Vec<DbSchemaConstraint>,
+    pub constraint: Vec<DbSchemaConstraint>,
     #[pyo3(get)]
+    pub index: Vec<DbSchemaIndex>,
     pub index: Vec<DbSchemaIndex>,
     #[allow(dead_code)]
     inner: CoreDbSchemaMetadata,
@@ -1134,8 +1453,14 @@ impl DbSchemaMetadata {
         let constraint = constraint.unwrap_or_default();
         let index = index.unwrap_or_default();
 
+    fn new(constraint: Option<Vec<DbSchemaConstraint>>, index: Option<Vec<DbSchemaIndex>>) -> Self {
+        let constraint = constraint.unwrap_or_default();
+        let index = index.unwrap_or_default();
+
         let inner = CoreDbSchemaMetadata::new();
         Self {
+            constraint,
+            index,
             constraint,
             index,
             inner,
