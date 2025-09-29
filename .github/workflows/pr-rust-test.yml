@@ -11,7 +11,7 @@ on:
   pull_request:
     branches: [ main, feat/validation-rewrite, feat/javascript-binding-pullforward ]
     paths:
-      - 'rust/**'
+      - 'rust/cypher_guard/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/rust.yml'
