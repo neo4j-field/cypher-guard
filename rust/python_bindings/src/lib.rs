@@ -503,7 +503,7 @@ impl DbSchemaProperty {
                 }
             },
         };
-
+ 
         let neo4j_type = match dict.get_item("neo4j_type")? {
             Some(value) => value.extract::<String>()?,
             None => match dict.get_item("type")? {
@@ -817,6 +817,7 @@ pub struct DbSchemaConstraint {
     pub owned_index: String,
     #[pyo3(get)]
     pub property_type: Option<String>,
+    #[allow(dead_code)]
     inner: CoreDbSchemaConstraint,
 }
 
@@ -990,6 +991,7 @@ pub struct DbSchemaIndex {
     pub values_selectivity: f64,
     #[pyo3(get)]
     pub distinct_values: f64,
+    #[allow(dead_code)]
     inner: CoreDbSchemaIndex,
 }
 
