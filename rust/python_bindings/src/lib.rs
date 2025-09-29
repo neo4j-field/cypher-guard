@@ -7,7 +7,6 @@ use ::cypher_guard::{
     DbSchemaIndex as CoreDbSchemaIndex, DbSchemaMetadata as CoreDbSchemaMetadata,
     DbSchemaProperty as CoreDbSchemaProperty,
     DbSchemaRelationshipPattern as CoreDbSchemaRelationshipPattern,
-    DbSchemaConstraint as CoreDbSchemaConstraint, DbSchemaIndex as CoreDbSchemaIndex,
     PropertyType as CorePropertyType,
 };
 use pyo3::create_exception;
@@ -481,9 +480,7 @@ impl DbSchemaProperty {
             example_values: example_values.clone(),
         };
 
-        Ok(Self {
-            inner,
-        })
+        Ok(Self { inner })
     }
 
     #[classmethod]
@@ -503,7 +500,7 @@ impl DbSchemaProperty {
                 }
             },
         };
- 
+
         let neo4j_type = match dict.get_item("neo4j_type")? {
             Some(value) => value.extract::<String>()?,
             None => match dict.get_item("type")? {
@@ -859,7 +856,10 @@ impl DbSchemaConstraint {
 
     #[classmethod]
     #[pyo3(name = "from_dict")]
-    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
         let id = dict
             .get_item("id")?
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'id' field"))?
@@ -907,7 +907,9 @@ impl DbSchemaConstraint {
 
         let properties = dict
             .get_item("properties")?
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field"))?
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field")
+            })?
             .extract::<Vec<String>>()?;
         let owned_index = match dict.get_item("owned_index")? {
             Some(value) => Some(value.extract::<String>()?),
@@ -946,7 +948,10 @@ impl DbSchemaConstraint {
         dict.set_item("labels_or_types", &self.labels_or_types)?;
         dict.set_item("properties", &self.properties)?;
         dict.set_item("owned_index", &self.owned_index)?;
-        dict.set_item("property_type", self.property_type.as_ref().map(|s| s.as_str()))?;
+        dict.set_item(
+            "property_type",
+            self.property_type.as_ref().map(|s| s.as_str()),
+        )?;
         Ok(dict.into())
     }
 
@@ -1007,12 +1012,8 @@ impl DbSchemaIndex {
         values_selectivity: f64,
         distinct_values: f64,
     ) -> Self {
-        let inner = CoreDbSchemaIndex::new(
-            label.clone(),
-            properties.clone(),
-            size,
-            index_type.clone(),
-        );
+        let inner =
+            CoreDbSchemaIndex::new(label.clone(), properties.clone(), size, index_type.clone());
 
         Self {
             label,
@@ -1027,14 +1028,19 @@ impl DbSchemaIndex {
 
     #[classmethod]
     #[pyo3(name = "from_dict")]
-    fn py_from_dict(_cls: &Bound<'_, pyo3::types::PyType>, dict: &Bound<'_, pyo3::types::PyDict>) -> PyResult<Self> {
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
         let label = dict
             .get_item("label")?
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'label' field"))?
             .extract::<String>()?;
         let properties = dict
             .get_item("properties")?
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field"))?
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field")
+            })?
             .extract::<Vec<String>>()?;
         let size = dict
             .get_item("size")?
@@ -1045,7 +1051,9 @@ impl DbSchemaIndex {
             None => dict
                 .get_item("type")?
                 .ok_or_else(|| {
-                    PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'index_type' or 'type' field")
+                    PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'index_type' or 'type' field",
+                    )
                 })?
                 .extract::<String>()?,
         };
