@@ -928,9 +928,7 @@ impl DbSchemaConstraint {
         dict.set_item("labels_or_types", &self.labels_or_types)?;
         dict.set_item("properties", &self.properties)?;
         dict.set_item("owned_index", &self.owned_index)?;
-        if let Some(property_type) = &self.property_type {
-            dict.set_item("property_type", property_type)?;
-        }
+        dict.set_item("property_type", self.property_type.as_ref().map(|s| s.as_str()))?;
         Ok(dict.into())
     }
 
@@ -1189,9 +1187,9 @@ impl DbSchemaMetadata {
 
     fn __str__(&self) -> String {
         format!(
-            "Constraints:\n{}\nIndexes:\n{}",
-            self.constraint.iter().map(|c| c.__str__()).collect::<Vec<String>>().join("\n"),
-            self.index.iter().map(|i| i.__str__()).collect::<Vec<String>>().join("\n")
+            "DbSchemaMetadata(constraint=[{}], index=[{}])",
+            self.constraint.iter().map(|c| c.__str__()).collect::<Vec<String>>().join(", "),
+            self.index.iter().map(|i| i.__str__()).collect::<Vec<String>>().join(", ")
         )
     }
 }
@@ -1440,6 +1438,17 @@ impl DbSchema {
         }
         dict.set_item("node_props", node_props_dict)?;
 
+        // Convert rel_props to dict
+        let rel_props_dict = pyo3::types::PyDict::new(py);
+        for (rel_type, properties) in &self.rel_props {
+            let props_list = pyo3::types::PyList::empty(py);
+            for prop in properties {
+                props_list.append(prop.py_to_dict(py)?)?;
+            }
+            rel_props_dict.set_item(rel_type, props_list)?;
+        }
+        dict.set_item("rel_props", rel_props_dict)?;
+
         // Convert relationships to dict
         let rels_list = pyo3::types::PyList::empty(py);
         for rel in &self.relationships {
@@ -1447,15 +1456,97 @@ impl DbSchema {
         }
         dict.set_item("relationships", rels_list)?;
 
+        // Convert metadata to dict
+        dict.set_item("metadata", self.metadata.py_to_dict(py)?)?;
+
         Ok(dict.into())
     }
 
+    fn __str__(&self) -> String {
+        let mut result = String::new();
+
+        // Nodes section
+        result.push_str("Nodes:\n");
+        for (label, properties) in &self.node_props {
+            result.push_str(&format!("{}:\n", label));
+            for prop in properties {
+                result.push_str(&format!("{}\n", prop.__str__()));
+            }
+        }
+
+        // Relationship Properties section
+        if !self.rel_props.is_empty() {
+            result.push_str("Relationship Properties:\n");
+            for (rel_type, properties) in &self.rel_props {
+                result.push_str(&format!("{}:\n", rel_type));
+                for prop in properties {
+                    result.push_str(&format!("{}\n", prop.__str__()));
+                }
+            }
+        }
+
+        // Relationships section
+        if !self.relationships.is_empty() {
+            result.push_str("Relationships:\n");
+            for rel in &self.relationships {
+                result.push_str(&format!("{}\n", rel.__str__()));
+            }
+        }
+
+        // Constraints section
+        if !self.metadata.constraint.is_empty() {
+            result.push_str("Constraints:\n");
+            for constraint in &self.metadata.constraint {
+                result.push_str(&format!("{}\n", constraint.__str__()));
+            }
+        }
+
+        // Indexes section
+        if !self.metadata.index.is_empty() {
+            result.push_str("Indexes:\n");
+            for index in &self.metadata.index {
+                result.push_str(&format!("{}\n", index.__str__()));
+            }
+        }
+
+        result
+    }
+
     fn __repr__(&self) -> String {
-        format!(
-            "DbSchema(node_props={} labels, relationships={} types)",
-            self.node_props.len(),
-            self.relationships.len()
-        )
+        let mut result = String::from("DbSchema(node_props={");
+
+        // Format node_props
+        let node_props_strs: Vec<String> = self.node_props
+            .iter()
+            .map(|(label, props)| {
+                let props_repr: Vec<String> = props.iter().map(|p| p.__repr__()).collect();
+                format!("'{}': {}", label, props_repr.join(", "))
+            })
+            .collect();
+        result.push_str(&node_props_strs.join(", "));
+        result.push_str("}, rel_props={");
+
+        // Format rel_props
+        let rel_props_strs: Vec<String> = self.rel_props
+            .iter()
+            .map(|(rel_type, props)| {
+                let props_repr: Vec<String> = props.iter().map(|p| p.__repr__()).collect();
+                format!("'{}': {}", rel_type, props_repr.join(", "))
+            })
+            .collect();
+        result.push_str(&rel_props_strs.join(", "));
+        result.push_str("}, relationships=[");
+
+        // Format relationships
+        let rels_repr: Vec<String> = self.relationships.iter().map(|r| r.__repr__()).collect();
+        result.push_str(&rels_repr.join(", "));
+        result.push_str("], metadata=");
+
+        // Format metadata
+        result.push_str(&self.metadata.__repr__());
+        result.push(')');
+
+        result
     }
 }
 
