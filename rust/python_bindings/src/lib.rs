@@ -945,9 +945,7 @@ impl DbSchemaConstraint {
         dict.set_item("labels_or_types", &self.labels_or_types)?;
         dict.set_item("properties", &self.properties)?;
         dict.set_item("owned_index", &self.owned_index)?;
-        if let Some(property_type) = &self.property_type {
-            dict.set_item("property_type", property_type)?;
-        }
+        dict.set_item("property_type", self.property_type.as_ref().map(|s| s.as_str()))?;
         Ok(dict.into())
     }
 
