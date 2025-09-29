@@ -65,13 +65,15 @@ uv-install:
 build: build-python
 
 build-python: uv-install
+	cargo clean
+	cargo build --verbose
 	uv run maturin build --release
 	uv pip install --force-reinstall target/wheels/*.whl
 
-test-python: uv-install
+test-python:
 	uv run pytest rust/python_bindings/tests/ -vv
 
-test-python-unit: uv-install
+test-python-unit:
 	uv run pytest rust/python_bindings/tests/unit/ -vv
 
 # JavaScript targets

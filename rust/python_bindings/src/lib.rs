@@ -1214,13 +1214,19 @@ pub struct DbSchema {
 #[pymethods]
 impl DbSchema {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (node_props=None, rel_props=None, relationships=None, metadata=None))]
+    fn new(
+        node_props: Option<std::collections::HashMap<String, Vec<DbSchemaProperty>>>,
+        rel_props: Option<std::collections::HashMap<String, Vec<DbSchemaProperty>>>,
+        relationships: Option<Vec<DbSchemaRelationshipPattern>>,
+        metadata: Option<DbSchemaMetadata>,
+    ) -> Self {
         let inner = CoreDbSchema::new();
         Self {
-            node_props: std::collections::HashMap::new(),
-            rel_props: std::collections::HashMap::new(),
-            relationships: Vec::new(),
-            metadata: DbSchemaMetadata::new(None, None),
+            node_props: node_props.unwrap_or_default(),
+            rel_props: rel_props.unwrap_or_default(),
+            relationships: relationships.unwrap_or_default(),
+            metadata: metadata.unwrap_or_else(|| DbSchemaMetadata::new(None, None)),
             inner,
         }
     }
