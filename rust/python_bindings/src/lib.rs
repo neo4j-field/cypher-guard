@@ -505,7 +505,7 @@ impl DbSchemaProperty {
                 }
             },
         };
-
+ 
         let neo4j_type = match dict.get_item("neo4j_type")? {
             Some(value) => value.extract::<String>()?,
             None => match dict.get_item("type")? {
@@ -523,7 +523,7 @@ impl DbSchemaProperty {
         // Extract optional fields with alternative field names support
         let distinct_value_count = match dict.get_item("distinct_value_count")? {
             Some(value) if !value.is_none() => Some(value.extract::<i64>()?),
-            _ => match dict.get_item("distinct_values")? {
+            _ => match dict.get_item("distinct_count")? {
                 Some(value) if !value.is_none() => Some(value.extract::<i64>()?),
                 _ => None,
             },
@@ -800,6 +800,7 @@ pub struct DbSchemaConstraint {
     pub owned_index: String,
     #[pyo3(get)]
     pub property_type: Option<String>,
+    #[allow(dead_code)]
     inner: CoreDbSchemaConstraint,
 }
 
@@ -973,6 +974,7 @@ pub struct DbSchemaIndex {
     pub values_selectivity: f64,
     #[pyo3(get)]
     pub distinct_values: f64,
+    #[allow(dead_code)]
     inner: CoreDbSchemaIndex,
 }
 
@@ -1096,6 +1098,7 @@ pub struct DbSchemaMetadata {
     pub constraint: Vec<DbSchemaConstraint>,
     #[pyo3(get)]
     pub index: Vec<DbSchemaIndex>,
+    #[allow(dead_code)]
     inner: CoreDbSchemaMetadata,
 }
 

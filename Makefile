@@ -80,6 +80,8 @@ pre-clean-for-python-build:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	find . -type f -name "*.so" -delete
+# allow rust analyzer to work since macro cache files deleted by cargo clean
+	cargo check
 
 
 test-python:
@@ -87,6 +89,9 @@ test-python:
 
 test-python-unit:
 	uv run --no-sync pytest rust/python_bindings/tests/unit/ -vv
+
+test-python-integration:
+	uv run --no-sync pytest rust/python_bindings/tests/integration/ -s
 
 # JavaScript targets
 build-js:
