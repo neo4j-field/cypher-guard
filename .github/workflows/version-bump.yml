@@ -12,9 +12,9 @@ on:
         - patch
         - minor
         - major
-  pull_request:
-    types: [closed]
-    branches: [ main ]
+  # pull_request:
+  #   types: [closed]
+  #   branches: [ main ]
 
 jobs:
   bump-version:

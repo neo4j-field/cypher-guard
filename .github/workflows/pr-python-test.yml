@@ -1,0 +1,55 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main, feat/validation-rewrite, feat/javascript-binding-pullforward ]
+    paths:
+      - 'rust/python_bindings/**'
+      - 'rust/cypher_guard/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/python.yml'
+  pull_request:
+    branches: [ main, feat/validation-rewrite, feat/javascript-binding-pullforward ]
+    paths:
+      - 'rust/python_bindings/**'
+      - 'rust/cypher_guard/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/python.yml'
+
+env:
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+
+jobs:
+  test:
+    name: Test Python (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v1
+      with:
+        version: latest
+
+    - name: Cache uv dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+
+    - name: Build and install
+      run: make build-python
+
+    - name: Run unit tests
+      run: make test-python-unit
