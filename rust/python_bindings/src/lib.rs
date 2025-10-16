@@ -1884,7 +1884,6 @@ impl DbSchema {
 ///     >>> has_valid_cypher("MATCH (p:InvalidLabel) RETURN p.name", schema_json)  
 ///     False
 pub fn has_valid_cypher(_py: Python, query: &str, schema: DbSchema) -> PyResult<bool> {
-
     // Fast path - just check if there are any validation errors
     let errors = get_cypher_validation_errors(query, &schema.inner);
     Ok(errors.is_empty())
@@ -1950,12 +1949,7 @@ pub fn check_syntax(py: Python, query: &str) -> PyResult<bool> {
 ///     []
 #[pyfunction]
 #[pyo3(text_signature = "(query, schema, /)")]
-pub fn validate_cypher(
-    py: Python,
-    query: &str,
-    schema: DbSchema,
-) -> PyResult<Vec<String>> {
-
+pub fn validate_cypher(py: Python, query: &str, schema: DbSchema) -> PyResult<Vec<String>> {
     // First check if the query can be parsed (syntax check)
     match parse_query_rust(query) {
         Ok(_) => {
