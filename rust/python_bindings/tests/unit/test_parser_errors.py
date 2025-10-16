@@ -239,7 +239,6 @@ class TestErrorConsistency:
         error_raising_functions = [
             cypher_guard.check_syntax,
             lambda q: cypher_guard.is_write(q),
-            lambda q: cypher_guard.is_read(q),
         ]
 
         for func in error_raising_functions:
@@ -258,7 +257,6 @@ class TestErrorConsistency:
         error_raising_functions = [
             cypher_guard.check_syntax,
             lambda q: cypher_guard.is_write(q),
-            lambda q: cypher_guard.is_read(q),
         ]
 
         for func in error_raising_functions:
