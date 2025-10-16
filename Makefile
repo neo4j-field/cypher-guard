@@ -67,7 +67,8 @@ build: build-python
 build-python: pre-clean-for-python-build
 	uv sync --no-install-project
 	uv run maturin build --release
-	uv pip install --reinstall-package cypher-guard target/wheels/cypher_guard-*.whl
+	WHEEL_FILE=$$(find target/wheels/ -name "cypher_guard-*.whl" -type f | head -1) && \
+	uv pip install --reinstall-package cypher-guard "$$WHEEL_FILE"
 
 build-python-dev: pre-clean-for-python-build
 	maturin develop --release
