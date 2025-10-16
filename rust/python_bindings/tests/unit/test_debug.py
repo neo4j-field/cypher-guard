@@ -1,12 +1,11 @@
 import pytest
-from cypher_guard import validate_cypher
+from cypher_guard import validate_cypher, DbSchema
 
 
 @pytest.fixture
 def test_schema():
     """Test schema fixture for all debug tests"""
-    return """
-    {
+    return DbSchema.from_dict({
         "node_props": {
             "Person": [
                 {"name": "name", "neo4j_type": "STRING"},
@@ -50,8 +49,7 @@ def test_schema():
             "index": [],
             "constraint": []
         }
-    }
-    """
+    })
 
 
 def test_simple_qpp(test_schema):

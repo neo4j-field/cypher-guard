@@ -61,6 +61,7 @@ build-rust:
 # Python targets
 uv-install:
 	uv sync --no-install-project
+	uv sync --no-install-project
 
 build: build-python
 

@@ -45,72 +45,48 @@ from cypher_guard import (
 )
 
 
-@pytest.fixture(scope="session")
-def schema_json():
-    """Basic schema for testing."""
-    return '''
-    {
-        "node_props": {
-            "Person": [
-                {"name": "name", "neo4j_type": "STRING"},
-                {"name": "age", "neo4j_type": "INTEGER"}
-            ]
-        },
-        "rel_props": {
-            "KNOWS": [
-                {"name": "since", "neo4j_type": "DATE_TIME"}
-            ]
-        },
-        "relationships": [
-            {"start": "Person", "end": "Person", "rel_type": "KNOWS"}
-        ],
-        "metadata": {
-            "index": [],
-            "constraint": []
-        }
-    }
-    '''
+
 
 
 class TestNomParsingErrors:
     """Test that NomParsingError is raised for basic syntax errors."""
     
-    def test_nom_parsing_error_basic_syntax(self, schema_json):
+    def test_nom_parsing_error_basic_syntax(self):
         """Test that NomParsingError is raised for basic syntax errors."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n RETURN n")
     
-    def test_nom_parsing_error_incomplete_query(self, schema_json):
+    def test_nom_parsing_error_incomplete_query(self):
         """Test that NomParsingError is raised for incomplete queries."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person")
     
-    def test_nom_parsing_error_invalid_keyword(self, schema_json):
+    def test_nom_parsing_error_invalid_keyword(self):
         """Test that NomParsingError is raised for invalid keywords."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) INVALID")
     
-    def test_nom_parsing_error_incomplete_where(self, schema_json):
+    def test_nom_parsing_error_incomplete_where(self):
         """Test that NomParsingError is raised for incomplete WHERE clauses."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) WHERE")
     
-    def test_nom_parsing_error_multiple_return(self, schema_json):
+    def test_nom_parsing_error_multiple_return(self):
         """Test that NomParsingError is raised for multiple RETURN clauses."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n RETURN n")
     
-    def test_nom_parsing_error_order_by_before_return(self, schema_json):
+    def test_nom_parsing_error_order_by_before_return(self):
         """Test that NomParsingError is raised for ORDER BY before RETURN."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) ORDER BY n.name RETURN n")
     
-    def test_nom_parsing_error_delete_after_return(self, schema_json):
+    def test_nom_parsing_error_delete_after_return(self):
         """Test that NomParsingError is raised for DELETE after RETURN."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n DELETE n")
     
-    def test_nom_parsing_error_set_after_return(self, schema_json):
+    def test_nom_parsing_error_set_after_return(self):
         """Test that NomParsingError is raised for SET after RETURN."""
         with pytest.raises(NomParsingError):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n SET n.age = 30")
@@ -119,32 +95,32 @@ class TestNomParsingErrors:
 class TestSpecificParserErrors:
     """Test specific parser error types that are actually raised."""
     
-    def test_return_before_other_clauses(self, schema_json):
+    def test_return_before_other_clauses(self):
         """Test that ReturnBeforeOtherClauses is raised when RETURN comes too early."""
         with pytest.raises(ReturnBeforeOtherClauses):
             cypher_guard.check_syntax("RETURN n MATCH (n:Person)")
     
-    def test_where_before_match(self, schema_json):
+    def test_where_before_match(self):
         """Test that WhereBeforeMatch is raised when WHERE comes before MATCH."""
         with pytest.raises(WhereBeforeMatch):
             cypher_guard.check_syntax("WHERE n.age > 30 MATCH (n:Person) RETURN n")
     
-    def test_match_after_return(self, schema_json):
+    def test_match_after_return(self):
         """Test that MatchAfterReturn is raised when MATCH comes after RETURN."""
         with pytest.raises(MatchAfterReturn):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n MATCH (m:Person)")
     
-    def test_with_after_return(self, schema_json):
+    def test_with_after_return(self):
         """Test that WithAfterReturn is raised when WITH comes after RETURN."""
         with pytest.raises(WithAfterReturn):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n WITH n")
     
-    def test_unwind_after_return(self, schema_json):
+    def test_unwind_after_return(self):
         """Test that UnwindAfterReturn is raised when UNWIND comes after RETURN."""
         with pytest.raises(UnwindAfterReturn):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n UNWIND [1,2,3] AS x")
     
-    def test_invalid_clause_order_where_after_return(self, schema_json):
+    def test_invalid_clause_order_where_after_return(self):
         """Test that InvalidClauseOrder is raised for WHERE after RETURN."""
         with pytest.raises(InvalidClauseOrder):
             cypher_guard.check_syntax("MATCH (n:Person) RETURN n WHERE n.age > 30")
@@ -153,19 +129,19 @@ class TestSpecificParserErrors:
 class TestValidQueries:
     """Test that some queries that might seem invalid actually parse successfully."""
     
-    def test_create_after_return_is_valid(self, schema_json):
+    def test_create_after_return_is_valid(self):
         """Test that CREATE after RETURN actually parses successfully."""
         # This is surprising but true - CREATE after RETURN is valid Cypher
         result = cypher_guard.check_syntax("MATCH (n:Person) RETURN n CREATE (m:Person)")
         assert result is True
     
-    def test_merge_after_return_is_valid(self, schema_json):
+    def test_merge_after_return_is_valid(self):
         """Test that MERGE after RETURN actually parses successfully."""
         # This is surprising but true - MERGE after RETURN is valid Cypher
         result = cypher_guard.check_syntax("MATCH (n:Person) RETURN n MERGE (m:Person)")
         assert result is True
     
-    def test_undefined_variable_is_valid_parsing(self, schema_json):
+    def test_undefined_variable_is_valid_parsing(self):
         """Test that undefined variables don't cause parsing errors."""
         # Undefined variables are a validation issue, not a parsing issue
         result = cypher_guard.check_syntax("MATCH (n:Person) RETURN undefined_var")
@@ -175,14 +151,14 @@ class TestValidQueries:
 class TestErrorInheritance:
     """Test that all parser errors inherit from the base CypherParsingError."""
     
-    def test_nom_parsing_error_inheritance(self, schema_json):
+    def test_nom_parsing_error_inheritance(self):
         """Test that NomParsingError inherits from CypherParsingError."""
         with pytest.raises(NomParsingError) as exc_info:
             cypher_guard.check_syntax("MATCH (n RETURN n")
         
         assert isinstance(exc_info.value, CypherParsingError)
     
-    def test_specific_errors_inheritance(self, schema_json):
+    def test_specific_errors_inheritance(self):
         """Test that specific parser errors inherit from CypherParsingError."""
         error_queries = [
             ("RETURN n MATCH (n:Person)", ReturnBeforeOtherClauses),
@@ -203,7 +179,7 @@ class TestErrorInheritance:
 class TestErrorMessages:
     """Test that error messages are informative and helpful."""
     
-    def test_nom_parsing_error_message(self, schema_json):
+    def test_nom_parsing_error_message(self):
         """Test that NomParsingError messages contain useful information."""
         with pytest.raises(NomParsingError) as exc_info:
             cypher_guard.check_syntax("MATCH (n:Person")
@@ -212,7 +188,7 @@ class TestErrorMessages:
         assert "Nom parsing error" in error_msg
         assert "error Verify" in error_msg or "error Tag" in error_msg
     
-    def test_specific_error_messages(self, schema_json):
+    def test_specific_error_messages(self):
         """Test that specific error messages are descriptive."""
         with pytest.raises(ReturnBeforeOtherClauses) as exc_info:
             cypher_guard.check_syntax("RETURN n MATCH (n:Person)")
@@ -231,7 +207,7 @@ class TestErrorMessages:
 class TestErrorConsistency:
     """Test that errors are consistent across different functions."""
     
-    def test_nom_parsing_error_consistency(self, schema_json):
+    def test_nom_parsing_error_consistency(self):
         """Test that NomParsingError is consistent across functions that raise errors."""
         invalid_query = "MATCH (n:Person) WHERE"
         
@@ -250,7 +226,7 @@ class TestErrorConsistency:
         result = cypher_guard.has_parser_errors(invalid_query)
         assert result is True
     
-    def test_specific_error_consistency(self, schema_json):
+    def test_specific_error_consistency(self):
         """Test that specific errors are consistent across functions that raise errors."""
         invalid_query = "RETURN n MATCH (n:Person)"
         
@@ -273,17 +249,17 @@ class TestErrorConsistency:
 class TestErrorEdgeCases:
     """Test edge cases and boundary conditions."""
     
-    def test_empty_query(self, schema_json):
+    def test_empty_query(self):
         """Test that empty queries raise appropriate errors."""
         with pytest.raises((UnexpectedEndOfInput, NomParsingError)):
             cypher_guard.check_syntax("")
     
-    def test_whitespace_only_query(self, schema_json):
+    def test_whitespace_only_query(self):
         """Test that whitespace-only queries raise appropriate errors."""
         with pytest.raises((UnexpectedEndOfInput, NomParsingError)):
             cypher_guard.check_syntax("   \n\t  ")
     
-    def test_very_long_invalid_query(self, schema_json):
+    def test_very_long_invalid_query(self):
         """Test that very long invalid queries still raise appropriate errors."""
         long_query = "MATCH " + "(" * 1000 + "n:Person" + ")" * 1000 + " RETURN n"
         with pytest.raises((NomParsingError, InvalidSyntax)):
@@ -293,7 +269,7 @@ class TestErrorEdgeCases:
 class TestErrorTypeSummary:
     """Test to document what error types are actually raised."""
     
-    def test_error_type_summary(self, schema_json):
+    def test_error_type_summary(self):
         """Document which error types are actually raised by the parser."""
         # This test documents the current behavior for reference
         

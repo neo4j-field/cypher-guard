@@ -12,7 +12,6 @@ use ::cypher_guard::{
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
 
 // Base exception for all validation errors
 create_exception!(cypher_guard, CypherValidationError, PyException);
@@ -1113,6 +1112,331 @@ impl DbSchemaIndex {
             self.properties.join(", ")
         )
     }
+
+    fn __str__(&self) -> String {
+        format!("(:{})-[:{}]->(:{})", self.start, self.rel_type, self.end)
+    }
+}
+
+/// Python wrapper for DbSchemaConstraint
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DbSchemaConstraint {
+    #[pyo3(get)]
+    pub id: i64,
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub constraint_type: String,
+    #[pyo3(get)]
+    pub entity_type: String,
+    #[pyo3(get)]
+    pub labels_or_types: Vec<String>,
+    #[pyo3(get)]
+    pub properties: Vec<String>,
+    #[pyo3(get)]
+    pub owned_index: String,
+    #[pyo3(get)]
+    pub property_type: Option<String>,
+    #[allow(dead_code)]
+    inner: CoreDbSchemaConstraint,
+}
+
+#[pymethods]
+impl DbSchemaConstraint {
+    #[new]
+    #[pyo3(signature = (id, name, constraint_type, entity_type, labels_or_types, properties, owned_index=None, property_type=None))]
+    fn new(
+        id: i64,
+        name: String,
+        constraint_type: String,
+        entity_type: String,
+        labels_or_types: Vec<String>,
+        properties: Vec<String>,
+        owned_index: Option<String>,
+        property_type: Option<String>,
+    ) -> Self {
+        let inner = CoreDbSchemaConstraint::new(
+            id,
+            name.clone(),
+            constraint_type.clone(),
+            entity_type.clone(),
+            labels_or_types.clone(),
+            properties.clone(),
+        );
+
+        Self {
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index: owned_index.unwrap_or_default(),
+            property_type,
+            inner,
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict")]
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
+        let id = dict
+            .get_item("id")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'id' field"))?
+            .extract::<i64>()?;
+        let name = dict
+            .get_item("name")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'name' field"))?
+            .extract::<String>()?;
+        let constraint_type = match dict.get_item("constraint_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("type")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'constraint_type' or 'type' field",
+                    ))
+                }
+            },
+        };
+        let entity_type = match dict.get_item("entity_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => match dict.get_item("entityType")? {
+                Some(value) => value.extract::<String>()?,
+                None => {
+                    return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'entity_type' or 'entityType' field",
+                    ))
+                }
+            },
+        };
+        let labels_or_types = match dict.get_item("labels_or_types")? {
+            Some(value) => value.extract::<Vec<String>>()?,
+            None => match dict.get_item("labelsOrTypes")? {
+                Some(value) => value.extract::<Vec<String>>()?,
+                None => match dict.get_item("labels")? {
+                    Some(value) => value.extract::<Vec<String>>()?,
+                    None => {
+                        return Err(PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                            "Missing 'labels_or_types', 'labelsOrTypes', or 'labels' field",
+                        ))
+                    }
+                },
+            },
+        };
+
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field")
+            })?
+            .extract::<Vec<String>>()?;
+        let owned_index = match dict.get_item("owned_index")? {
+            Some(value) => Some(value.extract::<String>()?),
+            None => match dict.get_item("ownedIndex")? {
+                Some(value) => Some(value.extract::<String>()?),
+                None => None,
+            },
+        };
+        let property_type = match dict.get_item("property_type")? {
+            Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+            _ => match dict.get_item("propertyType")? {
+                Some(value) if !value.is_none() => Some(value.extract::<String>()?),
+                _ => None,
+            },
+        };
+
+        Ok(Self::new(
+            id,
+            name,
+            constraint_type,
+            entity_type,
+            labels_or_types,
+            properties,
+            owned_index,
+            property_type,
+        ))
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("id", self.id)?;
+        dict.set_item("name", &self.name)?;
+        dict.set_item("constraint_type", &self.constraint_type)?;
+        dict.set_item("entity_type", &self.entity_type)?;
+        dict.set_item("labels_or_types", &self.labels_or_types)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("owned_index", &self.owned_index)?;
+        dict.set_item(
+            "property_type",
+            self.property_type.as_ref().map(|s| s.as_str()),
+        )?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={}, property_type={})",
+            self.id,
+            self.name,
+            self.constraint_type,
+            self.entity_type,
+            self.labels_or_types.join(", "),
+            self.properties.join(", "),
+            self.owned_index,
+            self.property_type.as_ref().map_or("None".to_string(), |pt| pt.clone())
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "{} CONSTRAINT {} ON {} ({}).{{{}}}",
+            self.constraint_type,
+            self.name,
+            self.entity_type,
+            self.labels_or_types.join(", "),
+            self.properties.join(", "),
+        )
+    }
+}
+
+/// Python wrapper for DbSchemaIndex
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct DbSchemaIndex {
+    #[pyo3(get)]
+    pub label: String,
+    #[pyo3(get)]
+    pub properties: Vec<String>,
+    #[pyo3(get)]
+    pub size: i64,
+    #[pyo3(get)]
+    pub index_type: String,
+    #[pyo3(get)]
+    pub values_selectivity: f64,
+    #[pyo3(get)]
+    pub distinct_values: f64,
+    #[allow(dead_code)]
+    inner: CoreDbSchemaIndex,
+}
+
+#[pymethods]
+impl DbSchemaIndex {
+    #[new]
+    #[pyo3(signature = (label, properties, size, index_type, values_selectivity=0.0, distinct_values=0.0))]
+    fn new(
+        label: String,
+        properties: Vec<String>,
+        size: i64,
+        index_type: String,
+        values_selectivity: f64,
+        distinct_values: f64,
+    ) -> Self {
+        let inner =
+            CoreDbSchemaIndex::new(label.clone(), properties.clone(), size, index_type.clone());
+
+        Self {
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
+            inner,
+        }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_dict")]
+    fn py_from_dict(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        dict: &Bound<'_, pyo3::types::PyDict>,
+    ) -> PyResult<Self> {
+        let label = dict
+            .get_item("label")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'label' field"))?
+            .extract::<String>()?;
+        let properties = dict
+            .get_item("properties")?
+            .ok_or_else(|| {
+                PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'properties' field")
+            })?
+            .extract::<Vec<String>>()?;
+        let size = dict
+            .get_item("size")?
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>("Missing 'size' field"))?
+            .extract::<i64>()?;
+        let index_type = match dict.get_item("index_type")? {
+            Some(value) => value.extract::<String>()?,
+            None => dict
+                .get_item("type")?
+                .ok_or_else(|| {
+                    PyErr::new::<pyo3::exceptions::PyKeyError, _>(
+                        "Missing 'index_type' or 'type' field",
+                    )
+                })?
+                .extract::<String>()?,
+        };
+        let values_selectivity = match dict.get_item("values_selectivity")? {
+            Some(value) => value.extract::<f64>()?,
+            None => match dict.get_item("valuesSelectivity")? {
+                Some(value) => value.extract::<f64>()?,
+                None => 0.0,
+            },
+        };
+        let distinct_values = match dict.get_item("distinct_values")? {
+            Some(value) => value.extract::<f64>()?,
+            None => match dict.get_item("distinctValues")? {
+                Some(value) => value.extract::<f64>()?,
+                None => 0.0,
+            },
+        };
+
+        Ok(Self::new(
+            label,
+            properties,
+            size,
+            index_type,
+            values_selectivity,
+            distinct_values,
+        ))
+    }
+
+    #[pyo3(name = "to_dict")]
+    fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("label", &self.label)?;
+        dict.set_item("properties", &self.properties)?;
+        dict.set_item("size", self.size)?;
+        dict.set_item("index_type", &self.index_type)?;
+        dict.set_item("values_selectivity", self.values_selectivity)?;
+        dict.set_item("distinct_values", self.distinct_values)?;
+        Ok(dict.into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DbSchemaIndex(label={}, properties=[{}], size={}, index_type={}, values_selectivity={}, distinct_values={})",
+            self.label,
+            self.properties.join(", "),
+            self.size,
+            self.index_type,
+            self.values_selectivity,
+            self.distinct_values
+        )
+    }
+
+    fn __str__(&self) -> String {
+        format!(
+            "INDEX {} ON {} ({})",
+            self.index_type,
+            self.label,
+            self.properties.join(", ")
+        )
+    }
 }
 
 /// Python wrapper for DbSchemaMetadata
@@ -1121,7 +1445,9 @@ impl DbSchemaIndex {
 pub struct DbSchemaMetadata {
     #[pyo3(get)]
     pub constraint: Vec<DbSchemaConstraint>,
+    pub constraint: Vec<DbSchemaConstraint>,
     #[pyo3(get)]
+    pub index: Vec<DbSchemaIndex>,
     pub index: Vec<DbSchemaIndex>,
     #[allow(dead_code)]
     inner: CoreDbSchemaMetadata,
@@ -1134,8 +1460,14 @@ impl DbSchemaMetadata {
         let constraint = constraint.unwrap_or_default();
         let index = index.unwrap_or_default();
 
+    fn new(constraint: Option<Vec<DbSchemaConstraint>>, index: Option<Vec<DbSchemaIndex>>) -> Self {
+        let constraint = constraint.unwrap_or_default();
+        let index = index.unwrap_or_default();
+
         let inner = CoreDbSchemaMetadata::new();
         Self {
+            constraint,
+            index,
             constraint,
             index,
             inner,
@@ -1274,73 +1606,6 @@ impl DbSchema {
             metadata: metadata.unwrap_or_else(|| DbSchemaMetadata::new(None, None)),
             inner,
         }
-    }
-
-    #[classmethod]
-    #[pyo3(name = "from_json_string")]
-    fn py_from_json_string(
-        _cls: &Bound<'_, pyo3::types::PyType>,
-        py: Python,
-        json_str: &str,
-    ) -> PyResult<Self> {
-        let inner = CoreDbSchema::from_json_string(json_str).map_err(|e| match e {
-            CypherGuardError::Schema(schema_err) => convert_schema_error(py, schema_err),
-            other => convert_cypher_error(py, other),
-        })?;
-
-        // Convert core node_props to Python wrapper node_props
-        let node_props = inner
-            .node_props
-            .iter()
-            .map(|(label, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-
-                (label.clone(), properties)
-            })
-            .collect();
-
-        // Convert core relationships to Python wrapper relationships
-        let relationships = inner
-            .relationships
-            .iter()
-            .map(|core_rel| DbSchemaRelationshipPattern {
-                start: core_rel.start.clone(),
-                end: core_rel.end.clone(),
-                rel_type: core_rel.rel_type.clone(),
-                inner: core_rel.clone(),
-            })
-            .collect();
-
-        // Convert core rel_props to wrapper rel_props
-        let rel_props = inner
-            .rel_props
-            .iter()
-            .map(|(rel_type, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-                (rel_type.clone(), properties)
-            })
-            .collect();
-
-        // Convert core metadata to wrapper metadata (currently empty but properly typed)
-        let metadata = DbSchemaMetadata::new(None, None);
-
-        Ok(Self {
-            node_props,
-            rel_props,
-            relationships,
-            metadata,
-            inner,
-        })
     }
 
     fn has_label(&self, label: &str) -> bool {
@@ -1618,22 +1883,9 @@ impl DbSchema {
 ///     True
 ///     >>> has_valid_cypher("MATCH (p:InvalidLabel) RETURN p.name", schema_json)  
 ///     False
-pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        DbSchema::py_from_json_string(&py.get_type::<DbSchema>(), py, schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        schema_obj
-    } else {
-        return Err(convert_schema_error(
-            py,
-            CypherGuardSchemaError::invalid_format(
-                "schema must be either a JSON string or DbSchema object",
-            ),
-        ));
-    };
-
+pub fn has_valid_cypher(_py: Python, query: &str, schema: DbSchema) -> PyResult<bool> {
     // Fast path - just check if there are any validation errors
-    let errors = get_cypher_validation_errors(query, &db_schema.inner);
+    let errors = get_cypher_validation_errors(query, &schema.inner);
     Ok(errors.is_empty())
 }
 
@@ -1697,31 +1949,12 @@ pub fn check_syntax(py: Python, query: &str) -> PyResult<bool> {
 ///     []
 #[pyfunction]
 #[pyo3(text_signature = "(query, schema, /)")]
-pub fn validate_cypher(
-    py: Python,
-    query: &str,
-    schema: &Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        // Schema provided as JSON string
-        DbSchema::py_from_json_string(&py.get_type::<DbSchema>(), py, schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        // Schema provided as DbSchema object
-        schema_obj
-    } else {
-        return Err(convert_schema_error(
-            py,
-            CypherGuardSchemaError::invalid_format(
-                "schema must be either a JSON string or DbSchema object",
-            ),
-        ));
-    };
-
+pub fn validate_cypher(py: Python, query: &str, schema: DbSchema) -> PyResult<Vec<String>> {
     // First check if the query can be parsed (syntax check)
     match parse_query_rust(query) {
         Ok(_) => {
             // If parsing succeeds, get validation errors
-            Ok(get_cypher_validation_errors(query, &db_schema.inner))
+            Ok(get_cypher_validation_errors(query, &schema.inner))
         }
         Err(e) => {
             // If parsing fails, raise syntax error

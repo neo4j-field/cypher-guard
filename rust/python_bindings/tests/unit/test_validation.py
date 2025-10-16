@@ -1,10 +1,9 @@
-from cypher_guard import validate_cypher, InvalidNodeLabel, InvalidRelationshipType, InvalidNodeProperty, InvalidRelationshipProperty, InvalidPropertyAccess
+from cypher_guard import validate_cypher, InvalidNodeLabel, InvalidRelationshipType, InvalidNodeProperty, InvalidRelationshipProperty, InvalidPropertyAccess, DbSchema
 import pytest
 
 @pytest.fixture(scope="session")
-def schema_json():
-    return '''
-    {
+def schema():
+    return DbSchema.from_dict({
         "node_props": {
             "Person": [
                 {"name": "name", "neo4j_type": "STRING"},
@@ -48,8 +47,7 @@ def schema_json():
             "index": [],
             "constraint": []
         }
-    }
-    '''
+    })
 
 def get_valid_cypher_queries():
     return [
@@ -93,51 +91,51 @@ def valid_qpp_cypher_queries():
     "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.height",  # 'height' is not a valid property
     "MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN a.name, r.invalid_property",  # 'invalid_property' is not a valid property
 ])
-def test_cypher_query_invalid_property(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_property(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
    "MATCH (a:Person)-[r:FOLLOWS]->(b:Person) RETURN a.name",  # 'FOLLOWS' is not a valid relationship type
     "MATCH (a:Station)-[r:CONNECTS]->(b:Station) RETURN a.name",  # 'CONNECTS' is not a valid relationship type
 ])
-def test_cypher_query_invalid_relationship_type(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_relationship_type(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
    "MATCH (a:User) RETURN a.name",  # 'User' is not a valid label
     "MATCH (a:Train) RETURN a.name",  # 'Train' is not a valid label
 ])
-def test_cypher_query_invalid_node_label(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_node_label(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
    "MATCH (a:Person) WHERE a.age = '30' RETURN a.name",  # 'age' should be INTEGER, not STRING
     "MATCH (a:Person) WHERE a.name = 123 RETURN a.name",  # 'name' should be STRING, not INTEGER
 ])
-def test_cypher_query_invalid_property_type(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_property_type(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
    "MATCH (a:Person)<-[r:ACTED_IN]-(b:Movie) RETURN a.name",  # ACTED_IN is defined as Person->Movie, not Person<-Movie
     "MATCH (a:Stop)<-[r:CALLS_AT]-(b:Station) RETURN a.name",  # CALLS_AT is defined as Stop->Station, not Stop<-Station
 ])
-def test_cypher_query_invalid_relationship_direction(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_relationship_direction(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
 @pytest.mark.parametrize("query", [
     "MATCH (a:Person)-[r:KNOWS]->(b:Person) WHERE r.role = 'friend' RETURN a.name",  # KNOWS doesn't have a 'role' property, but ACTED_IN does
     "MATCH (a:Station)-[r:LINK]->(b:Station) WHERE r.duration = 10 RETURN a.name"  # LINK doesn't have a 'duration' property, and doesn't exist on any rel or node
 ])
-def test_cypher_query_invalid_relationship_property(query: str, schema_json: str):
-    errors = validate_cypher(query, schema_json)
+def test_cypher_query_invalid_relationship_property(query: str, schema: DbSchema):
+    errors = validate_cypher(query, schema)
     assert len(errors) > 0
 
-def test_complex_multiline_with_context_aware_validation(schema_json: str):
+def test_complex_multiline_with_context_aware_validation(schema: DbSchema):
     """Test context-aware relationship property validation in complex multiline query with WITH clauses"""
     # This query should fail because r.role doesn't exist on KNOWS relationships (only on ACTED_IN)
     query = """
@@ -150,7 +148,7 @@ def test_complex_multiline_with_context_aware_validation(schema_json: str):
     RETURN a.name, b.name, m.title
     """
     
-    errors = validate_cypher(query, schema_json)
+    errors = validate_cypher(query, schema)
     
     # Should have exactly 1 error: r.role is invalid for KNOWS relationship
     assert len(errors) == 1
@@ -159,7 +157,7 @@ def test_complex_multiline_with_context_aware_validation(schema_json: str):
     # Should complain about r.role being invalid (r is bound to KNOWS relationship)
     assert any("r.role" in msg or ("r" in msg and "role" in msg) for msg in error_messages)
     
-def test_complex_multiline_valid_context_aware(schema_json: str):
+def test_complex_multiline_valid_context_aware(schema: DbSchema):
     """Test that the same query structure works when using correct relationship properties"""
     # This query should pass - using r.since (valid for KNOWS) and r2.role (valid for ACTED_IN)
     query = """
@@ -173,38 +171,38 @@ def test_complex_multiline_valid_context_aware(schema_json: str):
     """
     
     # Should pass now that we use valid Cypher syntax (r.since IS NOT NULL)
-    result = validate_cypher(query, schema_json)
+    result = validate_cypher(query, schema)
     assert len(result) == 0  # Should pass with valid temporal property check
 
 @pytest.mark.parametrize("query", get_valid_cypher_queries())
-def test_valid_queries(query: str, schema_json: str):
-    assert len(validate_cypher(query, schema_json)) == 0
+def test_valid_queries(query: str, schema: DbSchema):
+    assert len(validate_cypher(query, schema)) == 0
        
 @pytest.mark.parametrize("query", get_valid_qpp_cypher_queries())
-def test_valid_qpps(query: str, schema_json: str):
-    assert len(validate_cypher(query, schema_json)) == 0
+def test_valid_qpps(query: str, schema: DbSchema):
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_basic_validation_valid(schema_json: str):
+def test_basic_validation_valid(schema: DbSchema):
     query = "MATCH (p:Person) RETURN p.name"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_relationship_pattern_valid(schema_json: str):
+def test_relationship_pattern_valid(schema: DbSchema):
     query = "MATCH (a:Person)-[r:KNOWS {since: 2020}]->(b:Person) RETURN a.name, r.since"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_quantified_path_pattern_valid(schema_json: str):
+def test_quantified_path_pattern_valid(schema: DbSchema):
     query = """
     MATCH ((a:Stop)-[:NEXT]->(b:Stop)){1,3}
     RETURN a.departs
     """
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_merge_clause_valid(schema_json: str):
+def test_merge_clause_valid(schema: DbSchema):
     query = "MERGE (a:Person {name: 'Alice'}) ON CREATE SET a.created = true"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
 @pytest.mark.skip(reason="Known issue: Rust validation bug with multiple MATCH clauses causing integer overflow")
-def test_path_variable_with_predicate_valid(schema_json: str):
+def test_path_variable_with_predicate_valid(schema: DbSchema):
     query = """
     MATCH (bfr:Station),
           (ndl:Station)
@@ -212,52 +210,52 @@ def test_path_variable_with_predicate_valid(schema_json: str):
     WHERE bfr.name = 'test'
     RETURN bfr.name
     """
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_with_clause_valid(schema_json: str):
+def test_with_clause_valid(schema: DbSchema):
     query = "MATCH (a:Person) WITH a RETURN a.name"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_with_clause_alias_valid(schema_json: str):
+def test_with_clause_alias_valid(schema: DbSchema):
     query = "MATCH (a:Person) WITH a AS b RETURN b.name"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_with_clause_wildcard_valid(schema_json: str):
+def test_with_clause_wildcard_valid(schema: DbSchema):
     query = "MATCH (a:Person) WITH * RETURN a.name"
-    assert len(validate_cypher(query, schema_json)) == 0
+    assert len(validate_cypher(query, schema)) == 0
 
-def test_with_clause_invalid_variable(schema_json: str):
+def test_with_clause_invalid_variable(schema: DbSchema):
     query = "MATCH (a:Person) WITH b RETURN b.name"
-    errors = validate_cypher(query, schema_json)
+    errors = validate_cypher(query, schema)
     assert errors and any("Undefined variable" in e for e in errors)
 
-def test_with_clause_invalid_alias_expression(schema_json: str):
+def test_with_clause_invalid_alias_expression(schema: DbSchema):
     query = "MATCH (a:Person) WITH b AS c RETURN c.name"
-    errors = validate_cypher(query, schema_json)
+    errors = validate_cypher(query, schema)
     assert errors and any("Undefined variable" in e for e in errors)
 
-def test_invalid_node_label(schema_json):
-    errors = validate_cypher("MATCH (a:User) RETURN a.name", schema_json)
+def test_invalid_node_label(schema):
+    errors = validate_cypher("MATCH (a:User) RETURN a.name", schema)
     assert len(errors) > 0
     assert any("Invalid node label" in error for error in errors)
 
-def test_invalid_relationship_type(schema_json):
-    errors = validate_cypher("MATCH (a:Person)-[r:FOLLOWS]->(b:Person) RETURN a.name", schema_json)
+def test_invalid_relationship_type(schema):
+    errors = validate_cypher("MATCH (a:Person)-[r:FOLLOWS]->(b:Person) RETURN a.name", schema)
     assert len(errors) > 0
     assert any("Invalid relationship type" in error for error in errors)
 
-def test_invalid_node_property(schema_json):
-    errors = validate_cypher("MATCH (a:Person) RETURN a.invalid_prop", schema_json)
+def test_invalid_node_property(schema):
+    errors = validate_cypher("MATCH (a:Person) RETURN a.invalid_prop", schema)
     assert len(errors) > 0
     assert any("Invalid property access" in error for error in errors)
 
-def test_invalid_relationship_property(schema_json):
-    errors = validate_cypher("MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN r.invalid_prop", schema_json)
+def test_invalid_relationship_property(schema):
+    errors = validate_cypher("MATCH (a:Person)-[r:KNOWS]->(b:Person) RETURN r.invalid_prop", schema)
     assert len(errors) > 0
     assert any("Invalid property access" in error for error in errors)
 
-def test_invalid_property_access(schema_json):
-    errors = validate_cypher("MATCH (a:Person) RETURN a.height", schema_json)
+def test_invalid_property_access(schema):
+    errors = validate_cypher("MATCH (a:Person) RETURN a.height", schema)
     assert len(errors) > 0
     assert any("Invalid property access" in error for error in errors)
 
