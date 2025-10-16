@@ -12,7 +12,6 @@ use ::cypher_guard::{
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
 
 // Base exception for all validation errors
 create_exception!(cypher_guard, CypherValidationError, PyException);
@@ -1609,73 +1608,6 @@ impl DbSchema {
         }
     }
 
-    #[classmethod]
-    #[pyo3(name = "from_json_string")]
-    fn py_from_json_string(
-        _cls: &Bound<'_, pyo3::types::PyType>,
-        py: Python,
-        json_str: &str,
-    ) -> PyResult<Self> {
-        let inner = CoreDbSchema::from_json_string(json_str).map_err(|e| match e {
-            CypherGuardError::Schema(schema_err) => convert_schema_error(py, schema_err),
-            other => convert_cypher_error(py, other),
-        })?;
-
-        // Convert core node_props to Python wrapper node_props
-        let node_props = inner
-            .node_props
-            .iter()
-            .map(|(label, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-
-                (label.clone(), properties)
-            })
-            .collect();
-
-        // Convert core relationships to Python wrapper relationships
-        let relationships = inner
-            .relationships
-            .iter()
-            .map(|core_rel| DbSchemaRelationshipPattern {
-                start: core_rel.start.clone(),
-                end: core_rel.end.clone(),
-                rel_type: core_rel.rel_type.clone(),
-                inner: core_rel.clone(),
-            })
-            .collect();
-
-        // Convert core rel_props to wrapper rel_props
-        let rel_props = inner
-            .rel_props
-            .iter()
-            .map(|(rel_type, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-                (rel_type.clone(), properties)
-            })
-            .collect();
-
-        // Convert core metadata to wrapper metadata (currently empty but properly typed)
-        let metadata = DbSchemaMetadata::new(None, None);
-
-        Ok(Self {
-            node_props,
-            rel_props,
-            relationships,
-            metadata,
-            inner,
-        })
-    }
-
     fn has_label(&self, label: &str) -> bool {
         self.inner.has_label(label)
     }
@@ -1951,22 +1883,10 @@ impl DbSchema {
 ///     True
 ///     >>> has_valid_cypher("MATCH (p:InvalidLabel) RETURN p.name", schema_json)  
 ///     False
-pub fn has_valid_cypher(py: Python, query: &str, schema: &Bound<'_, PyAny>) -> PyResult<bool> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        DbSchema::py_from_json_string(&py.get_type::<DbSchema>(), py, schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        schema_obj
-    } else {
-        return Err(convert_schema_error(
-            py,
-            CypherGuardSchemaError::invalid_format(
-                "schema must be either a JSON string or DbSchema object",
-            ),
-        ));
-    };
+pub fn has_valid_cypher(_py: Python, query: &str, schema: DbSchema) -> PyResult<bool> {
 
     // Fast path - just check if there are any validation errors
-    let errors = get_cypher_validation_errors(query, &db_schema.inner);
+    let errors = get_cypher_validation_errors(query, &schema.inner);
     Ok(errors.is_empty())
 }
 
@@ -2033,28 +1953,14 @@ pub fn check_syntax(py: Python, query: &str) -> PyResult<bool> {
 pub fn validate_cypher(
     py: Python,
     query: &str,
-    schema: &Bound<'_, PyAny>,
+    schema: DbSchema,
 ) -> PyResult<Vec<String>> {
-    let db_schema = if let Ok(schema_str) = schema.extract::<&str>() {
-        // Schema provided as JSON string
-        DbSchema::py_from_json_string(&py.get_type::<DbSchema>(), py, schema_str)?
-    } else if let Ok(schema_obj) = schema.extract::<DbSchema>() {
-        // Schema provided as DbSchema object
-        schema_obj
-    } else {
-        return Err(convert_schema_error(
-            py,
-            CypherGuardSchemaError::invalid_format(
-                "schema must be either a JSON string or DbSchema object",
-            ),
-        ));
-    };
 
     // First check if the query can be parsed (syntax check)
     match parse_query_rust(query) {
         Ok(_) => {
             // If parsing succeeds, get validation errors
-            Ok(get_cypher_validation_errors(query, &db_schema.inner))
+            Ok(get_cypher_validation_errors(query, &schema.inner))
         }
         Err(e) => {
             // If parsing fails, raise syntax error
