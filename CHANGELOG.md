@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Updated Python API examples to reflect current functions
 - Fixed integration test assertions for new API
+- Reimplement Schema conversion functionality in Python library
 
 ## [0.1.19] - 2024-01-XX
 
