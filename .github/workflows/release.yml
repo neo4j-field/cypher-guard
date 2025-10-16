@@ -1,9 +1,9 @@
 name: Release
 
-on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+# on:
+#   push:
+#     branches: [ main ]
+#     tags: [ 'v*' ]
 
 env:
   PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
