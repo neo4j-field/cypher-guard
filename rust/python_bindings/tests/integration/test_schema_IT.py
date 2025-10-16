@@ -12,7 +12,7 @@ def test_load_DbSchema_from_neo4j_graphrag_package(init_data: None, neo4j_driver
     db_schema = DbSchema.from_dict(schema)
 
     print()
-    print(db_schema)
+    print(db_schema.to_dict())
 
     # Check Person properties in node_props
     assert "Person" in db_schema.node_props

@@ -2,7 +2,7 @@
 name = "cypher_guard"
 version = "4.0.0"
 description = "Python bindings for Cypher Guard - A Rust library for parsing and validating Cypher queries against a user-defined schema"
-readme = "../../README.md"
+readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "Neo4j Field Team"}
@@ -49,4 +49,5 @@ build-backend = "maturin"
 
 [tool.maturin]
 module-name = "cypher_guard"
+manifest-path = "rust/python_bindings/Cargo.toml"
 manylinux = "2_34" 

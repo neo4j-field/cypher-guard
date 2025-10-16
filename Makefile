@@ -60,16 +60,39 @@ build-rust:
 
 # Python targets
 uv-install:
-	cd rust/python_bindings && uv sync
+	uv sync --no-install-project
 
 build: build-python
 
-build-python: uv-install
-	cd rust/python_bindings && uv run maturin build --release
-	cd rust/python_bindings && uv pip install --force-reinstall ../../target/wheels/cypher_guard-*-cp*-*.whl
+build-python: pre-clean-for-python-build
+	uv sync --no-install-project
+	uv run maturin build --release
+	WHEEL_FILE=$$(find target/wheels/ -name "cypher_guard-*.whl" -type f | head -1) && \
+	uv pip install --reinstall-package cypher-guard "$$WHEEL_FILE"
 
-test-python: uv-install
-	cd rust/python_bindings && uv run pytest tests/ -vv
+build-python-dev: pre-clean-for-python-build
+	maturin develop --release
+
+pre-clean-for-python-build:
+	cargo clean
+	rm -rf target/
+	rm -rf dist/
+	rm -rf *.egg-info
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.so" -delete
+# allow rust analyzer to work since macro cache files deleted by cargo clean
+	cargo check
+
+
+test-python:
+	uv run --no-sync pytest rust/python_bindings/tests/ -vv
+
+test-python-unit:
+	uv run --no-sync pytest rust/python_bindings/tests/unit/ -vv
+
+test-python-integration:
+	uv run --no-sync pytest rust/python_bindings/tests/integration/ -s
 
 # JavaScript targets
 build-js:
@@ -103,8 +126,8 @@ docs-rust:
 
 docs-python: uv-install
 	@echo "Generating Python API documentation..."
-	cd rust/python_bindings && uv add --dev pdoc3
-	cd rust/python_bindings && uv run pdoc --html --output-dir ../../docs/api/python cypher_guard
+	uv add --dev pdoc3
+	uv run pdoc --html --output-dir docs/api/python cypher_guard
 	@echo "Python documentation generated at docs/api/python/"
 
 docs-js:
