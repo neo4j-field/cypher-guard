@@ -285,6 +285,50 @@ impl DbSchema {
         }
     }
 
+    /// Create a new schema with provided components
+    pub fn with_components(
+        node_props: HashMap<String, Vec<DbSchemaProperty>>,
+        rel_props: HashMap<String, Vec<DbSchemaProperty>>,
+        relationships: Vec<DbSchemaRelationshipPattern>,
+        metadata: DbSchemaMetadata,
+    ) -> Self {
+        Self {
+            node_props,
+            rel_props,
+            relationships,
+            metadata,
+        }
+    }
+
+    /// Create a schema from a map/dictionary-like structure using serde_json::Value
+    /// This is useful when constructing a schema from raw map data
+    ///
+    /// # Example
+    /// ```rust
+    /// use serde_json::json;
+    /// use cypher_guard::DbSchema;
+    ///
+    /// let schema_map = json!({
+    ///     "node_props": {
+    ///         "Person": [
+    ///             {"name": "name", "neo4j_type": "STRING"}
+    ///         ]
+    ///     },
+    ///     "rel_props": {},
+    ///     "relationships": [],
+    ///     "metadata": {"constraint": [], "index": []}
+    /// });
+    /// let schema = DbSchema::from_map(schema_map).unwrap();
+    /// ```
+    pub fn from_map(value: serde_json::Value) -> Result<Self> {
+        serde_json::from_value(value).map_err(|e| {
+            CypherGuardError::Schema(CypherGuardSchemaError::InvalidJson(format!(
+                "Failed to parse schema from map: {}",
+                e
+            )))
+        })
+    }
+
     /// Load schema from JSON string
     pub fn from_json_string(json_str: &str) -> Result<Self> {
         match serde_json::from_str(json_str) {
@@ -781,5 +825,172 @@ mod tests {
         assert!(display_string.contains("Place"));
         assert!(display_string.contains("LIVES_IN"));
         assert!(display_string.contains("KNOWS"));
+    }
+
+    #[test]
+    fn test_with_components() {
+        // Create components
+        let mut node_props = HashMap::new();
+        node_props.insert(
+            "Person".to_string(),
+            vec![
+                DbSchemaProperty::new("name", PropertyType::STRING),
+                DbSchemaProperty::new("age", PropertyType::INTEGER),
+            ],
+        );
+
+        let mut rel_props = HashMap::new();
+        rel_props.insert(
+            "KNOWS".to_string(),
+            vec![DbSchemaProperty::new("since", PropertyType::DATE_TIME)],
+        );
+
+        let relationships = vec![DbSchemaRelationshipPattern::new(
+            "Person",
+            "Person",
+            "KNOWS",
+        )];
+
+        let metadata = DbSchemaMetadata::new();
+
+        // Create schema with components
+        let schema = DbSchema::with_components(node_props, rel_props, relationships, metadata);
+
+        // Verify the schema was constructed correctly
+        assert!(schema.has_label("Person"));
+        assert!(schema.has_node_property("Person", "name"));
+        assert!(schema.has_node_property("Person", "age"));
+        assert!(schema.has_relationship_property("KNOWS", "since"));
+        assert_eq!(schema.relationships.len(), 1);
+        assert_eq!(schema.relationships[0].start, "Person");
+        assert_eq!(schema.relationships[0].end, "Person");
+        assert_eq!(schema.relationships[0].rel_type, "KNOWS");
+    }
+
+    #[test]
+    fn test_from_map() {
+        use serde_json::json;
+
+        // Create a JSON value representing a schema map
+        let schema_map = json!({
+            "node_props": {
+                "Person": [
+                    {"name": "name", "neo4j_type": "STRING"},
+                    {"name": "age", "neo4j_type": "INTEGER"}
+                ],
+                "Movie": [
+                    {"name": "title", "neo4j_type": "STRING"}
+                ]
+            },
+            "rel_props": {
+                "ACTED_IN": [
+                    {"name": "role", "neo4j_type": "STRING"}
+                ]
+            },
+            "relationships": [
+                {"start": "Person", "end": "Movie", "rel_type": "ACTED_IN"}
+            ],
+            "metadata": {
+                "constraint": [],
+                "index": []
+            }
+        });
+
+        // Create schema from map
+        let schema = DbSchema::from_map(schema_map).unwrap();
+
+        // Verify the schema was constructed correctly
+        assert!(schema.has_label("Person"));
+        assert!(schema.has_label("Movie"));
+        assert!(schema.has_node_property("Person", "name"));
+        assert!(schema.has_node_property("Person", "age"));
+        assert!(schema.has_node_property("Movie", "title"));
+        assert!(schema.has_relationship_property("ACTED_IN", "role"));
+        assert_eq!(schema.relationships.len(), 1);
+        assert_eq!(schema.relationships[0].start, "Person");
+        assert_eq!(schema.relationships[0].end, "Movie");
+        assert_eq!(schema.relationships[0].rel_type, "ACTED_IN");
+    }
+
+    #[test]
+    fn test_from_map_minimal() {
+        use serde_json::json;
+
+        // Create a minimal schema map with only required fields
+        let schema_map = json!({
+            "node_props": {
+                "Person": [
+                    {"name": "name", "neo4j_type": "STRING"}
+                ]
+            },
+            "rel_props": {},
+            "relationships": [],
+            "metadata": {
+                "constraint": [],
+                "index": []
+            }
+        });
+
+        let schema = DbSchema::from_map(schema_map).unwrap();
+
+        assert!(schema.has_label("Person"));
+        assert!(schema.has_node_property("Person", "name"));
+        assert_eq!(schema.rel_props.len(), 0);
+        assert_eq!(schema.relationships.len(), 0);
+    }
+
+    #[test]
+    fn test_from_map_invalid() {
+        use serde_json::json;
+
+        // Create an invalid schema map with missing required fields
+        let invalid_map = json!({
+            "node_props": "invalid"
+        });
+
+        let result = DbSchema::from_map(invalid_map);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_map_with_metadata() {
+        use serde_json::json;
+
+        let schema_map = json!({
+            "node_props": {
+                "Person": [
+                    {"name": "name", "neo4j_type": "STRING"}
+                ]
+            },
+            "rel_props": {},
+            "relationships": [],
+            "metadata": {
+                "constraint": [
+                    {
+                        "id": 1,
+                        "name": "unique_person_name",
+                        "constraint_type": "UNIQUE",
+                        "entity_type": "NODE",
+                        "labels": ["Person"],
+                        "properties": ["name"]
+                    }
+                ],
+                "index": [
+                    {
+                        "label": "Person",
+                        "properties": ["name"],
+                        "size": 100,
+                        "index_type": "BTREE"
+                    }
+                ]
+            }
+        });
+
+        let schema = DbSchema::from_map(schema_map).unwrap();
+
+        assert_eq!(schema.metadata.constraint.len(), 1);
+        assert_eq!(schema.metadata.constraint[0].name, "unique_person_name");
+        assert_eq!(schema.metadata.index.len(), 1);
+        assert_eq!(schema.metadata.index[0].label, "Person");
     }
 }
