@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - PR template for structured PR descriptions
 - GitHub Action for automatic release note generation
+- Add `from_components` and `from_map` functions to `DbSchema` 
 
 ### Changed
 - Streamlined README to focus on user installation
