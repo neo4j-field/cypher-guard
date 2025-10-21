@@ -12,6 +12,8 @@ use ::cypher_guard::{
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
+use pyo3::types::PyAny;
+use std::collections::HashMap;
 
 // Base exception for all validation errors
 create_exception!(cypher_guard, CypherValidationError, PyException);
@@ -718,12 +720,6 @@ impl DbSchemaProperty {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct DbSchemaRelationshipPattern {
-    #[pyo3(get)]
-    pub start: String,
-    #[pyo3(get)]
-    pub end: String,
-    #[pyo3(get)]
-    pub rel_type: String,
     inner: CoreDbSchemaRelationshipPattern,
 }
 
@@ -732,16 +728,27 @@ impl DbSchemaRelationshipPattern {
     #[new]
     fn new(start: String, end: String, rel_type: String) -> Self {
         let inner = CoreDbSchemaRelationshipPattern {
-            start: start.clone(),
-            end: end.clone(),
-            rel_type: rel_type.clone(),
-        };
-        Self {
             start,
             end,
             rel_type,
-            inner,
-        }
+        };
+        Self { inner }
+    }
+
+    // Getters that delegate to inner
+    #[getter]
+    fn start(&self) -> &str {
+        &self.inner.start
+    }
+
+    #[getter]
+    fn end(&self) -> &str {
+        &self.inner.end
+    }
+
+    #[getter]
+    fn rel_type(&self) -> &str {
+        &self.inner.rel_type
     }
 
     #[classmethod]
@@ -775,21 +782,24 @@ impl DbSchemaRelationshipPattern {
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new(py);
-        dict.set_item("start", &self.start)?;
-        dict.set_item("end", &self.end)?;
-        dict.set_item("rel_type", &self.rel_type)?;
+        dict.set_item("start", &self.inner.start)?;
+        dict.set_item("end", &self.inner.end)?;
+        dict.set_item("rel_type", &self.inner.rel_type)?;
         Ok(dict.into())
     }
 
     fn __repr__(&self) -> String {
         format!(
             "DbSchemaRelationshipPattern(start={}, end={}, rel_type={})",
-            self.start, self.end, self.rel_type
+            self.inner.start, self.inner.end, self.inner.rel_type
         )
     }
 
     fn __str__(&self) -> String {
-        format!("(:{})-[:{}]->(:{})", self.start, self.rel_type, self.end)
+        format!(
+            "(:{})-[:{}]->(:{})",
+            self.inner.start, self.inner.rel_type, self.inner.end
+        )
     }
 }
 
@@ -797,24 +807,10 @@ impl DbSchemaRelationshipPattern {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct DbSchemaConstraint {
-    #[pyo3(get)]
-    pub id: i64,
-    #[pyo3(get)]
-    pub name: String,
-    #[pyo3(get)]
-    pub constraint_type: String,
-    #[pyo3(get)]
-    pub entity_type: String,
-    #[pyo3(get)]
-    pub labels_or_types: Vec<String>,
-    #[pyo3(get)]
-    pub properties: Vec<String>,
-    #[pyo3(get)]
-    pub owned_index: String,
-    #[pyo3(get)]
-    pub property_type: Option<String>,
-    #[allow(dead_code)]
     inner: CoreDbSchemaConstraint,
+    // Extra fields not in core
+    owned_index: String,
+    property_type: Option<String>,
 }
 
 #[pymethods]
@@ -833,24 +829,59 @@ impl DbSchemaConstraint {
     ) -> Self {
         let inner = CoreDbSchemaConstraint::new(
             id,
-            name.clone(),
-            constraint_type.clone(),
-            entity_type.clone(),
-            labels_or_types.clone(),
-            properties.clone(),
-        );
-
-        Self {
-            id,
             name,
             constraint_type,
             entity_type,
             labels_or_types,
             properties,
+        );
+
+        Self {
+            inner,
             owned_index: owned_index.unwrap_or_default(),
             property_type,
-            inner,
         }
+    }
+
+    // Getters that delegate to inner
+    #[getter]
+    fn id(&self) -> i64 {
+        self.inner.id
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    #[getter]
+    fn constraint_type(&self) -> &str {
+        &self.inner.constraint_type
+    }
+
+    #[getter]
+    fn entity_type(&self) -> &str {
+        &self.inner.entity_type
+    }
+
+    #[getter]
+    fn labels_or_types(&self) -> Vec<String> {
+        self.inner.labels.clone()
+    }
+
+    #[getter]
+    fn properties(&self) -> Vec<String> {
+        self.inner.properties.clone()
+    }
+
+    #[getter]
+    fn owned_index(&self) -> &str {
+        &self.owned_index
+    }
+
+    #[getter]
+    fn property_type(&self) -> Option<String> {
+        self.property_type.clone()
     }
 
     #[classmethod]
@@ -940,12 +971,12 @@ impl DbSchemaConstraint {
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new(py);
-        dict.set_item("id", self.id)?;
-        dict.set_item("name", &self.name)?;
-        dict.set_item("constraint_type", &self.constraint_type)?;
-        dict.set_item("entity_type", &self.entity_type)?;
-        dict.set_item("labels_or_types", &self.labels_or_types)?;
-        dict.set_item("properties", &self.properties)?;
+        dict.set_item("id", self.inner.id)?;
+        dict.set_item("name", &self.inner.name)?;
+        dict.set_item("constraint_type", &self.inner.constraint_type)?;
+        dict.set_item("entity_type", &self.inner.entity_type)?;
+        dict.set_item("labels_or_types", &self.inner.labels)?;
+        dict.set_item("properties", &self.inner.properties)?;
         dict.set_item("owned_index", &self.owned_index)?;
         dict.set_item(
             "property_type",
@@ -956,12 +987,12 @@ impl DbSchemaConstraint {
 
     fn __repr__(&self) -> String {
         format!("DbSchemaConstraint(id={}, name={}, constraint_type={}, entity_type={}, labels_or_types=[{}], properties=[{}], owned_index={}, property_type={})",
-            self.id,
-            self.name,
-            self.constraint_type,
-            self.entity_type,
-            self.labels_or_types.join(", "),
-            self.properties.join(", "),
+            self.inner.id,
+            self.inner.name,
+            self.inner.constraint_type,
+            self.inner.entity_type,
+            self.inner.labels.join(", "),
+            self.inner.properties.join(", "),
             self.owned_index,
             self.property_type.as_ref().map_or("None".to_string(), |pt| pt.clone())
         )
@@ -970,11 +1001,11 @@ impl DbSchemaConstraint {
     fn __str__(&self) -> String {
         format!(
             "{} CONSTRAINT {} ON {} ({}).{{{}}}",
-            self.constraint_type,
-            self.name,
-            self.entity_type,
-            self.labels_or_types.join(", "),
-            self.properties.join(", "),
+            self.inner.constraint_type,
+            self.inner.name,
+            self.inner.entity_type,
+            self.inner.labels.join(", "),
+            self.inner.properties.join(", "),
         )
     }
 }
@@ -983,20 +1014,10 @@ impl DbSchemaConstraint {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct DbSchemaIndex {
-    #[pyo3(get)]
-    pub label: String,
-    #[pyo3(get)]
-    pub properties: Vec<String>,
-    #[pyo3(get)]
-    pub size: i64,
-    #[pyo3(get)]
-    pub index_type: String,
-    #[pyo3(get)]
-    pub values_selectivity: f64,
-    #[pyo3(get)]
-    pub distinct_values: f64,
-    #[allow(dead_code)]
     inner: CoreDbSchemaIndex,
+    // Extra fields not in core
+    values_selectivity: f64,
+    distinct_values: f64,
 }
 
 #[pymethods]
@@ -1011,18 +1032,44 @@ impl DbSchemaIndex {
         values_selectivity: f64,
         distinct_values: f64,
     ) -> Self {
-        let inner =
-            CoreDbSchemaIndex::new(label.clone(), properties.clone(), size, index_type.clone());
+        let inner = CoreDbSchemaIndex::new(label, properties, size, index_type);
 
         Self {
-            label,
-            properties,
-            size,
-            index_type,
+            inner,
             values_selectivity,
             distinct_values,
-            inner,
         }
+    }
+
+    // Getters that delegate to inner
+    #[getter]
+    fn label(&self) -> &str {
+        &self.inner.label
+    }
+
+    #[getter]
+    fn properties(&self) -> Vec<String> {
+        self.inner.properties.clone()
+    }
+
+    #[getter]
+    fn size(&self) -> i64 {
+        self.inner.size
+    }
+
+    #[getter]
+    fn index_type(&self) -> &str {
+        &self.inner.index_type
+    }
+
+    #[getter]
+    fn values_selectivity(&self) -> f64 {
+        self.values_selectivity
+    }
+
+    #[getter]
+    fn distinct_values(&self) -> f64 {
+        self.distinct_values
     }
 
     #[classmethod]
@@ -1084,10 +1131,10 @@ impl DbSchemaIndex {
     #[pyo3(name = "to_dict")]
     fn py_to_dict(&self, py: Python) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new(py);
-        dict.set_item("label", &self.label)?;
-        dict.set_item("properties", &self.properties)?;
-        dict.set_item("size", self.size)?;
-        dict.set_item("index_type", &self.index_type)?;
+        dict.set_item("label", &self.inner.label)?;
+        dict.set_item("properties", &self.inner.properties)?;
+        dict.set_item("size", self.inner.size)?;
+        dict.set_item("index_type", &self.inner.index_type)?;
         dict.set_item("values_selectivity", self.values_selectivity)?;
         dict.set_item("distinct_values", self.distinct_values)?;
         Ok(dict.into())
@@ -1095,10 +1142,10 @@ impl DbSchemaIndex {
 
     fn __repr__(&self) -> String {
         format!("DbSchemaIndex(label={}, properties=[{}], size={}, index_type={}, values_selectivity={}, distinct_values={})",
-            self.label,
-            self.properties.join(", "),
-            self.size,
-            self.index_type,
+            self.inner.label,
+            self.inner.properties.join(", "),
+            self.inner.size,
+            self.inner.index_type,
             self.values_selectivity,
             self.distinct_values
         )
@@ -1107,9 +1154,9 @@ impl DbSchemaIndex {
     fn __str__(&self) -> String {
         format!(
             "INDEX {} ON {} ({})",
-            self.index_type,
-            self.label,
-            self.properties.join(", ")
+            self.inner.index_type,
+            self.inner.label,
+            self.inner.properties.join(", ")
         )
     }
 }
@@ -1118,12 +1165,8 @@ impl DbSchemaIndex {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct DbSchemaMetadata {
-    #[pyo3(get)]
     pub constraint: Vec<DbSchemaConstraint>,
-    #[pyo3(get)]
     pub index: Vec<DbSchemaIndex>,
-    #[allow(dead_code)]
-    inner: CoreDbSchemaMetadata,
 }
 
 #[pymethods]
@@ -1133,12 +1176,18 @@ impl DbSchemaMetadata {
         let constraint = constraint.unwrap_or_default();
         let index = index.unwrap_or_default();
 
-        let inner = CoreDbSchemaMetadata::new();
-        Self {
-            constraint,
-            index,
-            inner,
-        }
+        Self { constraint, index }
+    }
+
+    // Getters
+    #[getter]
+    fn constraint(&self) -> Vec<DbSchemaConstraint> {
+        self.constraint.clone()
+    }
+
+    #[getter]
+    fn index(&self) -> Vec<DbSchemaIndex> {
+        self.index.clone()
     }
 
     #[classmethod]
@@ -1244,14 +1293,6 @@ impl DbSchemaMetadata {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct DbSchema {
-    #[pyo3(get)]
-    pub node_props: std::collections::HashMap<String, Vec<DbSchemaProperty>>,
-    #[pyo3(get)]
-    pub rel_props: std::collections::HashMap<String, Vec<DbSchemaProperty>>,
-    #[pyo3(get)]
-    pub relationships: Vec<DbSchemaRelationshipPattern>,
-    #[pyo3(get)]
-    pub metadata: DbSchemaMetadata,
     inner: CoreDbSchema,
 }
 
@@ -1265,14 +1306,73 @@ impl DbSchema {
         relationships: Option<Vec<DbSchemaRelationshipPattern>>,
         metadata: Option<DbSchemaMetadata>,
     ) -> Self {
-        let inner = CoreDbSchema::new();
-        Self {
-            node_props: node_props.unwrap_or_default(),
-            rel_props: rel_props.unwrap_or_default(),
-            relationships: relationships.unwrap_or_default(),
-            metadata: metadata.unwrap_or_else(|| DbSchemaMetadata::new(None, None)),
-            inner,
-        }
+        // Convert wrapper types to core types for inner schema
+        let core_node_props = node_props
+            .as_ref()
+            .map(|props| {
+                props
+                    .iter()
+                    .map(|(label, properties)| {
+                        (
+                            label.clone(),
+                            properties.iter().map(|p| p.inner.clone()).collect(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let core_rel_props = rel_props
+            .as_ref()
+            .map(|props| {
+                props
+                    .iter()
+                    .map(|(rel_type, properties)| {
+                        (
+                            rel_type.clone(),
+                            properties.iter().map(|p| p.inner.clone()).collect(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let core_relationships = relationships
+            .as_ref()
+            .map(|rels| rels.iter().map(|r| r.inner.clone()).collect())
+            .unwrap_or_default();
+
+        let core_metadata = metadata
+            .as_ref()
+            .map(|m| CoreDbSchemaMetadata {
+                constraint: m.constraint.iter().map(|c| c.inner.clone()).collect(),
+                index: m.index.iter().map(|i| i.inner.clone()).collect(),
+            })
+            .unwrap_or_else(CoreDbSchemaMetadata::new);
+
+        let inner = CoreDbSchema::with_components(
+            core_node_props,
+            core_rel_props,
+            core_relationships,
+            core_metadata,
+        );
+
+        Self { inner }
+    }
+
+    #[classmethod]
+    #[pyo3(name = "from_json_string")]
+    fn py_from_json_string(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python,
+        json_str: &str,
+    ) -> PyResult<Self> {
+        let inner = CoreDbSchema::from_json_string(json_str).map_err(|e| match e {
+            CypherGuardError::Schema(schema_err) => convert_schema_error(py, schema_err),
+            other => convert_cypher_error(py, other),
+        })?;
+
+        Ok(Self { inner })
     }
 
     fn has_label(&self, label: &str) -> bool {
@@ -1281,6 +1381,77 @@ impl DbSchema {
 
     fn has_node_property(&self, label: &str, name: &str) -> bool {
         self.inner.has_node_property(label, name)
+    }
+    // Getters that delegate to inner and wrap in Python types
+    #[getter]
+    fn node_props(&self) -> HashMap<String, Vec<DbSchemaProperty>> {
+        self.inner
+            .node_props
+            .iter()
+            .map(|(label, props)| {
+                (
+                    label.clone(),
+                    props
+                        .iter()
+                        .map(|p| DbSchemaProperty { inner: p.clone() })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[getter]
+    fn rel_props(&self) -> HashMap<String, Vec<DbSchemaProperty>> {
+        self.inner
+            .rel_props
+            .iter()
+            .map(|(rel_type, props)| {
+                (
+                    rel_type.clone(),
+                    props
+                        .iter()
+                        .map(|p| DbSchemaProperty { inner: p.clone() })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[getter]
+    fn relationships(&self) -> Vec<DbSchemaRelationshipPattern> {
+        self.inner
+            .relationships
+            .iter()
+            .map(|r| DbSchemaRelationshipPattern { inner: r.clone() })
+            .collect()
+    }
+
+    #[getter]
+    fn metadata(&self) -> DbSchemaMetadata {
+        DbSchemaMetadata {
+            constraint: self
+                .inner
+                .metadata
+                .constraint
+                .iter()
+                .map(|c| DbSchemaConstraint {
+                    inner: c.clone(),
+                    owned_index: String::new(),
+                    property_type: None,
+                })
+                .collect(),
+            index: self
+                .inner
+                .metadata
+                .index
+                .iter()
+                .map(|i| DbSchemaIndex {
+                    inner: i.clone(),
+                    values_selectivity: 0.0,
+                    distinct_values: 0.0,
+                })
+                .collect(),
+        }
     }
 
     #[classmethod]
@@ -1344,62 +1515,7 @@ impl DbSchema {
             }
         }
 
-        // Convert core schema to wrapper
-        let node_props = core_schema
-            .node_props
-            .iter()
-            .map(|(label, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-                (label.clone(), properties)
-            })
-            .collect();
-
-        let relationships = core_schema
-            .relationships
-            .iter()
-            .map(|core_rel| DbSchemaRelationshipPattern {
-                start: core_rel.start.clone(),
-                end: core_rel.end.clone(),
-                rel_type: core_rel.rel_type.clone(),
-                inner: core_rel.clone(),
-            })
-            .collect();
-
-        // Parse rel_props
-        let rel_props = core_schema
-            .rel_props
-            .iter()
-            .map(|(rel_type, core_properties)| {
-                let properties = core_properties
-                    .iter()
-                    .map(|core_prop| DbSchemaProperty {
-                        inner: core_prop.clone(),
-                    })
-                    .collect();
-                (rel_type.clone(), properties)
-            })
-            .collect();
-
-        // Parse metadata from the input dictionary
-        let metadata = if let Some(metadata_item) = dict.get_item("metadata")? {
-            let metadata_dict = metadata_item.downcast::<pyo3::types::PyDict>()?;
-            DbSchemaMetadata::py_from_dict(_cls, metadata_dict)?
-        } else {
-            DbSchemaMetadata::new(None, None)
-        };
-
-        Ok(Self {
-            node_props,
-            rel_props,
-            relationships,
-            metadata,
-            inner: core_schema,
-        })
+        Ok(Self { inner: core_schema })
     }
 
     #[pyo3(name = "to_dict")]
@@ -1408,10 +1524,13 @@ impl DbSchema {
 
         // Convert node_props to dict
         let node_props_dict = pyo3::types::PyDict::new(py);
-        for (label, properties) in &self.node_props {
+        for (label, properties) in &self.inner.node_props {
             let props_list = pyo3::types::PyList::empty(py);
             for prop in properties {
-                props_list.append(prop.py_to_dict(py)?)?;
+                let wrapped_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
+                props_list.append(wrapped_prop.py_to_dict(py)?)?;
             }
             node_props_dict.set_item(label, props_list)?;
         }
@@ -1419,10 +1538,13 @@ impl DbSchema {
 
         // Convert rel_props to dict
         let rel_props_dict = pyo3::types::PyDict::new(py);
-        for (rel_type, properties) in &self.rel_props {
+        for (rel_type, properties) in &self.inner.rel_props {
             let props_list = pyo3::types::PyList::empty(py);
             for prop in properties {
-                props_list.append(prop.py_to_dict(py)?)?;
+                let wrapped_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
+                props_list.append(wrapped_prop.py_to_dict(py)?)?;
             }
             rel_props_dict.set_item(rel_type, props_list)?;
         }
@@ -1430,13 +1552,15 @@ impl DbSchema {
 
         // Convert relationships to dict
         let rels_list = pyo3::types::PyList::empty(py);
-        for rel in &self.relationships {
-            rels_list.append(rel.py_to_dict(py)?)?;
+        for rel in &self.inner.relationships {
+            let wrapped_rel = DbSchemaRelationshipPattern { inner: rel.clone() };
+            rels_list.append(wrapped_rel.py_to_dict(py)?)?;
         }
         dict.set_item("relationships", rels_list)?;
 
         // Convert metadata to dict
-        dict.set_item("metadata", self.metadata.py_to_dict(py)?)?;
+        let wrapped_metadata = self.metadata();
+        dict.set_item("metadata", wrapped_metadata.py_to_dict(py)?)?;
 
         Ok(dict.into())
     }
@@ -1446,45 +1570,67 @@ impl DbSchema {
 
         // Nodes section
         result.push_str("Nodes:\n");
-        for (label, properties) in &self.node_props {
+        for (label, properties) in &self.inner.node_props {
             result.push_str(&format!("{}:\n", label));
             for prop in properties {
-                result.push_str(&format!("{}\n", prop.__str__()));
+                // Wrap core property in Python wrapper for __str__ call
+                let py_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
+                result.push_str(&format!("{}\n", py_prop.__str__()));
             }
         }
 
         // Relationship Properties section
-        if !self.rel_props.is_empty() {
+        if !self.inner.rel_props.is_empty() {
             result.push_str("Relationship Properties:\n");
-            for (rel_type, properties) in &self.rel_props {
+            for (rel_type, properties) in &self.inner.rel_props {
                 result.push_str(&format!("{}:\n", rel_type));
                 for prop in properties {
-                    result.push_str(&format!("{}\n", prop.__str__()));
+                    // Wrap core property in Python wrapper for __str__ call
+                    let py_prop = DbSchemaProperty {
+                        inner: prop.clone(),
+                    };
+                    result.push_str(&format!("{}\n", py_prop.__str__()));
                 }
             }
         }
 
         // Relationships section
-        if !self.relationships.is_empty() {
+        if !self.inner.relationships.is_empty() {
             result.push_str("Relationships:\n");
-            for rel in &self.relationships {
-                result.push_str(&format!("{}\n", rel.__str__()));
+            for rel in &self.inner.relationships {
+                // Wrap core relationship in Python wrapper for __str__ call
+                let py_rel = DbSchemaRelationshipPattern { inner: rel.clone() };
+                result.push_str(&format!("{}\n", py_rel.__str__()));
             }
         }
 
         // Constraints section
-        if !self.metadata.constraint.is_empty() {
+        if !self.inner.metadata.constraint.is_empty() {
             result.push_str("Constraints:\n");
-            for constraint in &self.metadata.constraint {
-                result.push_str(&format!("{}\n", constraint.__str__()));
+            for constraint in &self.inner.metadata.constraint {
+                // Wrap core constraint in Python wrapper for __str__ call
+                let py_constraint = DbSchemaConstraint {
+                    inner: constraint.clone(),
+                    owned_index: String::new(),
+                    property_type: None,
+                };
+                result.push_str(&format!("{}\n", py_constraint.__str__()));
             }
         }
 
         // Indexes section
-        if !self.metadata.index.is_empty() {
+        if !self.inner.metadata.index.is_empty() {
             result.push_str("Indexes:\n");
-            for index in &self.metadata.index {
-                result.push_str(&format!("{}\n", index.__str__()));
+            for index in &self.inner.metadata.index {
+                // Wrap core index in Python wrapper for __str__ call
+                let py_index = DbSchemaIndex {
+                    inner: index.clone(),
+                    values_selectivity: 0.0,
+                    distinct_values: 0.0,
+                };
+                result.push_str(&format!("{}\n", py_index.__str__()));
             }
         }
 
@@ -1496,10 +1642,18 @@ impl DbSchema {
 
         // Format node_props
         let node_props_strs: Vec<String> = self
+            .inner
             .node_props
             .iter()
             .map(|(label, props)| {
-                let props_repr: Vec<String> = props.iter().map(|p| p.__repr__()).collect();
+                let props_repr: Vec<String> = props
+                    .iter()
+                    .map(|p| {
+                        // Wrap core property in Python wrapper for __repr__ call
+                        let py_prop = DbSchemaProperty { inner: p.clone() };
+                        py_prop.__repr__()
+                    })
+                    .collect();
                 format!("'{}': {}", label, props_repr.join(", "))
             })
             .collect();
@@ -1508,10 +1662,18 @@ impl DbSchema {
 
         // Format rel_props
         let rel_props_strs: Vec<String> = self
+            .inner
             .rel_props
             .iter()
             .map(|(rel_type, props)| {
-                let props_repr: Vec<String> = props.iter().map(|p| p.__repr__()).collect();
+                let props_repr: Vec<String> = props
+                    .iter()
+                    .map(|p| {
+                        // Wrap core property in Python wrapper for __repr__ call
+                        let py_prop = DbSchemaProperty { inner: p.clone() };
+                        py_prop.__repr__()
+                    })
+                    .collect();
                 format!("'{}': {}", rel_type, props_repr.join(", "))
             })
             .collect();
@@ -1519,12 +1681,45 @@ impl DbSchema {
         result.push_str("}, relationships=[");
 
         // Format relationships
-        let rels_repr: Vec<String> = self.relationships.iter().map(|r| r.__repr__()).collect();
+        let rels_repr: Vec<String> = self
+            .inner
+            .relationships
+            .iter()
+            .map(|r| {
+                // Wrap core relationship in Python wrapper for __repr__ call
+                let py_rel = DbSchemaRelationshipPattern { inner: r.clone() };
+                py_rel.__repr__()
+            })
+            .collect();
         result.push_str(&rels_repr.join(", "));
         result.push_str("], metadata=");
 
-        // Format metadata
-        result.push_str(&self.metadata.__repr__());
+        // Format metadata - wrap core metadata in Python wrapper for __repr__ call
+        let py_metadata = DbSchemaMetadata {
+            constraint: self
+                .inner
+                .metadata
+                .constraint
+                .iter()
+                .map(|c| DbSchemaConstraint {
+                    inner: c.clone(),
+                    owned_index: String::new(),
+                    property_type: None,
+                })
+                .collect(),
+            index: self
+                .inner
+                .metadata
+                .index
+                .iter()
+                .map(|i| DbSchemaIndex {
+                    inner: i.clone(),
+                    values_selectivity: 0.0,
+                    distinct_values: 0.0,
+                })
+                .collect(),
+        };
+        result.push_str(&py_metadata.__repr__());
         result.push(')');
 
         result
