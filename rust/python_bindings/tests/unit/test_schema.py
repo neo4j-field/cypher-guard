@@ -507,8 +507,7 @@ def test_DbSchema_init_from_dict_valid():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"], "min_value": None, "max_value": None, "distinct_value_count": None, "example_values": None}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]},
     })
     assert schema is not None
     assert len(schema.node_props) == 2
@@ -538,8 +537,7 @@ def test_DbSchema_to_dict_valid():
         "node_props": {"nodeA": [{"name": "name", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}, {"name": "age", "neo4j_type": "INTEGER"}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]},
     }
     schema = DbSchema.from_dict(d)
     assert schema.to_dict() == d
@@ -553,8 +551,7 @@ def test_DbSchema_str():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]},
     })
     assert "Nodes:" in str(schema)
     assert "nodeA:\nname: STRING\nage: INTEGER" in str(schema)
@@ -587,8 +584,7 @@ def test_DbSchema_repr():
                        "nodeB": [{"name": "title", "neo4j_type": "STRING", "enum_values": ["value1", "value2"]}]},
         "rel_props": {"relA": [{"name": "num", "neo4j_type": "INTEGER"}]},
         "relationships": [{"start": "nodeA", "end": "nodeB", "rel_type": "relA"}],
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
-        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]}
+        "metadata": {"constraint": [{"id": 1, "name": "CONSTRAINT_NAME", "constraint_type": "UNIQUE", "entity_type": "NODE", "labels_or_types": ["label1", "label2"], "properties": ["prop1", "prop2"], "owned_index": "INDEX_NAME", "property_type": None}], "index": [{"label": "INDEX_NAME", "properties": ["prop1", "prop2"], "size": 10, "index_type": "BTREE", "values_selectivity": 0.5, "distinct_values": 1000}]},
     })
     assert "DbSchema(node_props={" in repr(schema)
     assert "'nodeA': DbSchemaProperty(name=name, neo4j_type=STRING, enum_values=['value1', 'value2'], min_value=None, max_value=None, distinct_value_count=None, example_values=None)" in repr(schema)
