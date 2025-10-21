@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streamlined README to focus on user installation
 - Moved development details to separate docs/DEVELOPMENT.md
 - Enhanced PARSER_INTERNALS.md with real code examples
+- Removed `is_read` function since this duplicates `is_write` functionality
 - Removed `from_json_string` method from `DbSchema` object
 
 ### Fixed
