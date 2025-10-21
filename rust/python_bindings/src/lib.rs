@@ -796,7 +796,10 @@ impl DbSchemaRelationshipPattern {
     }
 
     fn __str__(&self) -> String {
-        format!("(:{})-[:{}]->(:{})", self.inner.start, self.inner.rel_type, self.inner.end)
+        format!(
+            "(:{})-[:{}]->(:{})",
+            self.inner.start, self.inner.rel_type, self.inner.end
+        )
     }
 }
 
@@ -1173,10 +1176,7 @@ impl DbSchemaMetadata {
         let constraint = constraint.unwrap_or_default();
         let index = index.unwrap_or_default();
 
-        Self {
-            constraint,
-            index,
-        }
+        Self { constraint, index }
     }
 
     // Getters
@@ -1357,9 +1357,7 @@ impl DbSchema {
             core_metadata,
         );
 
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 
     #[classmethod]
@@ -1384,7 +1382,6 @@ impl DbSchema {
     fn has_node_property(&self, label: &str, name: &str) -> bool {
         self.inner.has_node_property(label, name)
     }
-
     // Getters that delegate to inner and wrap in Python types
     #[getter]
     fn node_props(&self) -> HashMap<String, Vec<DbSchemaProperty>> {
@@ -1425,9 +1422,7 @@ impl DbSchema {
         self.inner
             .relationships
             .iter()
-            .map(|r| DbSchemaRelationshipPattern {
-                inner: r.clone(),
-            })
+            .map(|r| DbSchemaRelationshipPattern { inner: r.clone() })
             .collect()
     }
 
@@ -1457,13 +1452,6 @@ impl DbSchema {
                 })
                 .collect(),
         }
-
-    fn has_label(&self, label: &str) -> bool {
-        self.inner.has_label(label)
-    }
-
-    fn has_node_property(&self, label: &str, name: &str) -> bool {
-        self.inner.has_node_property(label, name)
     }
 
     #[classmethod]
@@ -1539,7 +1527,9 @@ impl DbSchema {
         for (label, properties) in &self.inner.node_props {
             let props_list = pyo3::types::PyList::empty(py);
             for prop in properties {
-                let wrapped_prop = DbSchemaProperty { inner: prop.clone() };
+                let wrapped_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
                 props_list.append(wrapped_prop.py_to_dict(py)?)?;
             }
             node_props_dict.set_item(label, props_list)?;
@@ -1551,7 +1541,9 @@ impl DbSchema {
         for (rel_type, properties) in &self.inner.rel_props {
             let props_list = pyo3::types::PyList::empty(py);
             for prop in properties {
-                let wrapped_prop = DbSchemaProperty { inner: prop.clone() };
+                let wrapped_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
                 props_list.append(wrapped_prop.py_to_dict(py)?)?;
             }
             rel_props_dict.set_item(rel_type, props_list)?;
@@ -1561,9 +1553,7 @@ impl DbSchema {
         // Convert relationships to dict
         let rels_list = pyo3::types::PyList::empty(py);
         for rel in &self.inner.relationships {
-            let wrapped_rel = DbSchemaRelationshipPattern {
-                inner: rel.clone(),
-            };
+            let wrapped_rel = DbSchemaRelationshipPattern { inner: rel.clone() };
             rels_list.append(wrapped_rel.py_to_dict(py)?)?;
         }
         dict.set_item("relationships", rels_list)?;
@@ -1584,7 +1574,9 @@ impl DbSchema {
             result.push_str(&format!("{}:\n", label));
             for prop in properties {
                 // Wrap core property in Python wrapper for __str__ call
-                let py_prop = DbSchemaProperty { inner: prop.clone() };
+                let py_prop = DbSchemaProperty {
+                    inner: prop.clone(),
+                };
                 result.push_str(&format!("{}\n", py_prop.__str__()));
             }
         }
@@ -1596,7 +1588,9 @@ impl DbSchema {
                 result.push_str(&format!("{}:\n", rel_type));
                 for prop in properties {
                     // Wrap core property in Python wrapper for __str__ call
-                    let py_prop = DbSchemaProperty { inner: prop.clone() };
+                    let py_prop = DbSchemaProperty {
+                        inner: prop.clone(),
+                    };
                     result.push_str(&format!("{}\n", py_prop.__str__()));
                 }
             }

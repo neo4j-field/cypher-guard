@@ -846,9 +846,7 @@ mod tests {
         );
 
         let relationships = vec![DbSchemaRelationshipPattern::new(
-            "Person",
-            "Person",
-            "KNOWS",
+            "Person", "Person", "KNOWS",
         )];
 
         let metadata = DbSchemaMetadata::new();
