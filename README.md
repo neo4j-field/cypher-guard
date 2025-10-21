@@ -80,7 +80,6 @@ let errors = validate_cypher_with_schema(query, &schema)?;
 - **`validate_cypher(query, schema)`** - Returns list of validation errors
 - **`check_syntax(query)`** - Check syntax only (no schema needed)
 - **`is_write(query)`** - Check if query modifies data
-- **`is_read(query)`** - Check if query is read-only
 - **`has_parser_errors(query)`** - Check if query has syntax errors
 
 ### Schema Classes

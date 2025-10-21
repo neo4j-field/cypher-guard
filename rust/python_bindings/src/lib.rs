@@ -1687,64 +1687,6 @@ pub fn is_write(py: Python, query: &str) -> PyResult<bool> {
     }
 }
 
-/// Check if a Cypher query is a read-only query (no write operations).
-///
-/// Args:
-///     query (str): The Cypher query string to check
-///
-/// Returns:
-///     bool: True if the query is read-only, False if it contains write operations
-///
-/// Raises:
-///     ValueError: If there's a parsing error (syntax error)
-///
-/// Examples:
-///     >>> is_read("MATCH (n) RETURN n")
-///     True
-///     >>> is_read("CREATE (n:Person {name: 'Alice'})")
-///     False
-///     >>> is_read("MATCH (n) SET n.name = 'Bob'")
-///     False
-#[pyfunction]
-#[pyo3(text_signature = "(query, /)")]
-pub fn is_read(py: Python, query: &str) -> PyResult<bool> {
-    // First check if the query can be parsed (syntax check)
-    match parse_query_rust(query) {
-        Ok(ast) => {
-            // Check AST for write operations
-            let has_ast_write_ops = !ast.create_clauses.is_empty()
-                || !ast.merge_clauses.is_empty()
-                || !ast.call_clauses.is_empty(); // CALL can contain write operations
-
-            // Check for SET operations in MERGE clauses
-            let has_set_ops = ast.merge_clauses.iter().any(|merge| {
-                merge
-                    .on_create
-                    .as_ref()
-                    .is_some_and(|on_create| !on_create.set_clauses.is_empty())
-                    || merge
-                        .on_match
-                        .as_ref()
-                        .is_some_and(|on_match| !on_match.set_clauses.is_empty())
-            });
-
-            // For now, we need to fall back to string matching for DELETE/REMOVE
-            // since they're not implemented as separate clauses yet
-            let query_upper = query.to_uppercase();
-            let has_string_write_ops = query_upper.contains("DELETE")
-                || query_upper.contains("DETACH DELETE")
-                || query_upper.contains("REMOVE");
-
-            // Return True if it's read-only (no write operations)
-            Ok(!(has_ast_write_ops || has_set_ops || has_string_write_ops))
-        }
-        Err(e) => {
-            // If parsing fails, raise syntax error
-            Err(convert_parsing_error(py, e))
-        }
-    }
-}
-
 /// Check if a Cypher query has any parsing errors (syntax errors).
 ///
 /// Args:
@@ -1796,7 +1738,6 @@ fn cypher_guard(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_syntax, m)?)?;
     m.add_function(wrap_pyfunction!(validate_cypher, m)?)?;
     m.add_function(wrap_pyfunction!(is_write, m)?)?;
-    m.add_function(wrap_pyfunction!(is_read, m)?)?;
     m.add_function(wrap_pyfunction!(has_parser_errors, m)?)?;
 
     // Expose error classes using the simpler approach from PyO3 docs
