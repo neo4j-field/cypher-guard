@@ -1,12 +1,12 @@
 import pytest
 import cypher_guard
+from cypher_guard import DbSchema
 
 
 @pytest.fixture
 def simple_schema():
     """Simple schema fixture for error handling tests"""
-    return '''
-    {
+    return DbSchema.from_dict({
         "node_props": {
             "Person": [
                 {"name": "name", "neo4j_type": "STRING"},
@@ -25,8 +25,7 @@ def simple_schema():
             "index": [],
             "constraint": []
         }
-    }
-    '''
+    })
 
 def test_validate_cypher_success(simple_schema):
     """Test successful cypher validation with valid query"""
