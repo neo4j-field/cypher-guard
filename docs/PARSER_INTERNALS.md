@@ -110,6 +110,7 @@ The parser distinguishes between different levels of errors:
 - `WITH` (aliases, property access, function calls, wildcards)
 - `WHERE` (complex conditions, logical operators, parentheses)
 - `CREATE`
+- `INSERT` (Cypher 5.18, GQL conformance, uses `&` for multiple labels)
 - `MERGE` (with `ON CREATE` and `ON MATCH`)
 - `SET`
 
@@ -206,6 +207,7 @@ pub struct Query {
     pub match_clauses: Vec<MatchClause>,
     pub merge_clauses: Vec<MergeClause>,
     pub create_clauses: Vec<CreateClause>,
+    pub insert_clauses: Vec<InsertClause>,
     pub with_clauses: Vec<WithClause>,
     pub where_clauses: Vec<WhereClause>,
     pub return_clauses: Vec<ReturnClause>,
