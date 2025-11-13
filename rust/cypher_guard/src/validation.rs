@@ -216,6 +216,13 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
         }
     }
 
+    // Extract from INSERT clauses (same as CREATE, uses & for labels)
+    for insert_clause in &query.insert_clauses {
+        for element in &insert_clause.elements {
+            extract_from_match_element(element, &mut elements);
+        }
+    }
+
     // Extract from WHERE clauses
     for where_clause in &query.where_clauses {
         for condition in &where_clause.conditions {
@@ -865,6 +872,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -895,6 +903,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![WhereClause {
                 conditions: vec![WhereCondition::Comparison {
@@ -937,6 +946,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![ReturnClause {
@@ -976,6 +986,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![WithClause {
                 items: vec![WithItem {
                     expression: WithExpression::PropertyAccess {
@@ -1010,6 +1021,7 @@ mod tests {
             match_clauses: vec![],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1024,6 +1036,134 @@ mod tests {
         };
         let elements = extract_query_elements(&query);
         assert!(elements.defined_variables.contains("x"));
+    }
+
+    #[test]
+    fn test_extract_query_elements_with_insert() {
+        use crate::parser::ast::{InsertClause, MatchElement, NodePattern, PatternElement};
+
+        let query = Query {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            insert_clauses: vec![InsertClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![PatternElement::Node(NodePattern {
+                        variable: Some("tom".to_string()),
+                        label: Some("Person&Actor&Director".to_string()),
+                        properties: Some(vec![
+                            crate::parser::ast::Property {
+                                key: "name".to_string(),
+                                value: crate::parser::ast::PropertyValue::String(
+                                    "Tom Hanks".to_string(),
+                                ),
+                            },
+                            crate::parser::ast::Property {
+                                key: "age".to_string(),
+                                value: crate::parser::ast::PropertyValue::Number(65),
+                            },
+                        ]),
+                    })],
+                }],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+
+        // INSERT clauses should extract node labels (with & separator)
+        assert!(elements.node_labels.contains("Person&Actor&Director"));
+        assert!(elements.defined_variables.contains("tom"));
+
+        // Properties should be extracted
+        assert!(elements
+            .node_properties
+            .contains_key("Person&Actor&Director"));
+        let props = &elements.node_properties["Person&Actor&Director"];
+        assert!(props.contains(&"name".to_string()));
+        assert!(props.contains(&"age".to_string()));
+    }
+
+    #[test]
+    fn test_extract_query_elements_with_insert_relationship() {
+        use crate::parser::ast::{
+            Direction, InsertClause, MatchElement, NodePattern, PatternElement,
+            RelationshipDetails, RelationshipPattern,
+        };
+
+        let query = Query {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            insert_clauses: vec![InsertClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: Some(vec![crate::parser::ast::Property {
+                                key: "name".to_string(),
+                                value: crate::parser::ast::PropertyValue::String(
+                                    "Alice".to_string(),
+                                ),
+                            }]),
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Right,
+                                properties: Some(vec![crate::parser::ast::Property {
+                                    key: "since".to_string(),
+                                    value: crate::parser::ast::PropertyValue::Number(2020),
+                                }]),
+                                rel_type: Some("KNOWS".to_string()),
+                                length: None,
+                                where_clause: None,
+                                is_optional: false,
+                                quantifier: None,
+                            },
+                        )),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: Some(vec![crate::parser::ast::Property {
+                                key: "name".to_string(),
+                                value: crate::parser::ast::PropertyValue::String("Bob".to_string()),
+                            }]),
+                        }),
+                    ],
+                }],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+
+        // Should extract nodes and relationships
+        assert!(elements.node_labels.contains("Person"));
+        assert!(elements.defined_variables.contains("a"));
+        assert!(elements.defined_variables.contains("b"));
+        assert!(elements.defined_variables.contains("r"));
+
+        // Should extract relationship type
+        assert!(elements.relationship_properties.contains_key("KNOWS"));
+        let rel_props = &elements.relationship_properties["KNOWS"];
+        assert!(rel_props.contains(&"since".to_string()));
+
+        // Should extract node properties
+        assert!(elements.node_properties.contains_key("Person"));
+        let node_props = &elements.node_properties["Person"];
+        assert!(node_props.contains(&"name".to_string()));
     }
 
     #[test]
@@ -1268,6 +1408,7 @@ mod tests {
             match_clauses: vec![],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1348,6 +1489,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1397,6 +1539,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            insert_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],

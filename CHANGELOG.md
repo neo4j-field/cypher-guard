@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - PR template for structured PR descriptions
 - GitHub Action for automatic release note generation
-- Add `from_components` and `from_map` functions to `DbSchema` 
+- Add `from_components` and `from_map` functions to `DbSchema`
+- INSERT clause support (Cypher 5.18, GQL conformance)
+  - Parser support for INSERT clause with &-separated labels
+  - Validation support for INSERT clauses
+  - Comprehensive test coverage 
 
 ### Changed
 - Streamlined README to focus on user installation
