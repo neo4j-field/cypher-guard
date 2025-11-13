@@ -3,6 +3,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, digit1, multispace0},
     combinator::opt,
+    multi::separated_list1,
     sequence::{preceded, terminated, tuple},
     IResult,
 };
@@ -21,6 +22,31 @@ pub fn node_pattern(input: &str) -> IResult<&str, NodePattern> {
         Ok((input, _)) => {
             let (input, variable) = opt(identifier)(input)?;
             let (input, label) = opt(preceded(char(':'), identifier))(input)?;
+            let (input, _) = multispace0(input)?;
+            let (input, properties) = opt(property_map)(input)?;
+            let (input, _) = char(')')(input)?;
+            let result = NodePattern {
+                variable: variable.map(|s| s.to_string()),
+                label: label.map(|s| s.to_string()),
+                properties,
+            };
+            Ok((input, result))
+        }
+        Err(e) => Err(e),
+    }
+}
+
+// Parses a node pattern for INSERT clause (uses & for multiple labels)
+// Example: (tom:Person&Actor&Director {name: 'Tom Hanks'})
+pub fn node_pattern_insert(input: &str) -> IResult<&str, NodePattern> {
+    match char::<&str, nom::error::Error<&str>>('(')(input) {
+        Ok((input, _)) => {
+            let (input, variable) = opt(identifier)(input)?;
+            // Parse : followed by labels separated by &
+            let (input, labels) =
+                opt(preceded(char(':'), separated_list1(char('&'), identifier)))(input)?;
+            // Join labels with & separator
+            let label = labels.map(|labels| labels.join("&"));
             let (input, _) = multispace0(input)?;
             let (input, properties) = opt(property_map)(input)?;
             let (input, _) = char(')')(input)?;
@@ -307,6 +333,57 @@ pub fn match_element(input: &str) -> IResult<&str, MatchElement> {
 
 pub fn pattern(input: &str) -> IResult<&str, Vec<PatternElement>> {
     pattern_element_sequence(input, true)
+}
+
+// Match element for INSERT clause (uses node_pattern_insert for &-separated labels)
+pub fn match_element_insert(input: &str) -> IResult<&str, MatchElement> {
+    let (input, path_var) = opt(terminated(
+        identifier,
+        tuple((multispace0, char('='), multispace0)),
+    ))(input)?;
+
+    // Parse pattern using node_pattern_insert for nodes
+    // Reuse the same logic as pattern_element_sequence but with node_pattern_insert
+    let mut elements = Vec::new();
+    let mut current_input = input;
+
+    loop {
+        // Try node first (using INSERT node pattern with & labels)
+        match node_pattern_insert(current_input) {
+            Ok((rest, node)) => {
+                elements.push(PatternElement::Node(node));
+                current_input = rest;
+            }
+            Err(_) => {
+                // Try relationship (same as regular)
+                match relationship_pattern(current_input) {
+                    Ok((rest, rel)) => {
+                        elements.push(PatternElement::Relationship(rel));
+                        current_input = rest;
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+
+        // Stop if we don't see pattern continuation
+        let trimmed = current_input.trim_start();
+        if !trimmed.starts_with('(')
+            && !trimmed.starts_with('[')
+            && !trimmed.starts_with('-')
+            && !trimmed.starts_with('<')
+        {
+            break;
+        }
+    }
+
+    Ok((
+        current_input,
+        MatchElement {
+            path_var: path_var.map(|s| s.to_string()),
+            pattern: elements,
+        },
+    ))
 }
 
 pub fn path_variable(input: &str) -> IResult<&str, String> {

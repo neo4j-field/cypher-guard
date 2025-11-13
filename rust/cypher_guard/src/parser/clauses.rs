@@ -9,9 +9,9 @@ use nom::{
 };
 
 use crate::parser::ast::{
-    self, CallClause, CreateClause, MatchClause, MatchElement, MergeClause, OnCreateClause,
-    OnMatchClause, PropertyValue, Query, ReturnClause, SetClause, UnwindClause, UnwindExpression,
-    WhereClause, WithClause, WithExpression, WithItem,
+    self, CallClause, CreateClause, InsertClause, MatchClause, MatchElement, MergeClause,
+    OnCreateClause, OnMatchClause, PropertyValue, Query, ReturnClause, SetClause, UnwindClause,
+    UnwindExpression, WhereClause, WithClause, WithExpression, WithItem,
 };
 use crate::parser::patterns::*;
 use crate::parser::span::{offset_to_line_column, Spanned};
@@ -24,6 +24,7 @@ pub enum Clause {
     OptionalMatch(MatchClause),
     Merge(MergeClause),
     Create(CreateClause),
+    Insert(InsertClause),
     Return(ReturnClause),
     With(WithClause),
     Query(Query),
@@ -41,6 +42,22 @@ pub fn match_element_list(input: &str) -> IResult<&str, Vec<MatchElement>> {
     // Parse comma-separated match elements
     let (input, elements) =
         separated_list1(tuple((multispace0, char(','), multispace0)), match_element)(input)?;
+
+    Ok((input, elements))
+}
+
+// Parses a comma-separated list of match elements for INSERT clause
+pub fn match_element_list_insert(input: &str) -> IResult<&str, Vec<MatchElement>> {
+    use crate::parser::patterns::match_element_insert;
+    use nom::character::complete::char;
+    use nom::multi::separated_list1;
+    use nom::sequence::tuple;
+
+    // Parse comma-separated match elements using INSERT node pattern
+    let (input, elements) = separated_list1(
+        tuple((multispace0, char(','), multispace0)),
+        match_element_insert,
+    )(input)?;
 
     Ok((input, elements))
 }
@@ -467,6 +484,16 @@ pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
     Ok((input, CreateClause { elements }))
 }
 
+// Parses the INSERT clause (e.g. INSERT (tom:Person&Actor&Director {name: 'Tom Hanks'}))
+// INSERT is a synonym for CREATE but uses & for multiple labels instead of :
+pub fn insert_clause(input: &str) -> IResult<&str, InsertClause> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("INSERT")(input)?;
+    let (input, _) = multispace1(input)?;
+    let (input, elements) = match_element_list_insert(input)?;
+    Ok((input, InsertClause { elements }))
+}
+
 // Parses a WITH item (e.g., a, a.name, count(*))
 fn with_item(input: &str) -> IResult<&str, WithItem> {
     let (input, expr) = alt((
@@ -552,6 +579,7 @@ fn parse_subquery(input: &str) -> IResult<&str, Query> {
         match_clauses: Vec::new(),
         merge_clauses: Vec::new(),
         create_clauses: Vec::new(),
+        insert_clauses: Vec::new(),
         with_clauses: Vec::new(),
         where_clauses: Vec::new(),
         return_clauses: Vec::new(),
@@ -567,6 +595,7 @@ fn parse_subquery(input: &str) -> IResult<&str, Query> {
             Clause::OptionalMatch(match_clause) => query.match_clauses.push(match_clause.clone()),
             Clause::Merge(merge_clause) => query.merge_clauses.push(merge_clause.clone()),
             Clause::Create(create_clause) => query.create_clauses.push(create_clause.clone()),
+            Clause::Insert(insert_clause) => query.insert_clauses.push(insert_clause.clone()),
             Clause::With(with_clause) => query.with_clauses.push(with_clause.clone()),
             Clause::Where(where_clause) => query.where_clauses.push(where_clause.clone()),
             Clause::Return(return_clause) => query.return_clauses.push(return_clause.clone()),
@@ -835,6 +864,10 @@ pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
             let start = offset(full_input, input);
             Spanned::new(Clause::Create(c), start)
         }),
+        map(insert_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Insert(c), start)
+        }),
         map(unwind_clause, |c| {
             let start = offset(full_input, input);
             Spanned::new(Clause::Unwind(c), start)
@@ -900,6 +933,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         match_clauses: Vec::new(),
         merge_clauses: Vec::new(),
         create_clauses: Vec::new(),
+        insert_clauses: Vec::new(),
         with_clauses: Vec::new(),
         where_clauses: Vec::new(),
         return_clauses: Vec::new(),
@@ -913,6 +947,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             Clause::OptionalMatch(match_clause) => query.match_clauses.push(match_clause),
             Clause::Merge(merge_clause) => query.merge_clauses.push(merge_clause),
             Clause::Create(create_clause) => query.create_clauses.push(create_clause),
+            Clause::Insert(insert_clause) => query.insert_clauses.push(insert_clause),
             Clause::With(with_clause) => query.with_clauses.push(with_clause),
             Clause::Where(where_clause) => query.where_clauses.push(where_clause),
             Clause::Return(return_clause) => query.return_clauses.push(return_clause),
@@ -956,15 +991,16 @@ fn validate_clause_order(
                 ClauseOrderState::AfterMatch
             }
             (ClauseOrderState::Initial, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
-            (ClauseOrderState::Initial, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::Initial,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::Initial, Clause::Call(_)) => ClauseOrderState::AfterCall,
             (ClauseOrderState::Initial, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "query start",
                     format!(
-                        "{} must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)",
+                        "{} must come after a reading or writing clause (MATCH, UNWIND, CREATE, INSERT, MERGE)",
                         clause_name(clause)
                     ),
                 ));
@@ -978,9 +1014,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterMatch, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterMatch, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterMatch, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterMatch, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterMatch,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterMatch, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After UNWIND - can have WHERE, WITH, RETURN, or writing clauses
@@ -988,9 +1025,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterUnwind, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterUnwind, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterUnwind, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterUnwind, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterUnwind,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterUnwind, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WHERE - can have MATCH, WITH, RETURN, or more WHERE
@@ -1001,9 +1039,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWhere, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
             (ClauseOrderState::AfterWhere, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWhere, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterWhere, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWhere,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWhere, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WITH - can have MATCH, UNWIND, WHERE, WITH, RETURN, or writing clauses
@@ -1015,24 +1054,27 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWith, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterWith, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWith, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterWith, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWith,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWith, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After CALL - can have WHERE, WITH, RETURN, or writing clauses
             (ClauseOrderState::AfterCall, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterCall, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterCall, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterCall, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterCall,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterCall, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
-            // After RETURN - can have CREATE/MERGE (writing clauses)
-            (ClauseOrderState::AfterReturn, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            // After RETURN - can have CREATE/INSERT/MERGE (writing clauses)
+            (
+                ClauseOrderState::AfterReturn,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterReturn, Clause::Return(_)) => {
                 return Err(CypherGuardParsingError::return_after_return_at(
                     line, column,
@@ -1060,9 +1102,10 @@ fn validate_clause_order(
             }
 
             // After write clause - can have more write clauses, RETURN, or WITH
-            (ClauseOrderState::AfterWrite, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWrite,
+                Clause::Create(_) | Clause::Insert(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWrite, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterWrite, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWrite, _) => {
@@ -1088,7 +1131,7 @@ fn validate_clause_order(
     // Check that query ends appropriately
     match state {
         ClauseOrderState::Initial => Err(CypherGuardParsingError::missing_required_clause(
-            "reading clause (MATCH, UNWIND, CREATE, MERGE)",
+            "reading or writing clause (MATCH, UNWIND, CREATE, INSERT, MERGE)",
         )),
         ClauseOrderState::AfterWith => Err(CypherGuardParsingError::missing_required_clause(
             "RETURN or writing clause",
@@ -1120,6 +1163,7 @@ fn clause_name(clause: &Clause) -> &'static str {
         Clause::With(_) => "WITH",
         Clause::Return(_) => "RETURN",
         Clause::Create(_) => "CREATE",
+        Clause::Insert(_) => "INSERT",
         Clause::Merge(_) => "MERGE",
         Clause::Query(_) => "Query",
         Clause::Call(_) => "CALL",
@@ -1185,6 +1229,228 @@ mod tests {
             assert!(rel.properties().is_some());
         } else {
             panic!("Expected relationship");
+        }
+    }
+
+    // === INSERT clause tests ===
+
+    #[test]
+    fn test_insert_clause_single_label() {
+        let input = "INSERT (tom:Person {name: 'Tom Hanks'})";
+        let (_, clause) = insert_clause(input).unwrap();
+        assert_eq!(clause.elements.len(), 1);
+        if let PatternElement::Node(node) = &clause.elements[0].pattern[0] {
+            assert_eq!(node.variable, Some("tom".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+            assert!(node.properties.is_some());
+        } else {
+            panic!("Expected node");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_multiple_labels() {
+        let input = "INSERT (tom:Person&Actor&Director {name: 'Tom Hanks'})";
+        let (_, clause) = insert_clause(input).unwrap();
+        assert_eq!(clause.elements.len(), 1);
+        if let PatternElement::Node(node) = &clause.elements[0].pattern[0] {
+            assert_eq!(node.variable, Some("tom".to_string()));
+            assert_eq!(node.label, Some("Person&Actor&Director".to_string()));
+            assert!(node.properties.is_some());
+        } else {
+            panic!("Expected node");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_with_relationship() {
+        let input = "INSERT (a:Person&Actor {name: 'Alice'})-[r:KNOWS]->(b:Person {name: 'Bob'})";
+        let (_, clause) = insert_clause(input).unwrap();
+        assert_eq!(clause.elements.len(), 1);
+        if let PatternElement::Node(node) = &clause.elements[0].pattern[0] {
+            assert_eq!(node.label, Some("Person&Actor".to_string()));
+        } else {
+            panic!("Expected node");
+        }
+        if let PatternElement::Relationship(rel) = &clause.elements[0].pattern[1] {
+            assert_eq!(rel.direction(), Direction::Right);
+            assert_eq!(rel.rel_type(), Some("KNOWS"));
+        } else {
+            panic!("Expected relationship");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_no_labels() {
+        let input = "INSERT (a {name: 'Alice'})";
+        let (_, clause) = insert_clause(input).unwrap();
+        assert_eq!(clause.elements.len(), 1);
+        if let PatternElement::Node(node) = &clause.elements[0].pattern[0] {
+            assert_eq!(node.variable, Some("a".to_string()));
+            assert_eq!(node.label, None);
+        } else {
+            panic!("Expected node");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_multiple_inserts_with_relationships() {
+        let query =
+            "INSERT (a:Person)-[r:KNOWS]->(b:Person) INSERT (c:Person)-[s:KNOWS]->(d:Person)";
+        let result = crate::parse_query(query);
+        assert!(
+            result.is_ok(),
+            "Multiple INSERT clauses with relationships should parse"
+        );
+
+        let ast = result.unwrap();
+        assert_eq!(ast.insert_clauses.len(), 2, "Should have 2 INSERT clauses");
+
+        // Check first INSERT clause
+        let first_insert = &ast.insert_clauses[0];
+        assert_eq!(first_insert.elements.len(), 1);
+        let first_pattern = &first_insert.elements[0].pattern;
+        assert_eq!(first_pattern.len(), 3); // node, relationship, node
+
+        if let PatternElement::Node(node) = &first_pattern[0] {
+            assert_eq!(node.variable, Some("a".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+        } else {
+            panic!("Expected node");
+        }
+
+        if let PatternElement::Relationship(rel) = &first_pattern[1] {
+            assert_eq!(rel.direction(), Direction::Right);
+            assert_eq!(rel.rel_type(), Some("KNOWS"));
+        } else {
+            panic!("Expected relationship");
+        }
+
+        if let PatternElement::Node(node) = &first_pattern[2] {
+            assert_eq!(node.variable, Some("b".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+        } else {
+            panic!("Expected node");
+        }
+
+        // Check second INSERT clause
+        let second_insert = &ast.insert_clauses[1];
+        assert_eq!(second_insert.elements.len(), 1);
+        let second_pattern = &second_insert.elements[0].pattern;
+        assert_eq!(second_pattern.len(), 3); // node, relationship, node
+
+        if let PatternElement::Node(node) = &second_pattern[0] {
+            assert_eq!(node.variable, Some("c".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+        } else {
+            panic!("Expected node");
+        }
+
+        if let PatternElement::Relationship(rel) = &second_pattern[1] {
+            assert_eq!(rel.direction(), Direction::Right);
+            assert_eq!(rel.rel_type(), Some("KNOWS"));
+        } else {
+            panic!("Expected relationship");
+        }
+
+        if let PatternElement::Node(node) = &second_pattern[2] {
+            assert_eq!(node.variable, Some("d".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+        } else {
+            panic!("Expected node");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_with_node_properties() {
+        let query = "INSERT (tom:Person&Actor&Director {name: 'Tom Hanks', age: 65, born: 1956})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "INSERT with node properties should parse");
+
+        let ast = result.unwrap();
+        assert_eq!(ast.insert_clauses.len(), 1);
+
+        let insert_clause = &ast.insert_clauses[0];
+        assert_eq!(insert_clause.elements.len(), 1);
+
+        if let PatternElement::Node(node) = &insert_clause.elements[0].pattern[0] {
+            assert_eq!(node.variable, Some("tom".to_string()));
+            assert_eq!(node.label, Some("Person&Actor&Director".to_string()));
+            assert!(node.properties.is_some(), "Node should have properties");
+
+            let properties = node.properties.as_ref().unwrap();
+            assert_eq!(properties.len(), 3, "Should have 3 properties");
+
+            // Check that properties exist (exact values depend on PropertyValue parsing)
+            let prop_keys: Vec<&String> = properties.iter().map(|p| &p.key).collect();
+            assert!(
+                prop_keys.contains(&&"name".to_string()),
+                "Should have 'name' property"
+            );
+            assert!(
+                prop_keys.contains(&&"age".to_string()),
+                "Should have 'age' property"
+            );
+            assert!(
+                prop_keys.contains(&&"born".to_string()),
+                "Should have 'born' property"
+            );
+        } else {
+            panic!("Expected node");
+        }
+    }
+
+    #[test]
+    fn test_insert_clause_relationship_with_properties() {
+        let query =
+            "INSERT (a:Person {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(
+            result.is_ok(),
+            "INSERT with relationship and node properties should parse"
+        );
+
+        let ast = result.unwrap();
+        assert_eq!(ast.insert_clauses.len(), 1);
+
+        let insert_clause = &ast.insert_clauses[0];
+        assert_eq!(insert_clause.elements.len(), 1);
+        let pattern = &insert_clause.elements[0].pattern;
+        assert_eq!(pattern.len(), 3); // node, relationship, node
+
+        // Check first node with properties
+        if let PatternElement::Node(node) = &pattern[0] {
+            assert_eq!(node.variable, Some("a".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+            assert!(node.properties.is_some());
+            let props = node.properties.as_ref().unwrap();
+            assert_eq!(props.len(), 1);
+            assert_eq!(props[0].key, "name");
+        } else {
+            panic!("Expected node");
+        }
+
+        // Check relationship with properties
+        if let PatternElement::Relationship(rel) = &pattern[1] {
+            assert_eq!(rel.rel_type(), Some("KNOWS"));
+            assert!(rel.properties().is_some());
+            let rel_props = rel.properties().unwrap();
+            assert_eq!(rel_props.len(), 1);
+            assert_eq!(rel_props[0].key, "since");
+        } else {
+            panic!("Expected relationship");
+        }
+
+        // Check second node with properties
+        if let PatternElement::Node(node) = &pattern[2] {
+            assert_eq!(node.variable, Some("b".to_string()));
+            assert_eq!(node.label, Some("Person".to_string()));
+            assert!(node.properties.is_some());
+            let props = node.properties.as_ref().unwrap();
+            assert_eq!(props.len(), 1);
+            assert_eq!(props[0].key, "name");
+        } else {
+            panic!("Expected node");
         }
     }
 
@@ -2210,6 +2476,19 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_clause_order_insert_return() {
+        let query = "INSERT (tom:Person&Actor&Director {name: 'Tom Hanks'}) RETURN tom";
+        let result = crate::parse_query(query);
+        assert!(
+            result.is_ok(),
+            "Valid INSERT query should parse successfully"
+        );
+        let ast = result.unwrap();
+        assert!(!ast.insert_clauses.is_empty());
+        assert!(!ast.return_clauses.is_empty());
+    }
+
+    #[test]
     fn test_valid_clause_order_merge_return() {
         let query = "MERGE (a:Person {name: 'Alice'}) RETURN a";
         let result = crate::parse_query(query);
@@ -2221,6 +2500,16 @@ mod tests {
         let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'})";
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_return_insert() {
+        let query = "MATCH (a:Person) RETURN a INSERT (b:Person&Actor {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(
+            result.is_ok(),
+            "Valid query with INSERT after RETURN should parse successfully"
+        );
     }
 
     #[test]
@@ -2405,6 +2694,15 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_clause_order_insert_only() {
+        let query = "INSERT (tom:Person&Actor&Director {name: 'Tom Hanks'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "INSERT-only query should be valid");
+        let ast = result.unwrap();
+        assert!(!ast.insert_clauses.is_empty());
+    }
+
+    #[test]
     fn test_valid_clause_order_write_after_return() {
         let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'})";
         let result = crate::parse_query(query);
@@ -2412,10 +2710,31 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_clause_order_insert_after_return() {
+        let query = "MATCH (a:Person) RETURN a INSERT (b:Person&Actor {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "INSERT clause after RETURN should be valid");
+    }
+
+    #[test]
     fn test_valid_clause_order_multiple_write() {
         let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'}) MERGE (c:Person {name: 'Charlie'})";
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Multiple write clauses should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_insert_with_create() {
+        let query = "INSERT (a:Person&Actor {name: 'Alice'}) CREATE (b:Person {name: 'Bob'})";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "INSERT with CREATE should be valid");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_insert_return() {
+        let query = "MATCH (a:Person) INSERT (b:Person&Actor {name: 'Bob'}) RETURN a, b";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "MATCH INSERT RETURN should be valid");
     }
 
     #[test]

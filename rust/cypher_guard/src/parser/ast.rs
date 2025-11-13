@@ -4,6 +4,7 @@ pub struct Query {
     pub match_clauses: Vec<MatchClause>,
     pub merge_clauses: Vec<MergeClause>,
     pub create_clauses: Vec<CreateClause>,
+    pub insert_clauses: Vec<InsertClause>,
     pub with_clauses: Vec<WithClause>,
     pub where_clauses: Vec<WhereClause>,
     pub return_clauses: Vec<ReturnClause>,
@@ -194,6 +195,12 @@ pub struct MergeClause {
 // CREATE clause
 #[derive(Debug, PartialEq, Clone)]
 pub struct CreateClause {
+    pub elements: Vec<MatchElement>,
+}
+
+// INSERT clause (synonym for CREATE, but uses & for multiple labels)
+#[derive(Debug, PartialEq, Clone)]
+pub struct InsertClause {
     pub elements: Vec<MatchElement>,
 }
 
