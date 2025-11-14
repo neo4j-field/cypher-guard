@@ -111,6 +111,7 @@ The parser distinguishes between different levels of errors:
 - `WHERE` (complex conditions, logical operators, parentheses)
 - `CREATE`
 - `MERGE` (with `ON CREATE` and `ON MATCH`)
+- `DELETE` (Cypher 5.14+)
 - `SET`
 
 ### Node Patterns
@@ -206,6 +207,7 @@ pub struct Query {
     pub match_clauses: Vec<MatchClause>,
     pub merge_clauses: Vec<MergeClause>,
     pub create_clauses: Vec<CreateClause>,
+    pub delete_clauses: Vec<DeleteClause>,
     pub with_clauses: Vec<WithClause>,
     pub where_clauses: Vec<WhereClause>,
     pub return_clauses: Vec<ReturnClause>,
@@ -237,6 +239,18 @@ pub struct ReturnClause {
     pub items: Vec<String>, // Simplified for validation
 }
 ```
+
+#### DeleteClause
+```rust
+#[derive(Debug, PartialEq, Clone)]
+pub struct DeleteClause {
+    pub targets: Vec<String>, // Variables to delete (nodes, relationships, paths)
+}
+```
+
+The DELETE clause deletes nodes, relationships, or paths by referencing their variables. Example: `DELETE n, r` deletes the node bound to `n` and the relationship bound to `r`.
+
+**Note**: DELETE follows the same clause ordering rules as CREATE and MERGE (writing clauses). Variables being deleted must be defined in a previous clause (e.g., MATCH).
 
 #### WhereClause
 ```rust

@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - PR template for structured PR descriptions
 - GitHub Action for automatic release note generation
-- Add `from_components` and `from_map` functions to `DbSchema` 
+- Add `from_components` and `from_map` functions to `DbSchema`
+- DELETE clause support (Cypher 5.14+) 
 
 ### Changed
 - Streamlined README to focus on user installation
