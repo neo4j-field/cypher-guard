@@ -4,6 +4,7 @@ pub struct Query {
     pub match_clauses: Vec<MatchClause>,
     pub merge_clauses: Vec<MergeClause>,
     pub create_clauses: Vec<CreateClause>,
+    pub delete_clauses: Vec<DeleteClause>,
     pub with_clauses: Vec<WithClause>,
     pub where_clauses: Vec<WhereClause>,
     pub return_clauses: Vec<ReturnClause>,
@@ -195,6 +196,12 @@ pub struct MergeClause {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CreateClause {
     pub elements: Vec<MatchElement>,
+}
+
+// DELETE clause - deletes nodes, relationships, or paths
+#[derive(Debug, PartialEq, Clone)]
+pub struct DeleteClause {
+    pub targets: Vec<String>, // Variables to delete (nodes, relationships, paths)
 }
 
 // ON CREATE clause
