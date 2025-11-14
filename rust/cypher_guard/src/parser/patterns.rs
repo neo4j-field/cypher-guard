@@ -172,6 +172,7 @@ pub fn pattern_element_sequence(
             || trimmed_input.starts_with("REMOVE")
             || trimmed_input.starts_with("SET")
             || trimmed_input.starts_with("MERGE")
+            || trimmed_input.starts_with("LIMIT")
         {
             println!(
                 "[pattern_element_sequence] Stopping at clause boundary: '{}'",
