@@ -17,6 +17,7 @@ pub struct QueryElements {
     pub pattern_sequences: Vec<Vec<PatternElement>>, // Track complete pattern sequences for validation
     pub variable_node_bindings: HashMap<String, String>, // variable -> node label bindings
     pub variable_relationship_bindings: HashMap<String, String>, // variable -> relationship type bindings
+    pub delete_variables: HashSet<String>,                       // Variables that are being deleted
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,7 @@ impl QueryElements {
             pattern_sequences: Vec::new(),
             variable_node_bindings: HashMap::new(),
             variable_relationship_bindings: HashMap::new(),
+            delete_variables: HashSet::new(),
         }
     }
 
@@ -213,6 +215,17 @@ pub fn extract_query_elements(query: &Query) -> QueryElements {
     for create_clause in &query.create_clauses {
         for element in &create_clause.elements {
             extract_from_match_element(element, &mut elements);
+        }
+    }
+
+    // Extract from DELETE clauses
+    // DELETE targets are variables (nodes, relationships, paths) that are being deleted
+    for delete_clause in &query.delete_clauses {
+        for target in &delete_clause.targets {
+            // Track that this variable is being referenced (for validation)
+            elements.add_variable(target.clone());
+            // Track that this variable is being deleted (for explicit validation)
+            elements.delete_variables.insert(target.clone());
         }
     }
 
@@ -550,6 +563,26 @@ pub fn validate_query_elements(
         }
     }
 
+    // Validate DELETE clause variables: check if variables being deleted are bound to valid labels/types
+    for delete_var in &elements.delete_variables {
+        // Check if this variable is bound to a node label
+        if let Some(bound_label) = elements.variable_node_bindings.get(delete_var) {
+            if !schema.has_label(bound_label) {
+                errors.push(CypherGuardValidationError::InvalidNodeLabel(
+                    bound_label.clone(),
+                ));
+            }
+        }
+        // Check if this variable is bound to a relationship type
+        if let Some(bound_rel_type) = elements.variable_relationship_bindings.get(delete_var) {
+            if !schema.has_relationship_type(bound_rel_type) {
+                errors.push(CypherGuardValidationError::InvalidRelationshipType(
+                    bound_rel_type.clone(),
+                ));
+            }
+        }
+    }
+
     // Validate node labels
     for label in &elements.node_labels {
         if !schema.has_label(label) {
@@ -865,6 +898,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -895,6 +929,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![WhereClause {
                 conditions: vec![WhereCondition::Comparison {
@@ -937,6 +972,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![ReturnClause {
@@ -976,6 +1012,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![WithClause {
                 items: vec![WithItem {
                     expression: WithExpression::PropertyAccess {
@@ -1010,6 +1047,7 @@ mod tests {
             match_clauses: vec![],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1263,11 +1301,165 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_delete_undefined_variable() {
+        let schema = create_test_schema();
+        let query = Query {
+            match_clauses: vec![],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            delete_clauses: vec![DeleteClause {
+                targets: vec!["undefined_var".to_string()],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+        let errors = validate_query_elements(&elements, &schema);
+
+        // Should have an error for undefined variable
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            errors[0],
+            CypherGuardValidationError::UndefinedVariable(_)
+        ));
+    }
+
+    #[test]
+    fn test_validate_delete_defined_variable() {
+        let schema = create_test_schema();
+        let query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: Some("n".to_string()),
+                    pattern: vec![PatternElement::Node(NodePattern {
+                        variable: Some("n".to_string()),
+                        label: Some("Person".to_string()),
+                        properties: None,
+                    })],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            delete_clauses: vec![DeleteClause {
+                targets: vec!["n".to_string()],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+        let errors = validate_query_elements(&elements, &schema);
+
+        // Should have no errors - variable is defined
+        assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn test_validate_delete_invalid_node_label() {
+        let schema = create_test_schema();
+        let query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![PatternElement::Node(NodePattern {
+                        variable: Some("n".to_string()),
+                        label: Some("InvalidLabel".to_string()), // Invalid label
+                        properties: None,
+                    })],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            delete_clauses: vec![DeleteClause {
+                targets: vec!["n".to_string()],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+        let errors = validate_query_elements(&elements, &schema);
+
+        // Should have an error for invalid node label
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, CypherGuardValidationError::InvalidNodeLabel(_))));
+    }
+
+    #[test]
+    fn test_validate_delete_invalid_relationship_type() {
+        let schema = create_test_schema();
+        let query = Query {
+            match_clauses: vec![MatchClause {
+                elements: vec![MatchElement {
+                    path_var: None,
+                    pattern: vec![
+                        PatternElement::Node(NodePattern {
+                            variable: Some("a".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                        PatternElement::Relationship(RelationshipPattern::Regular(
+                            RelationshipDetails {
+                                variable: Some("r".to_string()),
+                                direction: Direction::Right,
+                                properties: None,
+                                rel_type: Some("INVALID_REL".to_string()), // Invalid relationship type
+                                length: None,
+                                where_clause: None,
+                                quantifier: None,
+                                is_optional: false,
+                            },
+                        )),
+                        PatternElement::Node(NodePattern {
+                            variable: Some("b".to_string()),
+                            label: Some("Person".to_string()),
+                            properties: None,
+                        }),
+                    ],
+                }],
+                is_optional: false,
+            }],
+            merge_clauses: vec![],
+            create_clauses: vec![],
+            delete_clauses: vec![DeleteClause {
+                targets: vec!["r".to_string()],
+            }],
+            with_clauses: vec![],
+            where_clauses: vec![],
+            return_clauses: vec![],
+            unwind_clauses: vec![],
+            call_clauses: vec![],
+        };
+
+        let elements = extract_query_elements(&query);
+        let errors = validate_query_elements(&elements, &schema);
+
+        // Should have an error for invalid relationship type
+        assert!(errors
+            .iter()
+            .any(|e| matches!(e, CypherGuardValidationError::InvalidRelationshipType(_))));
+    }
+
+    #[test]
     fn test_validate_unwind_expression_type() {
         let mut query = Query {
             match_clauses: vec![],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1348,6 +1540,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],
@@ -1397,6 +1590,7 @@ mod tests {
             }],
             merge_clauses: vec![],
             create_clauses: vec![],
+            delete_clauses: vec![],
             with_clauses: vec![],
             where_clauses: vec![],
             return_clauses: vec![],

@@ -9,9 +9,9 @@ use nom::{
 };
 
 use crate::parser::ast::{
-    self, CallClause, CreateClause, MatchClause, MatchElement, MergeClause, OnCreateClause,
-    OnMatchClause, PropertyValue, Query, ReturnClause, SetClause, UnwindClause, UnwindExpression,
-    WhereClause, WithClause, WithExpression, WithItem,
+    self, CallClause, CreateClause, DeleteClause, MatchClause, MatchElement, MergeClause,
+    OnCreateClause, OnMatchClause, PropertyValue, Query, ReturnClause, SetClause, UnwindClause,
+    UnwindExpression, WhereClause, WithClause, WithExpression, WithItem,
 };
 use crate::parser::patterns::*;
 use crate::parser::span::{offset_to_line_column, Spanned};
@@ -24,6 +24,7 @@ pub enum Clause {
     OptionalMatch(MatchClause),
     Merge(MergeClause),
     Create(CreateClause),
+    Delete(DeleteClause),
     Return(ReturnClause),
     With(WithClause),
     Query(Query),
@@ -467,6 +468,23 @@ pub fn create_clause(input: &str) -> IResult<&str, CreateClause> {
     Ok((input, CreateClause { elements }))
 }
 
+// Parses the DELETE clause (e.g. DELETE n, r)
+// DELETE can delete nodes, relationships, or paths
+pub fn delete_clause(input: &str) -> IResult<&str, DeleteClause> {
+    let (input, _) = multispace0(input)?;
+    let (input, _) = tag("DELETE")(input)?;
+    let (input, _) = multispace1(input)?;
+    // Parse comma-separated list of variables to delete
+    let (input, targets) =
+        separated_list1(tuple((multispace0, char(','), multispace0)), identifier)(input)?;
+    Ok((
+        input,
+        DeleteClause {
+            targets: targets.into_iter().map(|s| s.to_string()).collect(),
+        },
+    ))
+}
+
 // Parses a WITH item (e.g., a, a.name, count(*))
 fn with_item(input: &str) -> IResult<&str, WithItem> {
     let (input, expr) = alt((
@@ -552,6 +570,7 @@ fn parse_subquery(input: &str) -> IResult<&str, Query> {
         match_clauses: Vec::new(),
         merge_clauses: Vec::new(),
         create_clauses: Vec::new(),
+        delete_clauses: Vec::new(),
         with_clauses: Vec::new(),
         where_clauses: Vec::new(),
         return_clauses: Vec::new(),
@@ -567,6 +586,7 @@ fn parse_subquery(input: &str) -> IResult<&str, Query> {
             Clause::OptionalMatch(match_clause) => query.match_clauses.push(match_clause.clone()),
             Clause::Merge(merge_clause) => query.merge_clauses.push(merge_clause.clone()),
             Clause::Create(create_clause) => query.create_clauses.push(create_clause.clone()),
+            Clause::Delete(delete_clause) => query.delete_clauses.push(delete_clause.clone()),
             Clause::With(with_clause) => query.with_clauses.push(with_clause.clone()),
             Clause::Where(where_clause) => query.where_clauses.push(where_clause.clone()),
             Clause::Return(return_clause) => query.return_clauses.push(return_clause.clone()),
@@ -835,6 +855,10 @@ pub fn clause(input: &str) -> IResult<&str, Spanned<Clause>> {
             let start = offset(full_input, input);
             Spanned::new(Clause::Create(c), start)
         }),
+        map(delete_clause, |c| {
+            let start = offset(full_input, input);
+            Spanned::new(Clause::Delete(c), start)
+        }),
         map(unwind_clause, |c| {
             let start = offset(full_input, input);
             Spanned::new(Clause::Unwind(c), start)
@@ -900,6 +924,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
         match_clauses: Vec::new(),
         merge_clauses: Vec::new(),
         create_clauses: Vec::new(),
+        delete_clauses: Vec::new(),
         with_clauses: Vec::new(),
         where_clauses: Vec::new(),
         return_clauses: Vec::new(),
@@ -913,6 +938,7 @@ pub fn parse_query(input: &str) -> IResult<&str, Query> {
             Clause::OptionalMatch(match_clause) => query.match_clauses.push(match_clause),
             Clause::Merge(merge_clause) => query.merge_clauses.push(merge_clause),
             Clause::Create(create_clause) => query.create_clauses.push(create_clause),
+            Clause::Delete(delete_clause) => query.delete_clauses.push(delete_clause),
             Clause::With(with_clause) => query.with_clauses.push(with_clause),
             Clause::Where(where_clause) => query.where_clauses.push(where_clause),
             Clause::Return(return_clause) => query.return_clauses.push(return_clause),
@@ -956,15 +982,16 @@ fn validate_clause_order(
                 ClauseOrderState::AfterMatch
             }
             (ClauseOrderState::Initial, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
-            (ClauseOrderState::Initial, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::Initial,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::Initial, Clause::Call(_)) => ClauseOrderState::AfterCall,
             (ClauseOrderState::Initial, _) => {
                 return Err(CypherGuardParsingError::invalid_clause_order(
                     "query start",
                     format!(
-                        "{} must come after a reading clause (MATCH, UNWIND, CREATE, MERGE)",
+                        "{} must come after a reading clause (MATCH, UNWIND, CREATE, DELETE, MERGE)",
                         clause_name(clause)
                     ),
                 ));
@@ -978,9 +1005,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterMatch, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterMatch, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterMatch, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterMatch, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterMatch,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterMatch, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After UNWIND - can have WHERE, WITH, RETURN, or writing clauses
@@ -988,9 +1016,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterUnwind, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterUnwind, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterUnwind, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterUnwind, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterUnwind,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterUnwind, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WHERE - can have MATCH, WITH, RETURN, or more WHERE
@@ -1001,9 +1030,10 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWhere, Clause::Unwind(_)) => ClauseOrderState::AfterUnwind,
             (ClauseOrderState::AfterWhere, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWhere, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterWhere, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWhere,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWhere, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After WITH - can have MATCH, UNWIND, WHERE, WITH, RETURN, or writing clauses
@@ -1015,24 +1045,27 @@ fn validate_clause_order(
             (ClauseOrderState::AfterWith, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterWith, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWith, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterWith, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWith,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWith, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
             // After CALL - can have WHERE, WITH, RETURN, or writing clauses
             (ClauseOrderState::AfterCall, Clause::Where(_)) => ClauseOrderState::AfterWhere,
             (ClauseOrderState::AfterCall, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterCall, Clause::Return(_)) => ClauseOrderState::AfterReturn,
-            (ClauseOrderState::AfterCall, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterCall,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterCall, Clause::Call(_)) => ClauseOrderState::AfterCall,
 
-            // After RETURN - can have CREATE/MERGE (writing clauses)
-            (ClauseOrderState::AfterReturn, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            // After RETURN - can have CREATE/DELETE/MERGE (writing clauses)
+            (
+                ClauseOrderState::AfterReturn,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterReturn, Clause::Return(_)) => {
                 return Err(CypherGuardParsingError::return_after_return_at(
                     line, column,
@@ -1060,9 +1093,10 @@ fn validate_clause_order(
             }
 
             // After write clause - can have more write clauses, RETURN, or WITH
-            (ClauseOrderState::AfterWrite, Clause::Create(_) | Clause::Merge(_)) => {
-                ClauseOrderState::AfterWrite
-            }
+            (
+                ClauseOrderState::AfterWrite,
+                Clause::Create(_) | Clause::Delete(_) | Clause::Merge(_),
+            ) => ClauseOrderState::AfterWrite,
             (ClauseOrderState::AfterWrite, Clause::Return(_)) => ClauseOrderState::AfterReturn,
             (ClauseOrderState::AfterWrite, Clause::With(_)) => ClauseOrderState::AfterWith,
             (ClauseOrderState::AfterWrite, _) => {
@@ -1120,6 +1154,7 @@ fn clause_name(clause: &Clause) -> &'static str {
         Clause::With(_) => "WITH",
         Clause::Return(_) => "RETURN",
         Clause::Create(_) => "CREATE",
+        Clause::Delete(_) => "DELETE",
         Clause::Merge(_) => "MERGE",
         Clause::Query(_) => "Query",
         Clause::Call(_) => "CALL",
@@ -2217,7 +2252,107 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_clause_order_match_return_create() {
+    fn test_delete_clause_single_variable() {
+        let input = "DELETE n";
+        let (_, clause) = delete_clause(input).unwrap();
+        assert_eq!(clause.targets.len(), 1);
+        assert_eq!(clause.targets[0], "n");
+    }
+
+    #[test]
+    fn test_delete_clause_multiple_variables() {
+        let input = "DELETE n, r, path";
+        let (_, clause) = delete_clause(input).unwrap();
+        assert_eq!(clause.targets.len(), 3);
+        assert_eq!(clause.targets[0], "n");
+        assert_eq!(clause.targets[1], "r");
+        assert_eq!(clause.targets[2], "path");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'}) DELETE n";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_delete_return() {
+        let query = "DELETE n RETURN n";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_multiple_variables() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'}) DELETE n, r";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_multiple_matches_then_delete() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'})\nMATCH (m:Person {name: 'Keanu Reeves'})\nDELETE n, m";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_relationship() {
+        let query = "MATCH (n:Person {name: 'Laurence Fishburne'})-[r:ACTED_IN]->()\nDELETE r";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_multiple_clauses() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'})\nDELETE n\nMATCH (m:Person {name: 'Keanu Reeves'})\nDELETE m";
+        let result = crate::parse_query(query);
+        // This should fail - MATCH cannot come after DELETE
+        assert!(
+            result.is_err(),
+            "MATCH after DELETE should fail clause order validation"
+        );
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_multiple_deletes() {
+        let query =
+            "MATCH (n:Person {name: 'Tom Hanks'}), (m:Person {name: 'Keanu Reeves'})\nDELETE n, m";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_with_match() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'})\nDELETE n\nWITH count(n) AS deleted\nMATCH (m:Person {name: 'Keanu Reeves'})\nDELETE m";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_where_delete() {
+        let query = "MATCH (n:Person)\nWHERE n.name = 'Tom Hanks'\nDELETE n";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_with_delete() {
+        let query = "MATCH (n:Person)\nWITH n\nWHERE n.name = 'Tom Hanks'\nDELETE n";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_delete_return_multiline() {
+        let query = "MATCH (n:Person {name: 'Tom Hanks'})\nDELETE n\nRETURN n";
+        let result = crate::parse_query(query);
+        assert!(result.is_ok(), "Valid query should parse successfully");
+    }
+
+    #[test]
+    fn test_valid_clause_order_match_return_delete() {
         let query = "MATCH (a:Person) RETURN a CREATE (b:Person {name: 'Bob'})";
         let result = crate::parse_query(query);
         assert!(result.is_ok(), "Valid query should parse successfully");
