@@ -112,6 +112,7 @@ The parser distinguishes between different levels of errors:
 - `CREATE`
 - `MERGE` (with `ON CREATE` and `ON MATCH`)
 - `SET`
+- `LIMIT` (Cypher 5.24+)
 
 ### Node Patterns
 - Basic nodes: `(n)`
@@ -211,6 +212,7 @@ pub struct Query {
     pub return_clauses: Vec<ReturnClause>,
     pub unwind_clauses: Vec<UnwindClause>,
     pub call_clauses: Vec<CallClause>,
+    pub limit_clauses: Vec<LimitClause>,
 }
 ```
 
@@ -237,6 +239,20 @@ pub struct ReturnClause {
     pub items: Vec<String>, // Simplified for validation
 }
 ```
+
+#### LimitClause
+```rust
+#[derive(Debug, PartialEq, Clone)]
+pub struct LimitClause {
+    pub expression: PropertyValue, // Expression that evaluates to a positive INTEGER
+}
+```
+
+The `LIMIT` clause constrains the number of returned rows. It can be used:
+- As a standalone clause after `MATCH` (Cypher 5.24+): `MATCH (n) LIMIT 2 RETURN collect(n.name)`
+- After `RETURN` clause (traditional): `MATCH (n) RETURN n.name LIMIT 3`
+
+Currently, `LIMIT` supports numeric literals and parameters. Function calls and arithmetic expressions are not yet supported.
 
 #### WhereClause
 ```rust

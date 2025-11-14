@@ -9,6 +9,7 @@ pub struct Query {
     pub return_clauses: Vec<ReturnClause>,
     pub unwind_clauses: Vec<UnwindClause>,
     pub call_clauses: Vec<CallClause>,
+    pub limit_clauses: Vec<LimitClause>,
 }
 
 // RETURN clause (simple)
@@ -265,4 +266,10 @@ pub struct CallClause {
     pub subquery: Option<Query>,           // For CALL { ... } subqueries
     pub procedure: Option<String>,         // For CALL procedure() calls
     pub yield_clause: Option<Vec<String>>, // For YIELD clause
+}
+
+// LIMIT clause
+#[derive(Debug, PartialEq, Clone)]
+pub struct LimitClause {
+    pub expression: PropertyValue, // Expression that evaluates to a positive INTEGER
 }
